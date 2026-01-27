@@ -154,14 +154,23 @@ export default function Home() {
               </h1>
               <p className="text-gray-500 text-sm">Real-time Stock Tracker</p>
             </div>
-            {/* Search Link */}
-            <a
-              href="/search"
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-gray-300 hover:text-white transition-colors"
-            >
-              <span>🔍</span>
-              <span className="hidden sm:inline">ค้นหาหุ้น</span>
-            </a>
+            {/* Navigation Links */}
+            <div className="flex gap-2">
+              <a
+                href="/search"
+                className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-gray-300 hover:text-white transition-colors"
+              >
+                <span>🔍</span>
+                <span className="hidden sm:inline">ค้นหาหุ้น</span>
+              </a>
+              <a
+                href="/compare"
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-800 to-pink-800 hover:from-purple-700 hover:to-pink-700 rounded-lg text-white transition-colors"
+              >
+                <span>🏆</span>
+                <span className="hidden sm:inline">เปรียบเทียบ</span>
+              </a>
+            </div>
             <div className="text-right">
               <div className="flex items-center gap-2 text-sm">
                 <span

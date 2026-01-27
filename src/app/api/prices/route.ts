@@ -221,6 +221,67 @@ function calculateMACD(prices: number[]): {
   return { macd: macdLine, signal: signalLine, histogram, trend };
 }
 
+// คำนวณ Volume Profile และ POC (Point of Control)
+function calculateVolumeProfile(
+  closes: number[],
+  volumes: number[],
+  bins: number = 20,
+): { poc: number; vaHigh: number; vaLow: number } | null {
+  if (closes.length < 10 || volumes.length < 10) return null;
+
+  const minPrice = Math.min(...closes);
+  const maxPrice = Math.max(...closes);
+  const priceRange = maxPrice - minPrice;
+
+  if (priceRange === 0) return null;
+
+  const binSize = priceRange / bins;
+  const volumeByPrice: { [bin: number]: number } = {};
+
+  // รวม volume ในแต่ละช่วงราคา
+  for (let i = 0; i < closes.length; i++) {
+    const binIndex = Math.floor((closes[i] - minPrice) / binSize);
+    const clampedBin = Math.min(binIndex, bins - 1);
+    volumeByPrice[clampedBin] =
+      (volumeByPrice[clampedBin] || 0) + (volumes[i] || 0);
+  }
+
+  // หา POC (bin ที่มี volume สูงสุด)
+  let maxVolume = 0;
+  let pocBin = 0;
+  for (const [bin, vol] of Object.entries(volumeByPrice)) {
+    if (vol > maxVolume) {
+      maxVolume = vol;
+      pocBin = parseInt(bin);
+    }
+  }
+
+  const poc = minPrice + (pocBin + 0.5) * binSize;
+
+  // คำนวณ Value Area (70% ของ volume ทั้งหมด)
+  const totalVolume = Object.values(volumeByPrice).reduce((a, b) => a + b, 0);
+  const targetVolume = totalVolume * 0.7;
+
+  // Sort bins by volume
+  const sortedBins = Object.entries(volumeByPrice)
+    .map(([bin, vol]) => ({ bin: parseInt(bin), vol }))
+    .sort((a, b) => b.vol - a.vol);
+
+  let accumulatedVolume = 0;
+  const valueBins: number[] = [];
+
+  for (const { bin } of sortedBins) {
+    valueBins.push(bin);
+    accumulatedVolume += volumeByPrice[bin];
+    if (accumulatedVolume >= targetVolume) break;
+  }
+
+  const vaLow = minPrice + Math.min(...valueBins) * binSize;
+  const vaHigh = minPrice + (Math.max(...valueBins) + 1) * binSize;
+
+  return { poc, vaHigh, vaLow };
+}
+
 interface PriceResult {
   symbol: string;
   currentPrice: number;
@@ -249,6 +310,12 @@ interface PriceResult {
   macdSignal?: number;
   macdHistogram?: number;
   macdTrend?: "bullish" | "bearish" | "neutral";
+  // Volume Profile
+  poc?: number;
+  vaHigh?: number;
+  vaLow?: number;
+  // SLV specific
+  silverSpotPrice?: number;
 }
 
 export async function GET(request: Request) {
@@ -314,6 +381,8 @@ export async function GET(request: Request) {
           indicators?.low?.filter((l: number | null) => l !== null) || [];
         const closes: number[] =
           indicators?.close?.filter((c: number | null) => c !== null) || [];
+        const volumes: number[] =
+          indicators?.volume?.filter((v: number | null) => v !== null) || [];
 
         // คำนวณแนวรับ/ต้าน
         const { support, resistance } = calculateSupportResistance(
@@ -335,30 +404,24 @@ export async function GET(request: Request) {
         // คำนวณ MACD
         const macdResult = calculateMACD(closes);
 
-        // ถ้าเป็น SLV และมีราคาเงิน ให้แสดงข้อมูลละเอียด
+        // คำนวณ Volume Profile
+        const volumeProfile = calculateVolumeProfile(closes, volumes);
+
+        // ถ้าเป็น SLV ให้เพิ่มข้อมูลราคาเงินเป็น reference
         if (symbol === "SLV" && silverPrice) {
-          const estimatedPrice = silverPrice * SLV_SILVER_RATIO;
-          const estimatedChange =
-            ((estimatedPrice - actualPrice) / actualPrice) * 100;
-          const hasSignificantDiff = Math.abs(estimatedChange) > 0.5;
+          // ใช้ราคาจริงจาก Yahoo Finance เสมอ (ไม่ประมาณจาก Silver spot)
+          const dayChange = actualPrice - previousClose;
+          const dayChangePercent = (dayChange / previousClose) * 100;
 
           results[symbol] = {
             symbol,
-            currentPrice: hasSignificantDiff ? estimatedPrice : actualPrice,
+            currentPrice: actualPrice,
             previousClose,
-            dayChange:
-              (hasSignificantDiff ? estimatedPrice : actualPrice) -
-              previousClose,
-            dayChangePercent:
-              (((hasSignificantDiff ? estimatedPrice : actualPrice) -
-                previousClose) /
-                previousClose) *
-              100,
-            isEstimated: hasSignificantDiff,
-            source: "XAG/USD",
-            actualClosePrice: actualPrice,
-            estimatedPrice: estimatedPrice,
-            estimatedChange: estimatedChange,
+            dayChange,
+            dayChangePercent,
+            // Reference: ราคาเงิน spot
+            source: "Yahoo Finance",
+            silverSpotPrice: silverPrice,
             // Technical
             support,
             resistance,
@@ -376,6 +439,10 @@ export async function GET(request: Request) {
             macdSignal: macdResult.signal ?? undefined,
             macdHistogram: macdResult.histogram ?? undefined,
             macdTrend: macdResult.trend,
+            // Volume Profile
+            poc: volumeProfile?.poc,
+            vaHigh: volumeProfile?.vaHigh,
+            vaLow: volumeProfile?.vaLow,
           };
           return;
         }
@@ -406,6 +473,10 @@ export async function GET(request: Request) {
           macdSignal: macdResult.signal ?? undefined,
           macdHistogram: macdResult.histogram ?? undefined,
           macdTrend: macdResult.trend,
+          // Volume Profile
+          poc: volumeProfile?.poc,
+          vaHigh: volumeProfile?.vaHigh,
+          vaLow: volumeProfile?.vaLow,
         };
       } catch (error) {
         console.error(`Error fetching ${symbol}:`, error);

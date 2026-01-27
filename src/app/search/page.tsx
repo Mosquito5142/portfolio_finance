@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import { StockPrice } from "@/types/stock";
+import { StockPrice, MacroData } from "@/types/stock";
 import { formatUSD, formatPercent } from "@/lib/utils";
 
 // รายการหุ้นยอดนิยมสำหรับ autocomplete
@@ -71,10 +71,65 @@ const STOCK_LIST = [
   { symbol: "SOL-USD", name: "Solana USD" },
 ];
 
+// หุ้นที่เกี่ยวข้องกับ commodities (ได้รับผลกระทบจาก DXY)
+const COMMODITY_STOCKS = ["SLV", "GLD", "XOM", "CVX"];
+
+interface MacroDataExtended extends MacroData {
+  commodityImpact?: {
+    impact: "bullish" | "bearish" | "neutral";
+    reason: string;
+    dxySignal: string;
+    yieldSignal: string;
+  };
+}
+
+// Insider Data Types
+interface InsiderTransaction {
+  name: string;
+  relation: string;
+  shares: number;
+  value: number;
+  transactionType: "Buy" | "Sell" | "Exercise";
+  date: string;
+}
+
+interface InsiderDataResult {
+  recentTransactions: InsiderTransaction[];
+  netShares: number;
+  totalBuys: number;
+  totalSells: number;
+  sentiment: "buying" | "selling" | "neutral";
+  sentimentText: string;
+  shortInterest?: number;
+  shortRatio?: number;
+  institutionalOwnership?: number;
+}
+
+interface SocialDataResult {
+  buzzScore: number;
+  newsCount: number;
+  sentimentScore: number;
+  sentiment: "positive" | "negative" | "neutral";
+  sources: string[];
+  // News Quality
+  qualityScore?: number;
+  tier1Count?: number;
+  tier2Count?: number;
+  tier3Count?: number;
+}
+
+interface InsiderSocialData {
+  insider: InsiderDataResult | null;
+  social: SocialDataResult | null;
+}
+
 export default function SearchPage() {
   const [symbol, setSymbol] = useState("");
   const [loading, setLoading] = useState(false);
   const [stockData, setStockData] = useState<StockPrice | null>(null);
+  const [macroData, setMacroData] = useState<MacroDataExtended | null>(null);
+  const [insiderSocialData, setInsiderSocialData] =
+    useState<InsiderSocialData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -142,8 +197,11 @@ export default function SearchPage() {
     setLoading(true);
     setError(null);
     setStockData(null);
+    setMacroData(null);
+    setInsiderSocialData(null);
 
     try {
+      // ดึงข้อมูลหุ้น
       const response = await fetch(`/api/prices?symbols=${sym.toUpperCase()}`);
       if (!response.ok) throw new Error("Failed to fetch stock data");
 
@@ -156,6 +214,38 @@ export default function SearchPage() {
       }
 
       setStockData(stockPrice);
+
+      // ดึงข้อมูลเพิ่มเติมพร้อมกัน
+      const fetchPromises: Promise<void>[] = [];
+
+      // ดึงข้อมูล macro สำหรับหุ้น commodity
+      if (COMMODITY_STOCKS.includes(sym.toUpperCase())) {
+        fetchPromises.push(
+          fetch("/api/macro")
+            .then((res) => (res.ok ? res.json() : null))
+            .then((macroResult) => {
+              if (macroResult) setMacroData(macroResult);
+            })
+            .catch(() => console.log("Macro data fetch failed")),
+        );
+      }
+
+      // ดึงข้อมูล insider และ social
+      fetchPromises.push(
+        fetch(`/api/insider?symbol=${sym.toUpperCase()}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((insiderResult) => {
+            if (insiderResult) {
+              setInsiderSocialData({
+                insider: insiderResult.insider,
+                social: insiderResult.social,
+              });
+            }
+          })
+          .catch(() => console.log("Insider data fetch failed")),
+      );
+
+      await Promise.all(fetchPromises);
     } catch {
       setError("เกิดข้อผิดพลาดในการค้นหา กรุณาลองใหม่");
     } finally {
@@ -415,17 +505,111 @@ export default function SearchPage() {
               const bullishPercent =
                 totalPoints > 0 ? (bullishPoints / totalPoints) * 100 : 50;
 
+              // 🧠 ตรวจจับสถานการณ์ Overbought + Euphoria (ลด threshold เป็น 75)
+              const isOverbought =
+                stockData.rsi !== undefined && stockData.rsi > 75;
+              const isVeryOverbought =
+                stockData.rsi !== undefined && stockData.rsi > 85;
+              const buzzScore = insiderSocialData?.social?.buzzScore || 0;
+
+              // 🆕 ตรวจสอบ Tier 1 News (สำคัญที่สุด!)
+              const tier1Count = insiderSocialData?.social?.tier1Count || 0;
+              const hasTier1 = tier1Count >= 1;
+              const rsiValue = stockData.rsi || 50;
+              const rsiSafe = rsiValue <= 70;
+              const buzzHigh = buzzScore > 80;
+
+              // 🆕 Logic ใหม่: Tier 1 มีความสำคัญกว่า Buzz Score
+              const isEuphoria = !hasTier1 && buzzScore >= 90; // ถ้ามี Tier 1 ไม่ถือว่า Euphoria
+              const isHighRisk = isOverbought || isEuphoria;
+
+              // 📈 Trend Filter: เช็คว่าราคายืนเหนือ SMA50 ไหม?
+              const sma50 = stockData.ma50;
+              const isStrongTrend = sma50
+                ? stockData.currentPrice > sma50
+                : true;
+              const trendPercent = sma50
+                ? ((stockData.currentPrice - sma50) / sma50) * 100
+                : 0;
+
+              // 💰 คำนวณ Position Sizing แนะนำ (God Tier Logic + Trend Filter)
+              let positionSize: number; // เปอร์เซ็นต์ของพอร์ต
+              let positionRisk: "low" | "medium" | "high" | "extreme";
+              let positionReason: string;
+
+              // 🧠 New Logic: Tier 1 Sources + Trend Filter
+              if (hasTier1 && rsiSafe && isStrongTrend) {
+                // ✅ CASE A: Perfect Storm - Tier 1 + RSI Safe + Uptrend
+                positionSize = 15;
+                positionRisk = "low";
+                positionReason = `🔥 Perfect Storm! Tier 1 (${tier1Count}) + RSI ${rsiValue.toFixed(0)} + ยืนเหนือ SMA50 (+${trendPercent.toFixed(1)}%) จัดหนัก!`;
+              } else if (hasTier1 && rsiSafe && !isStrongTrend) {
+                // ⚠️ CASE B: The Discount - Tier 1 + RSI Safe แต่กราฟย่อ
+                positionSize = 7;
+                positionRisk = "medium";
+                positionReason = `💡 Tier 1 ข่าวดี + RSI Safe แต่ราคาต่ำกว่า SMA50 (${trendPercent.toFixed(1)}%) ซื้อถัวรอกราฟกลับ`;
+              } else if (hasTier1 && !rsiSafe && !isVeryOverbought) {
+                // ⚠️ มี Tier 1 แต่ RSI > 70 = Buy on Dip
+                positionSize = 5;
+                positionRisk = "medium";
+                positionReason = `พบ Tier 1 ข่าวดีจริง แต่ RSI ${rsiValue.toFixed(0)} แพงไปหน่อย รอย่อ`;
+              } else if (isVeryOverbought) {
+                // 🚫 RSI > 85 = ไม่เข้า
+                positionSize = 0;
+                positionRisk = "extreme";
+                positionReason = `RSI ${rsiValue.toFixed(0)} สูงมาก! แม้มีข่าวดี ก็ไม่ควรไล่ราคา`;
+              } else if (!hasTier1 && buzzHigh) {
+                // ⚠️ ข่าวเยอะแต่ไม่มี Tier 1 = ข่าวปั่น!
+                positionSize = 2;
+                positionRisk = "high";
+                positionReason = `⚠️ Buzz สูงแต่ไม่พบข่าว Tier 1 ระวังข่าวปั่น FOMO!`;
+              } else if (bullishPercent >= 70 && rsiSafe && isStrongTrend) {
+                // ✅ สัญญาณ Bullish + RSI ดี + Uptrend
+                positionSize = 12;
+                positionRisk = "low";
+                positionReason = `สัญญาณ Bullish ${bullishPercent.toFixed(0)}% + RSI Safe + Uptrend เข้าได้ 10-12%`;
+              } else if (bullishPercent >= 55 && isStrongTrend) {
+                positionSize = 8;
+                positionRisk = "medium";
+                positionReason = "สัญญาณปานกลาง + Uptrend แนะนำ 5-8%";
+              } else if (bullishPercent >= 55 && !isStrongTrend) {
+                positionSize = 5;
+                positionRisk = "medium";
+                positionReason = "สัญญาณดีแต่กราฟย่อ ซื้อถัว 5% รอกลับตัว";
+              } else {
+                positionSize = 3;
+                positionRisk = "high";
+                positionReason = "สัญญาณอ่อน แนะนำ 3% หรือรอดูก่อน";
+              }
+
               let recommendation:
                 | "strong_buy"
                 | "buy"
                 | "hold"
                 | "sell"
-                | "strong_sell";
+                | "strong_sell"
+                | "wait_dip";
               let recommendationText: string;
               let recommendationColor: string;
               let recommendationIcon: string;
+              let warningMessage: string | null = null;
 
-              if (bullishPercent >= 75) {
+              // 🚩 Logic Override: ถ้าหุ้นร้อนแรงเกินไป แม้ Bullish ก็ต้องระวัง (RSI > 75)
+              if (isHighRisk && bullishPercent >= 55) {
+                // แม้สัญญาณ Bullish แต่ RSI > 75 หรือ Buzz >= 90 = ไม่ควรไล่ซื้อ
+                recommendation = "wait_dip";
+                recommendationText = "ถือ / รอย่อ";
+                recommendationColor = "from-amber-500 to-yellow-500";
+                recommendationIcon = "⏳";
+
+                if (isOverbought && isEuphoria) {
+                  warningMessage = `⚠️ RSI สูง ${stockData.rsi?.toFixed(0)} + Buzz ${buzzScore}! อย่าไล่ราคา รอจังหวะย่อตัว`;
+                } else if (isOverbought) {
+                  warningMessage = `⚠️ RSI สูง ${stockData.rsi?.toFixed(0)} (>75) หุ้นร้อนแรงมาก ระวังแรงขายทำกำไร`;
+                } else {
+                  warningMessage = `⚠️ Buzz ${buzzScore}/100 ข่าวออกเยอะมาก! ระวัง FOMO`;
+                }
+              } else if (bullishPercent >= 75) {
                 recommendation = "strong_buy";
                 recommendationText = "แนะนำซื้อเข้า";
                 recommendationColor = "from-green-600 to-emerald-600";
@@ -503,6 +687,80 @@ export default function SearchPage() {
                     <div className="flex justify-between text-xs text-white/60 mt-1">
                       <span>Bearish</span>
                       <span>Bullish</span>
+                    </div>
+                  </div>
+
+                  {/* 🚩 Warning Message for High Risk */}
+                  {warningMessage && (
+                    <div className="p-3 mb-4 bg-amber-900/40 border border-amber-500/50 rounded-xl">
+                      <p className="text-amber-200 text-sm font-medium">
+                        {warningMessage}
+                      </p>
+                      <p className="text-amber-400/70 text-xs mt-1">
+                        💡 Tip: ถ้าถืออยู่แล้ว ให้ถือต่อ (Let profit run)
+                        ถ้ายังไม่ถือ รอราคาย่อก่อนค่อยเข้า
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 💰 Position Sizing Recommendation */}
+                  <div
+                    className={`p-4 rounded-xl mb-4 border ${
+                      positionRisk === "extreme"
+                        ? "bg-red-900/30 border-red-500/50"
+                        : positionRisk === "high"
+                          ? "bg-orange-900/30 border-orange-500/50"
+                          : positionRisk === "low"
+                            ? "bg-green-900/30 border-green-500/50"
+                            : "bg-blue-900/30 border-blue-500/50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">
+                          {positionRisk === "extreme"
+                            ? "🚫"
+                            : positionRisk === "high"
+                              ? "⚠️"
+                              : positionRisk === "low"
+                                ? "✅"
+                                : "💰"}
+                        </span>
+                        <div>
+                          <p className="text-white text-sm font-medium">
+                            Position Sizing แนะนำ
+                          </p>
+                          <p
+                            className={`text-xs ${
+                              positionRisk === "extreme"
+                                ? "text-red-400"
+                                : positionRisk === "high"
+                                  ? "text-orange-400"
+                                  : positionRisk === "low"
+                                    ? "text-green-400"
+                                    : "text-blue-400"
+                            }`}
+                          >
+                            {positionReason}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p
+                          className={`text-2xl font-bold ${
+                            positionRisk === "extreme"
+                              ? "text-red-400"
+                              : positionRisk === "high"
+                                ? "text-orange-400"
+                                : positionRisk === "low"
+                                  ? "text-green-400"
+                                  : "text-blue-400"
+                          }`}
+                        >
+                          {positionSize}%
+                        </p>
+                        <p className="text-gray-500 text-xs">ของพอร์ต</p>
+                      </div>
                     </div>
                   </div>
 
@@ -586,6 +844,493 @@ export default function SearchPage() {
                 </div>
               );
             })()}
+
+            {/* 🌍 Macro Indicators (DXY & US10Y) - สำหรับหุ้น Commodity */}
+            {macroData && (
+              <div className="mb-6 p-5 bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-2xl border border-blue-500/30">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-2xl">🌍</span>
+                  <div>
+                    <h3 className="text-white font-bold text-lg">
+                      Macro Indicators
+                    </h3>
+                    <p className="text-gray-400 text-sm">
+                      ปัจจัยภาพใหญ่ที่กระทบต่อ Commodities
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  {/* DXY */}
+                  <div className="bg-gray-800/50 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xl">💵</span>
+                      <span className="text-gray-400 text-sm">
+                        Dollar Index (DXY)
+                      </span>
+                    </div>
+                    <p className="text-2xl font-bold text-white">
+                      {macroData.dxy?.toFixed(2)}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span
+                        className={`text-sm ${
+                          macroData.dxyChange < 0
+                            ? "text-green-400"
+                            : macroData.dxyChange > 0
+                              ? "text-red-400"
+                              : "text-gray-400"
+                        }`}
+                      >
+                        {macroData.dxyChange >= 0 ? "▲" : "▼"}{" "}
+                        {Math.abs(macroData.dxyChange).toFixed(2)}% วันนี้
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      <span
+                        className={`text-xs px-2 py-1 rounded-full ${
+                          macroData.dxyTrend === "down"
+                            ? "bg-green-500/20 text-green-400"
+                            : macroData.dxyTrend === "up"
+                              ? "bg-red-500/20 text-red-400"
+                              : "bg-gray-500/20 text-gray-400"
+                        }`}
+                      >
+                        {macroData.dxyTrend === "down"
+                          ? "📉 อ่อนค่า 5 วัน (ดีต่อ Silver)"
+                          : macroData.dxyTrend === "up"
+                            ? "📈 แข็งค่า 5 วัน (กดดัน Silver)"
+                            : "➡️ ทรงตัว"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* US10Y */}
+                  <div className="bg-gray-800/50 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xl">📊</span>
+                      <span className="text-gray-400 text-sm">
+                        US 10-Year Yield
+                      </span>
+                    </div>
+                    <p className="text-2xl font-bold text-white">
+                      {macroData.us10y?.toFixed(2)}%
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span
+                        className={`text-sm ${
+                          macroData.us10yChange < 0
+                            ? "text-green-400"
+                            : macroData.us10yChange > 0
+                              ? "text-red-400"
+                              : "text-gray-400"
+                        }`}
+                      >
+                        {macroData.us10yChange >= 0 ? "▲" : "▼"}{" "}
+                        {Math.abs(macroData.us10yChange).toFixed(2)}% วันนี้
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      <span
+                        className={`text-xs px-2 py-1 rounded-full ${
+                          macroData.us10y > 4.5
+                            ? "bg-red-500/20 text-red-400"
+                            : macroData.us10y < 3.5
+                              ? "bg-green-500/20 text-green-400"
+                              : "bg-yellow-500/20 text-yellow-400"
+                        }`}
+                      >
+                        {macroData.us10y > 4.5
+                          ? "⚠️ Yield สูง (กดดัน Gold/Silver)"
+                          : macroData.us10y < 3.5
+                            ? "✅ Yield ต่ำ (ดีต่อ Gold/Silver)"
+                            : "➡️ Yield ปานกลาง"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Commodity Impact Summary */}
+                {macroData.commodityImpact && (
+                  <div
+                    className={`p-4 rounded-xl ${
+                      macroData.commodityImpact.impact === "bullish"
+                        ? "bg-green-900/30 border border-green-500/30"
+                        : macroData.commodityImpact.impact === "bearish"
+                          ? "bg-red-900/30 border border-red-500/30"
+                          : "bg-gray-800/50 border border-gray-700"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xl">
+                        {macroData.commodityImpact.impact === "bullish"
+                          ? "🚀"
+                          : macroData.commodityImpact.impact === "bearish"
+                            ? "⚠️"
+                            : "➡️"}
+                      </span>
+                      <span className="font-medium text-white">
+                        {macroData.commodityImpact.impact === "bullish"
+                          ? "Macro เอื้อต่อการขึ้น"
+                          : macroData.commodityImpact.impact === "bearish"
+                            ? "Macro กดดันราคา"
+                            : "Macro เป็นกลาง"}
+                      </span>
+                    </div>
+                    <p className="text-gray-400 text-sm">
+                      {macroData.commodityImpact.reason}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 📊 Volume Profile (POC) */}
+            {stockData.poc && (
+              <div className="mb-6 p-5 bg-gradient-to-r from-purple-900/30 to-pink-900/30 rounded-2xl border border-purple-500/30">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-2xl">📊</span>
+                  <div>
+                    <h3 className="text-white font-bold text-lg">
+                      Volume Profile
+                    </h3>
+                    <p className="text-gray-400 text-sm">
+                      จุดที่มีการซื้อขายหนาแน่นที่สุด (POC)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  {/* Value Area Low */}
+                  <div className="bg-green-900/20 border border-green-500/30 rounded-xl p-3 text-center">
+                    <p className="text-green-400 text-xs mb-1">
+                      📉 Value Area Low
+                    </p>
+                    <p className="text-green-300 text-lg font-bold">
+                      {formatUSD(stockData.vaLow || stockData.poc * 0.95)}
+                    </p>
+                    <p className="text-green-500/70 text-[10px]">
+                      แนวรับจาก Volume
+                    </p>
+                  </div>
+
+                  {/* POC */}
+                  <div className="bg-purple-900/30 border border-purple-500/50 rounded-xl p-3 text-center">
+                    <p className="text-purple-400 text-xs mb-1">
+                      🎯 POC (Point of Control)
+                    </p>
+                    <p className="text-purple-300 text-xl font-bold">
+                      {formatUSD(stockData.poc)}
+                    </p>
+                    <p className="text-purple-500/70 text-[10px]">
+                      จุดดอยเฉลี่ยของคนส่วนใหญ่
+                    </p>
+                  </div>
+
+                  {/* Value Area High */}
+                  <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-3 text-center">
+                    <p className="text-red-400 text-xs mb-1">
+                      📈 Value Area High
+                    </p>
+                    <p className="text-red-300 text-lg font-bold">
+                      {formatUSD(stockData.vaHigh || stockData.poc * 1.05)}
+                    </p>
+                    <p className="text-red-500/70 text-[10px]">
+                      แนวต้านจาก Volume
+                    </p>
+                  </div>
+                </div>
+
+                {/* POC Analysis */}
+                <div className="bg-gray-800/50 rounded-xl p-3">
+                  <p className="text-sm text-gray-300">
+                    {stockData.currentPrice < stockData.poc ? (
+                      <>
+                        <span className="text-red-400">⚠️ ราคาต่ำกว่า POC</span>
+                        <span className="text-gray-400">
+                          {" "}
+                          - มีแรงขายรออยู่ข้างบนจำนวนมาก (Overhead Supply)
+                          การเด้งขึ้นจะถูกจำกัด
+                        </span>
+                      </>
+                    ) : stockData.currentPrice > stockData.poc ? (
+                      <>
+                        <span className="text-green-400">
+                          ✅ ราคาทะลุ POC ขึ้นมาแล้ว
+                        </span>
+                        <span className="text-gray-400">
+                          {" "}
+                          - ราคาอยู่เหนือต้นทุนเฉลี่ยคนส่วนใหญ่ (Breakout)
+                          มีโอกาสวิ่งต่อ
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-yellow-400">
+                          ➡️ ราคาอยู่ที่ POC พอดี
+                        </span>
+                        <span className="text-gray-400">
+                          {" "}
+                          - จุด Equilibrium รอดูว่าจะ Breakout หรือ Breakdown
+                        </span>
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* 🐳 Insider Trading */}
+            {insiderSocialData?.insider && (
+              <div className="mb-6 p-5 bg-gradient-to-r from-amber-900/30 to-orange-900/30 rounded-2xl border border-amber-500/30">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-2xl">🐳</span>
+                  <div>
+                    <h3 className="text-white font-bold text-lg">
+                      Insider Trading
+                    </h3>
+                    <p className="text-gray-400 text-sm">
+                      การซื้อขายของผู้บริหารและเจ้าของ
+                    </p>
+                  </div>
+                </div>
+
+                {/* Sentiment Badge */}
+                <div
+                  className={`p-4 rounded-xl mb-4 ${
+                    insiderSocialData.insider.sentiment === "buying"
+                      ? "bg-green-900/40 border border-green-500/50"
+                      : insiderSocialData.insider.sentiment === "selling"
+                        ? "bg-red-900/40 border border-red-500/50"
+                        : "bg-gray-800/50 border border-gray-700"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-3xl">
+                      {insiderSocialData.insider.sentiment === "buying"
+                        ? "💎"
+                        : insiderSocialData.insider.sentiment === "selling"
+                          ? "🚨"
+                          : "➡️"}
+                    </span>
+                    <div>
+                      <p
+                        className={`text-lg font-bold ${
+                          insiderSocialData.insider.sentiment === "buying"
+                            ? "text-green-400"
+                            : insiderSocialData.insider.sentiment === "selling"
+                              ? "text-red-400"
+                              : "text-gray-400"
+                        }`}
+                      >
+                        {insiderSocialData.insider.sentiment === "buying"
+                          ? "ผู้บริหารกำลังซื้อหุ้น"
+                          : insiderSocialData.insider.sentiment === "selling"
+                            ? "ผู้บริหารกำลังขายหุ้น"
+                            : "ไม่มีสัญญาณชัดเจน"}
+                      </p>
+                      <p className="text-gray-400 text-sm">
+                        {insiderSocialData.insider.sentimentText}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  {/* Total Buys */}
+                  <div className="bg-green-900/20 rounded-xl p-3 text-center">
+                    <p className="text-green-400 text-xs mb-1">🟢 ซื้อ</p>
+                    <p className="text-green-300 text-xl font-bold">
+                      {insiderSocialData.insider.totalBuys}
+                    </p>
+                    <p className="text-green-500/70 text-[10px]">รายการ</p>
+                  </div>
+
+                  {/* Total Sells */}
+                  <div className="bg-red-900/20 rounded-xl p-3 text-center">
+                    <p className="text-red-400 text-xs mb-1">🔴 ขาย</p>
+                    <p className="text-red-300 text-xl font-bold">
+                      {insiderSocialData.insider.totalSells}
+                    </p>
+                    <p className="text-red-500/70 text-[10px]">รายการ</p>
+                  </div>
+
+                  {/* Short Interest */}
+                  {insiderSocialData.insider.shortInterest !== undefined && (
+                    <div className="bg-purple-900/20 rounded-xl p-3 text-center">
+                      <p className="text-purple-400 text-xs mb-1">
+                        📊 Short Interest
+                      </p>
+                      <p className="text-purple-300 text-xl font-bold">
+                        {insiderSocialData.insider.shortInterest.toFixed(1)}%
+                      </p>
+                      <p className="text-purple-500/70 text-[10px]">
+                        {insiderSocialData.insider.shortInterest > 20
+                          ? "สูง! ระวัง Squeeze"
+                          : insiderSocialData.insider.shortInterest > 10
+                            ? "ปานกลาง"
+                            : "ต่ำ"}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Institutional Ownership */}
+                {insiderSocialData.insider.institutionalOwnership !==
+                  undefined && (
+                  <div className="bg-gray-800/50 rounded-xl p-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400 text-sm">
+                        🏦 กองทุน/สถาบันถือหุ้น
+                      </span>
+                      <span className="text-white font-bold">
+                        {insiderSocialData.insider.institutionalOwnership.toFixed(
+                          1,
+                        )}
+                        %
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 🗣️ Social Sentiment */}
+            {insiderSocialData?.social && (
+              <div className="mb-6 p-5 bg-gradient-to-r from-cyan-900/30 to-blue-900/30 rounded-2xl border border-cyan-500/30">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-2xl">🗣️</span>
+                  <div>
+                    <h3 className="text-white font-bold text-lg">
+                      News & Social Sentiment
+                    </h3>
+                    <p className="text-gray-400 text-sm">
+                      อารมณ์ตลาดจากข่าวและโซเชียล
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  {/* Buzz Score */}
+                  <div className="bg-gray-800/50 rounded-xl p-4">
+                    <p className="text-gray-400 text-xs mb-2">📢 Buzz Score</p>
+                    <div className="flex items-end gap-2">
+                      <p className="text-3xl font-bold text-white">
+                        {insiderSocialData.social.buzzScore}
+                      </p>
+                      <p className="text-gray-400 text-sm mb-1">/100</p>
+                    </div>
+                    <div className="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full"
+                        style={{
+                          width: `${insiderSocialData.social.buzzScore}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="text-gray-500 text-xs mt-1">
+                      {insiderSocialData.social.buzzScore > 70
+                        ? "🔥 กำลังเป็นที่พูดถึงมาก!"
+                        : insiderSocialData.social.buzzScore > 40
+                          ? "📰 มีข่าวปานกลาง"
+                          : "😴 ไม่ค่อยมีข่าว"}
+                    </p>
+                  </div>
+
+                  {/* Sentiment Score */}
+                  <div className="bg-gray-800/50 rounded-xl p-4">
+                    <p className="text-gray-400 text-xs mb-2">💭 Sentiment</p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">
+                        {insiderSocialData.social.sentiment === "positive"
+                          ? "😊"
+                          : insiderSocialData.social.sentiment === "negative"
+                            ? "😟"
+                            : "😐"}
+                      </span>
+                      <div>
+                        <p
+                          className={`text-lg font-bold ${
+                            insiderSocialData.social.sentiment === "positive"
+                              ? "text-green-400"
+                              : insiderSocialData.social.sentiment ===
+                                  "negative"
+                                ? "text-red-400"
+                                : "text-gray-400"
+                          }`}
+                        >
+                          {insiderSocialData.social.sentiment === "positive"
+                            ? "เชิงบวก"
+                            : insiderSocialData.social.sentiment === "negative"
+                              ? "เชิงลบ"
+                              : "เป็นกลาง"}
+                        </p>
+                        <p className="text-gray-500 text-xs">
+                          Score:{" "}
+                          {(
+                            insiderSocialData.social.sentimentScore * 100
+                          ).toFixed(0)}
+                          %
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* News Sources + Quality */}
+                {insiderSocialData.social.sources.length > 0 && (
+                  <div className="bg-gray-800/50 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-gray-400 text-xs">
+                        📰 แหล่งข่าว ({insiderSocialData.social.newsCount} ข่าว)
+                      </p>
+                      {/* 🆕 News Quality Score */}
+                      {insiderSocialData.social.qualityScore !== undefined && (
+                        <div
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            insiderSocialData.social.qualityScore >= 50
+                              ? "bg-green-900/50 text-green-400"
+                              : insiderSocialData.social.qualityScore >= 20
+                                ? "bg-yellow-900/50 text-yellow-400"
+                                : "bg-red-900/50 text-red-400"
+                          }`}
+                        >
+                          {insiderSocialData.social.qualityScore >= 50
+                            ? "⭐ คุณภาพสูง"
+                            : insiderSocialData.social.qualityScore >= 20
+                              ? "📰 ปานกลาง"
+                              : "⚠️ คุณภาพต่ำ"}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {insiderSocialData.social.sources.map((source, i) => (
+                        <span
+                          key={i}
+                          className="px-2 py-1 bg-gray-700 rounded-full text-xs text-gray-300"
+                        >
+                          {source}
+                        </span>
+                      ))}
+                    </div>
+                    {/* 🆕 Tier Breakdown */}
+                    {insiderSocialData.social.tier1Count !== undefined && (
+                      <div className="flex gap-2 text-xs">
+                        <span className="px-2 py-0.5 bg-emerald-900/50 text-emerald-400 rounded">
+                          Tier 1: {insiderSocialData.social.tier1Count}
+                        </span>
+                        <span className="px-2 py-0.5 bg-blue-900/50 text-blue-400 rounded">
+                          Tier 2: {insiderSocialData.social.tier2Count}
+                        </span>
+                        <span className="px-2 py-0.5 bg-orange-900/50 text-orange-400 rounded">
+                          Tier 3: {insiderSocialData.social.tier3Count}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 52 Week Range */}
             {stockData.high52w && stockData.low52w && (

@@ -50,6 +50,13 @@ export interface StockPrice {
   macdSignal?: number; // Signal Line
   macdHistogram?: number; // Histogram
   macdTrend?: "bullish" | "bearish" | "neutral"; // สัญญาณ MACD
+  // Volume Profile
+  poc?: number; // Point of Control
+  vaHigh?: number; // Value Area High
+  vaLow?: number; // Value Area Low
+  // Short Interest
+  shortInterest?: number; // % Short
+  shortRatio?: number; // Days to cover
 }
 
 export interface PortfolioSummary {
@@ -59,4 +66,32 @@ export interface PortfolioSummary {
   totalProfitPercent: number;
   dayChange: number;
   dayChangePercent: number;
+}
+
+// Advanced Quant Data
+export interface MacroData {
+  dxy: number; // Dollar Index
+  dxyChange: number; // % เปลี่ยนแปลงรายวัน
+  dxyChange5d: number; // % เปลี่ยนแปลง 5 วัน
+  dxyTrend: "up" | "down" | "sideways"; // แนวโน้ม 5 วัน
+  us10y: number; // 10-Year Treasury Yield
+  us10yChange: number; // % เปลี่ยนแปลง
+  timestamp: string;
+}
+
+export interface VolumeProfile {
+  poc: number; // Point of Control - ราคาที่มี volume สูงสุด
+  pocVolume: number; // Volume ที่ POC
+  vaHigh: number; // Value Area High (70% of volume)
+  vaLow: number; // Value Area Low (70% of volume)
+  priceVolumeMap: { price: number; volume: number }[];
+}
+
+export interface InsiderData {
+  insiderBuying: boolean; // มีการซื้อใน 3 เดือน
+  insiderSelling: boolean; // มีการขายใน 3 เดือน
+  netInsiderShares: number; // จำนวน shares net (บวก=ซื้อ, ลบ=ขาย)
+  insiderSentiment: "buying" | "selling" | "neutral";
+  shortInterest?: number; // % Short Interest
+  shortRatio?: number; // Days to cover
 }
