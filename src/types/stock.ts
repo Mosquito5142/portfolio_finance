@@ -39,6 +39,7 @@ export interface StockPrice {
   high52w?: number; // ราคาสูงสุด 52 สัปดาห์
   low52w?: number; // ราคาต่ำสุด 52 สัปดาห์
   // Moving Averages
+  ema5?: number; // EMA 5 วัน (Fast - Trailing Stop)
   ma20?: number; // EMA 20 วัน
   ma50?: number; // SMA 50 วัน
   ma200?: number; // SMA 200 วัน
@@ -54,6 +55,11 @@ export interface StockPrice {
   poc?: number; // Point of Control
   vaHigh?: number; // Value Area High
   vaLow?: number; // Value Area Low
+  // Volume Analysis (Momentum)
+  volumeToday?: number; // Volume วันนี้
+  volumeAvg10?: number; // Volume เฉลี่ย 10 วัน
+  volumeChangePercent?: number; // % เปลี่ยนแปลง volume
+  volumeSignal?: "strong" | "weak_divergence" | "panic_sell" | "normal";
   // Short Interest
   shortInterest?: number; // % Short
   shortRatio?: number; // Days to cover

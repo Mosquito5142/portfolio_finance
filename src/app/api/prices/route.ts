@@ -299,6 +299,7 @@ interface PriceResult {
   high52w?: number;
   low52w?: number;
   // Moving Averages
+  ema5?: number; // Fast EMA for trailing stop
   ma20?: number;
   ma50?: number;
   ma200?: number;
@@ -314,6 +315,11 @@ interface PriceResult {
   poc?: number;
   vaHigh?: number;
   vaLow?: number;
+  // Volume Analysis (Momentum)
+  volumeToday?: number;
+  volumeAvg10?: number;
+  volumeChangePercent?: number;
+  volumeSignal?: "strong" | "weak_divergence" | "panic_sell" | "normal";
   // SLV specific
   silverSpotPrice?: number;
 }
@@ -368,6 +374,8 @@ export async function GET(request: Request) {
         const meta = result.meta;
         const actualPrice = meta.regularMarketPrice;
         const previousClose = meta.previousClose || meta.chartPreviousClose;
+        const dayChange = actualPrice - previousClose;
+        const dayChangePercent = (dayChange / previousClose) * 100;
 
         // ดึงข้อมูล 52 Week High/Low
         const high52w = meta.fiftyTwoWeekHigh;
@@ -392,6 +400,7 @@ export async function GET(request: Request) {
         );
 
         // คำนวณ Moving Averages
+        const ema5 = calculateEMA(closes, 5); // 🆕 Fast EMA for trailing stop
         const ma20 = calculateEMA(closes, 20);
         const ma50 = calculateSMA(closes, 50);
         const ma200 = calculateSMA(closes, 200);
@@ -406,6 +415,33 @@ export async function GET(request: Request) {
 
         // คำนวณ Volume Profile
         const volumeProfile = calculateVolumeProfile(closes, volumes);
+
+        // 🆕 คำนวณ Volume Analysis (Momentum Check)
+        const volumeToday =
+          volumes.length > 0 ? volumes[volumes.length - 1] : 0;
+        const volumeAvg10 = calculateSMA(volumes, 10) || 0;
+        const volumeChangePercent =
+          volumeAvg10 > 0
+            ? ((volumeToday - volumeAvg10) / volumeAvg10) * 100
+            : 0;
+        const priceUp = dayChange > 0;
+
+        let volumeSignal:
+          | "strong"
+          | "weak_divergence"
+          | "panic_sell"
+          | "normal" = "normal";
+        if (volumeToday > volumeAvg10) {
+          if (priceUp) {
+            volumeSignal = "strong"; // Volume สูง + ราคาขึ้น = ถือต่อได้
+          } else {
+            volumeSignal = "panic_sell"; // Volume สูง + ราคาลง = ขาย!
+          }
+        } else {
+          if (priceUp) {
+            volumeSignal = "weak_divergence"; // Volume ต่ำ + ราคาขึ้น = เตรียมขาย
+          }
+        }
 
         // ถ้าเป็น SLV ให้เพิ่มข้อมูลราคาเงินเป็น reference
         if (symbol === "SLV" && silverPrice) {
@@ -428,6 +464,7 @@ export async function GET(request: Request) {
             high52w,
             low52w,
             // Moving Averages
+            ema5: ema5 ?? undefined,
             ma20: ma20 ?? undefined,
             ma50: ma50 ?? undefined,
             ma200: ma200 ?? undefined,
@@ -443,12 +480,14 @@ export async function GET(request: Request) {
             poc: volumeProfile?.poc,
             vaHigh: volumeProfile?.vaHigh,
             vaLow: volumeProfile?.vaLow,
+            // Volume Analysis
+            volumeToday,
+            volumeAvg10,
+            volumeChangePercent,
+            volumeSignal,
           };
           return;
         }
-
-        const dayChange = actualPrice - previousClose;
-        const dayChangePercent = (dayChange / previousClose) * 100;
 
         results[symbol] = {
           symbol,
@@ -462,6 +501,7 @@ export async function GET(request: Request) {
           high52w,
           low52w,
           // Moving Averages
+          ema5: ema5 ?? undefined,
           ma20: ma20 ?? undefined,
           ma50: ma50 ?? undefined,
           ma200: ma200 ?? undefined,
@@ -477,6 +517,11 @@ export async function GET(request: Request) {
           poc: volumeProfile?.poc,
           vaHigh: volumeProfile?.vaHigh,
           vaLow: volumeProfile?.vaLow,
+          // Volume Analysis
+          volumeToday,
+          volumeAvg10,
+          volumeChangePercent,
+          volumeSignal,
         };
       } catch (error) {
         console.error(`Error fetching ${symbol}:`, error);

@@ -659,6 +659,176 @@ export default function SearchPage() {
                     </div>
                   </div>
 
+                  {/* 🤖 AI TACTICAL COMMAND */}
+                  {stockData.ema5 && (
+                    <div className="mb-4 p-4 bg-gradient-to-r from-gray-900 via-slate-900 to-gray-900 rounded-2xl border-2 border-cyan-500/50 shadow-lg shadow-cyan-500/10">
+                      <div className="flex items-center gap-3 mb-4 pb-3 border-b border-cyan-500/30">
+                        <span className="text-2xl">🤖</span>
+                        <div>
+                          <h3 className="text-cyan-400 font-bold text-lg">
+                            AI TACTICAL COMMAND
+                          </h3>
+                          <p className="text-gray-500 text-xs">
+                            คำแนะนำเฉพาะสถานะของคุณ
+                          </p>
+                        </div>
+                      </div>
+
+                      {(() => {
+                        // Calculate tactical data
+                        const ema5Val =
+                          stockData.ema5 || stockData.currentPrice;
+                        const rsiVal = stockData.rsi || 50;
+                        const trendUp = stockData.ma50
+                          ? stockData.currentPrice > stockData.ma50
+                          : true;
+                        const priceAboveEma5 = stockData.currentPrice > ema5Val;
+                        const distanceFromEma5 =
+                          ((stockData.currentPrice - ema5Val) / ema5Val) * 100;
+                        const volHigh =
+                          stockData.volumeSignal === "strong" ||
+                          (stockData.volumeChangePercent || 0) > 0;
+
+                        // 1. Logic for NEW BUYERS 🛒
+                        let newBuyerStatus = "";
+                        let newBuyerColor = "";
+                        let newBuyerIcon = "";
+                        let newBuyerAdvice = "";
+
+                        if (trendUp && rsiVal < 50) {
+                          newBuyerStatus = "🟢 เข้าได้เลย (Strong Buy)";
+                          newBuyerColor = "text-green-400";
+                          newBuyerIcon = "✅";
+                          newBuyerAdvice = `ราคาและโมเมนตัมกำลังสวย RSI ${rsiVal.toFixed(0)} + ยืนเหนือเส้น 50 วัน เข้าได้ตาม Position Size!`;
+                        } else if (trendUp && rsiVal > 75) {
+                          newBuyerStatus = "🟡 รอจังหวะย่อ (Wait on Dip)";
+                          newBuyerColor = "text-yellow-400";
+                          newBuyerIcon = "⏳";
+                          newBuyerAdvice = `อย่าไล่ราคา! RSI ${rsiVal.toFixed(0)} สูงเกินไป ตั้งรอที่ ${formatUSD(ema5Val)} (EMA5) จะได้เปรียบกว่า`;
+                        } else if (trendUp && rsiVal >= 50) {
+                          newBuyerStatus = "🟡 ระวังหน่อย (Caution)";
+                          newBuyerColor = "text-yellow-400";
+                          newBuyerIcon = "⚠️";
+                          newBuyerAdvice = `RSI ${rsiVal.toFixed(0)} เริ่มสูง แนะนำรอราคาย่อลงมาใกล้ ${formatUSD(ema5Val)} แล้วค่อยเข้า`;
+                        } else {
+                          newBuyerStatus = "🔴 ห้ามเข้า! (Don't Catch Knife)";
+                          newBuyerColor = "text-red-400";
+                          newBuyerIcon = "❌";
+                          newBuyerAdvice = `เป็นขาลง ราคาต่ำกว่า SMA50 รอให้กลับไปยืนเหนือเส้น 50 วันก่อน`;
+                        }
+
+                        // 2. Logic for HOLDERS 💎
+                        let holderStatus = "";
+                        let holderColor = "";
+                        let holderIcon = "";
+                        let holderAdvice = "";
+
+                        if (priceAboveEma5 && volHigh) {
+                          holderStatus = "🔥 ถือต่อ 100% (Strong Hold)";
+                          holderColor = "text-green-400";
+                          holderIcon = "💎";
+                          holderAdvice = `Volume ยังพีคและราคายืนเหนือ EMA5 สบายๆ ห้ามขายหมูเด็ดขาด! เลื่อน Stop Loss ตามมาที่ ${formatUSD(ema5Val)}`;
+                        } else if (priceAboveEma5 && !volHigh) {
+                          holderStatus =
+                            "⚠️ ถือได้แต่ระวัง (Hold with Caution)";
+                          holderColor = "text-yellow-400";
+                          holderIcon = "👀";
+                          holderAdvice = `ราคายังเหนือ EMA5 แต่แรงซื้อเริ่มแผ่ว จับตาดูเส้น ${formatUSD(ema5Val)} ถ้าหลุดให้เตรียมขาย`;
+                        } else {
+                          holderStatus = "🚨 หนี! ขายทันที (Take Profit)";
+                          holderColor = "text-red-400";
+                          holderIcon = "🏃";
+                          holderAdvice = `โมเมนตัมเสียแล้ว! ราคาหลุด EMA5 (${formatUSD(ema5Val)}) ขายล็อกกำไรทันที ก่อนลงไปมากกว่านี้`;
+                        }
+
+                        // 3. Logic for PYRAMIDERS 🧱
+                        let pyramidStatus = "";
+                        let pyramidColor = "";
+                        let pyramidIcon = "";
+                        let pyramidAdvice = "";
+
+                        if (distanceFromEma5 <= 2 && trendUp) {
+                          pyramidStatus = "🟢 เติมได้เลย (Buy on Support)";
+                          pyramidColor = "text-green-400";
+                          pyramidIcon = "➕";
+                          pyramidAdvice = `ราคาย่อมาใกล้ EMA5 แค่ ${distanceFromEma5.toFixed(1)}% ถ้าจะเติมนี่คือจังหวะทอง!`;
+                        } else if (distanceFromEma5 > 5) {
+                          pyramidStatus = "🔴 อย่าเพิ่งเติม (Too Extended)";
+                          pyramidColor = "text-red-400";
+                          pyramidIcon = "🛑";
+                          pyramidAdvice = `ราคาลอยสูงไป ${distanceFromEma5.toFixed(1)}% จาก EMA5 เสี่ยงดอยระยะสั้น รอกราฟพักตัวก่อน`;
+                        } else if (
+                          distanceFromEma5 > 2 &&
+                          distanceFromEma5 <= 5
+                        ) {
+                          pyramidStatus = "⚠️ รอจังหวะย่อ (Risky to Chase)";
+                          pyramidColor = "text-yellow-400";
+                          pyramidIcon = "⏳";
+                          pyramidAdvice = `Upside เหลือไม่เยอะ (${distanceFromEma5.toFixed(1)}% จาก EMA5) ถ้าจะเติมให้รอราคาลงมาแตะ ${formatUSD(ema5Val)}`;
+                        } else {
+                          pyramidStatus = "⚠️ ขาลง ห้ามเติม";
+                          pyramidColor = "text-red-400";
+                          pyramidIcon = "❌";
+                          pyramidAdvice =
+                            "ไม่ควรเติมของในขาลง รอให้กลับตัวก่อน";
+                        }
+
+                        return (
+                          <div className="space-y-4">
+                            {/* New Buyers */}
+                            <div className="p-3 bg-gray-800/50 rounded-xl border border-gray-700/50">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-lg">{newBuyerIcon}</span>
+                                <span className="text-gray-400 text-sm">
+                                  👤 สำหรับคน &quot;ว่างพอร์ต&quot; (New Entry)
+                                </span>
+                              </div>
+                              <p className={`font-bold ${newBuyerColor}`}>
+                                {newBuyerStatus}
+                              </p>
+                              <p className="text-gray-400 text-sm mt-1">
+                                {newBuyerAdvice}
+                              </p>
+                            </div>
+
+                            {/* Holders */}
+                            <div className="p-3 bg-gray-800/50 rounded-xl border border-gray-700/50">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-lg">{holderIcon}</span>
+                                <span className="text-gray-400 text-sm">
+                                  👤 สำหรับคน &quot;มีของแล้ว&quot; (Profit Run)
+                                </span>
+                              </div>
+                              <p className={`font-bold ${holderColor}`}>
+                                {holderStatus}
+                              </p>
+                              <p className="text-gray-400 text-sm mt-1">
+                                {holderAdvice}
+                              </p>
+                            </div>
+
+                            {/* Pyramiders */}
+                            <div className="p-3 bg-gray-800/50 rounded-xl border border-gray-700/50">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-lg">{pyramidIcon}</span>
+                                <span className="text-gray-400 text-sm">
+                                  👤 สำหรับคน &quot;จะเติมของ&quot; (Sniper
+                                  Add-on)
+                                </span>
+                              </div>
+                              <p className={`font-bold ${pyramidColor}`}>
+                                {pyramidStatus}
+                              </p>
+                              <p className="text-gray-400 text-sm mt-1">
+                                {pyramidAdvice}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
                   {/* Recommendation Badge */}
                   <div
                     className={`p-4 rounded-xl bg-gradient-to-r ${recommendationColor} mb-4`}
@@ -1079,6 +1249,284 @@ export default function SearchPage() {
                 </div>
               </div>
             )}
+
+            {/* 📈 Moving Averages */}
+            {stockData.ema5 && (
+              <div className="mb-6 p-5 bg-gradient-to-r from-cyan-900/30 to-blue-900/30 rounded-2xl border border-cyan-500/30">
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-2xl">📈</span>
+                  <div>
+                    <h3 className="text-white font-bold text-lg">
+                      Moving Averages
+                    </h3>
+                    <p className="text-gray-400 text-sm">
+                      เส้นค่าเฉลี่ยเคลื่อนที่ (Trend Indicator)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  {/* EMA 5 - Trailing Stop */}
+                  <div
+                    className={`p-3 rounded-xl border ${
+                      stockData.currentPrice > stockData.ema5
+                        ? "bg-green-900/30 border-green-500/50"
+                        : "bg-red-900/30 border-red-500/50"
+                    }`}
+                  >
+                    <p className="text-gray-400 text-xs mb-1">
+                      EMA 5 (Stop Line)
+                    </p>
+                    <p className="text-white font-bold text-lg">
+                      {formatUSD(stockData.ema5)}
+                    </p>
+                    <p
+                      className={`text-xs ${
+                        stockData.currentPrice > stockData.ema5
+                          ? "text-green-400"
+                          : "text-red-400"
+                      }`}
+                    >
+                      {stockData.currentPrice > stockData.ema5
+                        ? "▲ Above"
+                        : "▼ Below"}{" "}
+                      (
+                      {(
+                        ((stockData.currentPrice - stockData.ema5) /
+                          stockData.ema5) *
+                        100
+                      ).toFixed(1)}
+                      %)
+                    </p>
+                  </div>
+
+                  {/* EMA 20 */}
+                  {stockData.ma20 && (
+                    <div
+                      className={`p-3 rounded-xl border ${
+                        stockData.currentPrice > stockData.ma20
+                          ? "bg-green-900/20 border-green-500/30"
+                          : "bg-red-900/20 border-red-500/30"
+                      }`}
+                    >
+                      <p className="text-gray-400 text-xs mb-1">EMA 20</p>
+                      <p className="text-white font-bold text-lg">
+                        {formatUSD(stockData.ma20)}
+                      </p>
+                      <p
+                        className={`text-xs ${
+                          stockData.currentPrice > stockData.ma20
+                            ? "text-green-400"
+                            : "text-red-400"
+                        }`}
+                      >
+                        {stockData.currentPrice > stockData.ma20
+                          ? "▲ Above"
+                          : "▼ Below"}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* SMA 50 */}
+                  {stockData.ma50 && (
+                    <div
+                      className={`p-3 rounded-xl border ${
+                        stockData.currentPrice > stockData.ma50
+                          ? "bg-green-900/20 border-green-500/30"
+                          : "bg-red-900/20 border-red-500/30"
+                      }`}
+                    >
+                      <p className="text-gray-400 text-xs mb-1">SMA 50</p>
+                      <p className="text-white font-bold text-lg">
+                        {formatUSD(stockData.ma50)}
+                      </p>
+                      <p
+                        className={`text-xs ${
+                          stockData.currentPrice > stockData.ma50
+                            ? "text-green-400"
+                            : "text-red-400"
+                        }`}
+                      >
+                        {stockData.currentPrice > stockData.ma50
+                          ? "▲ Above"
+                          : "▼ Below"}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* SMA 200 */}
+                  {stockData.ma200 && (
+                    <div
+                      className={`p-3 rounded-xl border ${
+                        stockData.currentPrice > stockData.ma200
+                          ? "bg-green-900/20 border-green-500/30"
+                          : "bg-red-900/20 border-red-500/30"
+                      }`}
+                    >
+                      <p className="text-gray-400 text-xs mb-1">SMA 200</p>
+                      <p className="text-white font-bold text-lg">
+                        {formatUSD(stockData.ma200)}
+                      </p>
+                      <p
+                        className={`text-xs ${
+                          stockData.currentPrice > stockData.ma200
+                            ? "text-green-400"
+                            : "text-red-400"
+                        }`}
+                      >
+                        {stockData.currentPrice > stockData.ma200
+                          ? "▲ Above"
+                          : "▼ Below"}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* EMA5 Trailing Stop Alert */}
+                <div
+                  className={`p-3 rounded-xl ${
+                    stockData.currentPrice > stockData.ema5
+                      ? "bg-green-900/20 border border-green-500/30"
+                      : "bg-red-900/30 border border-red-500/50"
+                  }`}
+                >
+                  <p className="text-sm">
+                    {stockData.currentPrice > stockData.ema5 ? (
+                      <>
+                        <span className="text-green-400 font-medium">
+                          ✅ ปลอดภัย - อยู่เหนือ EMA5
+                        </span>
+                        <span className="text-gray-400">
+                          {" "}
+                          - ถือต่อได้ ใช้ {formatUSD(stockData.ema5)} เป็น
+                          Trailing Stop
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-red-400 font-medium">
+                          🚨 คำเตือน! ราคาหลุด EMA5
+                        </span>
+                        <span className="text-gray-400">
+                          {" "}
+                          - พิจารณาขาย 100% หรือ Set Stop Loss ทันที
+                        </span>
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* 📊 Daily Volume Analysis */}
+            {stockData.volumeToday !== undefined &&
+              stockData.volumeAvg10 !== undefined && (
+                <div className="mb-6 p-5 bg-gradient-to-r from-orange-900/30 to-yellow-900/30 rounded-2xl border border-orange-500/30">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-2xl">📊</span>
+                    <div>
+                      <h3 className="text-white font-bold text-lg">
+                        Daily Volume Analysis
+                      </h3>
+                      <p className="text-gray-400 text-sm">
+                        วิเคราะห์ Momentum ด้วย Volume
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    {/* Volume Today */}
+                    <div className="bg-gray-800/50 rounded-xl p-4">
+                      <p className="text-gray-400 text-xs mb-1">
+                        Volume วันนี้
+                      </p>
+                      <p className="text-2xl font-bold text-white">
+                        {(stockData.volumeToday / 1000000).toFixed(2)}M
+                      </p>
+                      <p
+                        className={`text-sm ${
+                          (stockData.volumeChangePercent || 0) > 0
+                            ? "text-green-400"
+                            : stockData.volumeChangePercent === 0
+                              ? "text-gray-400"
+                              : "text-red-400"
+                        }`}
+                      >
+                        {(stockData.volumeChangePercent || 0) > 0 ? "+" : ""}
+                        {(stockData.volumeChangePercent || 0).toFixed(0)}% vs
+                        ค่าเฉลี่ย
+                        {(stockData.volumeChangePercent || 0) > 50 && " 🔥"}
+                      </p>
+                    </div>
+
+                    {/* Volume Average 10 Days */}
+                    <div className="bg-gray-800/50 rounded-xl p-4">
+                      <p className="text-gray-400 text-xs mb-1">
+                        ค่าเฉลี่ย 10 วัน
+                      </p>
+                      <p className="text-2xl font-bold text-white">
+                        {(stockData.volumeAvg10 / 1000000).toFixed(2)}M
+                      </p>
+                      <p className="text-gray-500 text-sm">Baseline Volume</p>
+                    </div>
+                  </div>
+
+                  {/* Volume Signal Status */}
+                  <div
+                    className={`p-4 rounded-xl ${
+                      stockData.volumeSignal === "strong"
+                        ? "bg-green-900/30 border border-green-500/50"
+                        : stockData.volumeSignal === "panic_sell"
+                          ? "bg-red-900/50 border border-red-500/70"
+                          : stockData.volumeSignal === "weak_divergence"
+                            ? "bg-yellow-900/30 border border-yellow-500/50"
+                            : "bg-gray-800/50 border border-gray-700"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">
+                        {stockData.volumeSignal === "strong"
+                          ? "💪"
+                          : stockData.volumeSignal === "panic_sell"
+                            ? "🚨"
+                            : stockData.volumeSignal === "weak_divergence"
+                              ? "⚠️"
+                              : "➡️"}
+                      </span>
+                      <div>
+                        <p
+                          className={`font-bold ${
+                            stockData.volumeSignal === "strong"
+                              ? "text-green-400"
+                              : stockData.volumeSignal === "panic_sell"
+                                ? "text-red-400"
+                                : stockData.volumeSignal === "weak_divergence"
+                                  ? "text-yellow-400"
+                                  : "text-gray-400"
+                          }`}
+                        >
+                          {stockData.volumeSignal === "strong"
+                            ? "Volume Breakout! 🔥"
+                            : stockData.volumeSignal === "panic_sell"
+                              ? "Panic Sell Signal! 🚨"
+                              : stockData.volumeSignal === "weak_divergence"
+                                ? "Weak Divergence ⚠️"
+                                : "Volume ปกติ"}
+                        </p>
+                        <p className="text-gray-400 text-sm">
+                          {stockData.volumeSignal === "strong"
+                            ? "ขาขึ้นแข็งแกร่ง ถือต่อได้"
+                            : stockData.volumeSignal === "panic_sell"
+                              ? "Volume สูง + ราคาลง = ขายทันที!"
+                              : stockData.volumeSignal === "weak_divergence"
+                                ? "ราคาขึ้นแต่ Volume น้อย = เตรียมขาย"
+                                : "ไม่มีสัญญาณผิดปกติ"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
             {/* 🐳 Insider Trading */}
             {insiderSocialData?.insider && (
