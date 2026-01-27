@@ -747,30 +747,24 @@ export default function SearchPage() {
                         let pyramidIcon = "";
                         let pyramidAdvice = "";
 
-                        if (distanceFromEma5 <= 2 && trendUp) {
-                          pyramidStatus = "🟢 เติมได้เลย (Buy on Support)";
-                          pyramidColor = "text-green-400";
-                          pyramidIcon = "➕";
-                          pyramidAdvice = `ราคาย่อมาใกล้ EMA5 แค่ ${distanceFromEma5.toFixed(1)}% ถ้าจะเติมนี่คือจังหวะทอง!`;
-                        } else if (distanceFromEma5 > 5) {
-                          pyramidStatus = "🔴 อย่าเพิ่งเติม (Too Extended)";
+                        if (!priceAboveEma5) {
+                          // 🔴 ราคาหลุด EMA5 = ห้ามเติม
+                          pyramidStatus = "🔴 ห้ามเติม! (Don't Add)";
                           pyramidColor = "text-red-400";
-                          pyramidIcon = "🛑";
-                          pyramidAdvice = `ราคาลอยสูงไป ${distanceFromEma5.toFixed(1)}% จาก EMA5 เสี่ยงดอยระยะสั้น รอกราฟพักตัวก่อน`;
-                        } else if (
-                          distanceFromEma5 > 2 &&
-                          distanceFromEma5 <= 5
-                        ) {
-                          pyramidStatus = "⚠️ รอจังหวะย่อ (Risky to Chase)";
+                          pyramidIcon = "⛔";
+                          pyramidAdvice = `ราคาหลุด EMA5 (${formatUSD(ema5Val)}) โมเมนตัมเสียแล้ว การเติมตอนนี้คือการถัวขาลง (อันตราย!)`;
+                        } else if (priceAboveEma5 && !volHigh) {
+                          // ⚠️ ราคายืนได้แต่ Volume แห้ง = รอก่อน
+                          pyramidStatus = "⚠️ รอก่อน (Wait)";
                           pyramidColor = "text-yellow-400";
                           pyramidIcon = "⏳";
-                          pyramidAdvice = `Upside เหลือไม่เยอะ (${distanceFromEma5.toFixed(1)}% จาก EMA5) ถ้าจะเติมให้รอราคาลงมาแตะ ${formatUSD(ema5Val)}`;
+                          pyramidAdvice = `ราคายืนเหนือ EMA5 ได้ แต่ Volume แห้ง ระวัง False Break รอให้มี Volume ยืนยันก่อน`;
                         } else {
-                          pyramidStatus = "⚠️ ขาลง ห้ามเติม";
-                          pyramidColor = "text-red-400";
-                          pyramidIcon = "❌";
-                          pyramidAdvice =
-                            "ไม่ควรเติมของในขาลง รอให้กลับตัวก่อน";
+                          // 🟢 ราคาเหนือ EMA5 + Volume ดี = เติมได้
+                          pyramidStatus = "🟢 เติมได้ (Pyramid Up)";
+                          pyramidColor = "text-green-400";
+                          pyramidIcon = "➕";
+                          pyramidAdvice = `ราคายืนเหนือ EMA5 + Volume ยืนยัน เติมได้เลย! ตั้ง Stop Loss ที่ ${formatUSD(ema5Val)}`;
                         }
 
                         return (
