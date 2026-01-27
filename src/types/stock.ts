@@ -38,6 +38,18 @@ export interface StockPrice {
   resistance?: number; // แนวต้าน
   high52w?: number; // ราคาสูงสุด 52 สัปดาห์
   low52w?: number; // ราคาต่ำสุด 52 สัปดาห์
+  // Moving Averages
+  ma20?: number; // EMA 20 วัน
+  ma50?: number; // SMA 50 วัน
+  ma200?: number; // SMA 200 วัน
+  maSignal?: "bullish" | "bearish" | "neutral"; // สัญญาณ MA
+  // RSI & MACD
+  rsi?: number; // RSI 14 วัน
+  rsiSignal?: "overbought" | "oversold" | "neutral"; // สัญญาณ RSI
+  macd?: number; // MACD Line
+  macdSignal?: number; // Signal Line
+  macdHistogram?: number; // Histogram
+  macdTrend?: "bullish" | "bearish" | "neutral"; // สัญญาณ MACD
 }
 
 export interface PortfolioSummary {

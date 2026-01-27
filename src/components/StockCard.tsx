@@ -221,6 +221,206 @@ export default function StockCard({ stock, price }: StockCardProps) {
         </div>
       )}
 
+      {/* Moving Averages */}
+      {(price?.ma20 || price?.ma50 || price?.ma200) && (
+        <div className="mt-4 pt-4 border-t border-gray-800">
+          <p className="text-gray-400 text-xs font-medium mb-3 flex items-center gap-2">
+            📈 Moving Averages
+            {price.maSignal && (
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  price.maSignal === "bullish"
+                    ? "bg-green-500/20 text-green-400"
+                    : price.maSignal === "bearish"
+                      ? "bg-red-500/20 text-red-400"
+                      : "bg-gray-500/20 text-gray-400"
+                }`}
+              >
+                {price.maSignal === "bullish"
+                  ? "🐂 ขาขึ้น"
+                  : price.maSignal === "bearish"
+                    ? "🐻 ขาลง"
+                    : "➡️ Sideway"}
+              </span>
+            )}
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {price.ma20 && (
+              <div className="bg-gray-800/50 rounded-lg p-2 text-center">
+                <p className="text-gray-500 text-[10px] mb-1">EMA 20</p>
+                <p
+                  className={`text-sm font-medium ${currentPrice > price.ma20 ? "text-green-400" : "text-red-400"}`}
+                >
+                  {formatUSD(price.ma20)}
+                </p>
+                <p
+                  className={`text-[10px] ${currentPrice > price.ma20 ? "text-green-500" : "text-red-500"}`}
+                >
+                  {currentPrice > price.ma20 ? "▲ Above" : "▼ Below"}
+                </p>
+              </div>
+            )}
+            {price.ma50 && (
+              <div className="bg-gray-800/50 rounded-lg p-2 text-center">
+                <p className="text-gray-500 text-[10px] mb-1">SMA 50</p>
+                <p
+                  className={`text-sm font-medium ${currentPrice > price.ma50 ? "text-green-400" : "text-red-400"}`}
+                >
+                  {formatUSD(price.ma50)}
+                </p>
+                <p
+                  className={`text-[10px] ${currentPrice > price.ma50 ? "text-green-500" : "text-red-500"}`}
+                >
+                  {currentPrice > price.ma50 ? "▲ Above" : "▼ Below"}
+                </p>
+              </div>
+            )}
+            {price.ma200 && (
+              <div className="bg-gray-800/50 rounded-lg p-2 text-center">
+                <p className="text-gray-500 text-[10px] mb-1">SMA 200</p>
+                <p
+                  className={`text-sm font-medium ${currentPrice > price.ma200 ? "text-green-400" : "text-red-400"}`}
+                >
+                  {formatUSD(price.ma200)}
+                </p>
+                <p
+                  className={`text-[10px] ${currentPrice > price.ma200 ? "text-green-500" : "text-red-500"}`}
+                >
+                  {currentPrice > price.ma200 ? "▲ Above" : "▼ Below"}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* RSI & MACD */}
+      {(price?.rsi !== undefined || price?.macd !== undefined) && (
+        <div className="mt-4 pt-4 border-t border-gray-800">
+          <p className="text-gray-400 text-xs font-medium mb-3">
+            📊 RSI & MACD
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            {/* RSI */}
+            {price?.rsi !== undefined && (
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-500 text-[10px]">RSI (14)</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      price.rsiSignal === "overbought"
+                        ? "bg-red-500/20 text-red-400"
+                        : price.rsiSignal === "oversold"
+                          ? "bg-green-500/20 text-green-400"
+                          : "bg-gray-500/20 text-gray-400"
+                    }`}
+                  >
+                    {price.rsiSignal === "overbought"
+                      ? "🔴 Overbought"
+                      : price.rsiSignal === "oversold"
+                        ? "🟢 Oversold"
+                        : "⚪ Normal"}
+                  </span>
+                </div>
+                <div className="text-center">
+                  <p
+                    className={`text-2xl font-bold ${
+                      price.rsi >= 70
+                        ? "text-red-400"
+                        : price.rsi <= 30
+                          ? "text-green-400"
+                          : "text-white"
+                    }`}
+                  >
+                    {price.rsi.toFixed(1)}
+                  </p>
+                </div>
+                {/* RSI Gauge */}
+                <div className="mt-2">
+                  <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full ${
+                        price.rsi >= 70
+                          ? "bg-red-500"
+                          : price.rsi <= 30
+                            ? "bg-green-500"
+                            : "bg-blue-500"
+                      }`}
+                      style={{ width: `${price.rsi}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[9px] text-gray-600 mt-1">
+                    <span>0</span>
+                    <span>30</span>
+                    <span>70</span>
+                    <span>100</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MACD */}
+            {price?.macd !== undefined && (
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-gray-500 text-[10px]">MACD</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      price.macdTrend === "bullish"
+                        ? "bg-green-500/20 text-green-400"
+                        : price.macdTrend === "bearish"
+                          ? "bg-red-500/20 text-red-400"
+                          : "bg-gray-500/20 text-gray-400"
+                    }`}
+                  >
+                    {price.macdTrend === "bullish"
+                      ? "🐂 Bullish"
+                      : price.macdTrend === "bearish"
+                        ? "🐻 Bearish"
+                        : "➡️ Neutral"}
+                  </span>
+                </div>
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">MACD</span>
+                    <span
+                      className={
+                        price.macd >= 0 ? "text-green-400" : "text-red-400"
+                      }
+                    >
+                      {price.macd.toFixed(2)}
+                    </span>
+                  </div>
+                  {price.macdSignal !== undefined && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Signal</span>
+                      <span className="text-yellow-400">
+                        {price.macdSignal.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  {price.macdHistogram !== undefined && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Histogram</span>
+                      <span
+                        className={
+                          price.macdHistogram >= 0
+                            ? "text-green-400"
+                            : "text-red-400"
+                        }
+                      >
+                        {price.macdHistogram >= 0 ? "+" : ""}
+                        {price.macdHistogram.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Holdings Detail */}
       <details className="mt-4 pt-4 border-t border-gray-800">
         <summary className="text-gray-400 text-sm cursor-pointer hover:text-white transition-colors">

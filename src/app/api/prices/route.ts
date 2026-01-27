@@ -88,6 +88,139 @@ function calculateSupportResistance(
   return { support, resistance };
 }
 
+// คำนวณ Simple Moving Average (SMA)
+function calculateSMA(prices: number[], period: number): number | null {
+  if (prices.length < period) return null;
+  const recentPrices = prices.slice(-period);
+  const sum = recentPrices.reduce((acc, price) => acc + price, 0);
+  return sum / period;
+}
+
+// คำนวณ Exponential Moving Average (EMA)
+function calculateEMA(prices: number[], period: number): number | null {
+  if (prices.length < period) return null;
+
+  const multiplier = 2 / (period + 1);
+
+  // เริ่มจาก SMA ของ N วันแรก
+  const sma =
+    prices.slice(0, period).reduce((acc, price) => acc + price, 0) / period;
+
+  // คำนวณ EMA จากวันที่ period เป็นต้นไป
+  let ema = sma;
+  for (let i = period; i < prices.length; i++) {
+    ema = (prices[i] - ema) * multiplier + ema;
+  }
+
+  return ema;
+}
+
+// วิเคราะห์สัญญาณ MA
+function analyzeMASignal(
+  currentPrice: number,
+  ma20: number | null,
+  ma50: number | null,
+  ma200: number | null,
+): "bullish" | "bearish" | "neutral" {
+  if (!ma20 || !ma50) return "neutral";
+
+  // Golden Cross: MA20 ตัด MA50 ขึ้น และราคา > MA50
+  if (ma20 > ma50 && currentPrice > ma50) {
+    // ถ้ามี MA200 และราคา > MA200 = bullish มาก
+    if (ma200 && currentPrice > ma200) return "bullish";
+    return "bullish";
+  }
+
+  // Death Cross: MA20 ตัด MA50 ลง และราคา < MA50
+  if (ma20 < ma50 && currentPrice < ma50) {
+    return "bearish";
+  }
+
+  return "neutral";
+}
+
+// คำนวณ RSI (Relative Strength Index)
+function calculateRSI(prices: number[], period: number = 14): number | null {
+  if (prices.length < period + 1) return null;
+
+  let gains = 0;
+  let losses = 0;
+
+  // คำนวณ initial average gain/loss
+  for (let i = prices.length - period; i < prices.length; i++) {
+    const change = prices[i] - prices[i - 1];
+    if (change > 0) {
+      gains += change;
+    } else {
+      losses += Math.abs(change);
+    }
+  }
+
+  const avgGain = gains / period;
+  const avgLoss = losses / period;
+
+  if (avgLoss === 0) return 100;
+
+  const rs = avgGain / avgLoss;
+  const rsi = 100 - 100 / (1 + rs);
+
+  return rsi;
+}
+
+// วิเคราะห์สัญญาณ RSI
+function analyzeRSISignal(
+  rsi: number | null,
+): "overbought" | "oversold" | "neutral" {
+  if (rsi === null) return "neutral";
+  if (rsi >= 70) return "overbought"; // Overbought - อาจลง
+  if (rsi <= 30) return "oversold"; // Oversold - อาจขึ้น
+  return "neutral";
+}
+
+// คำนวณ MACD
+function calculateMACD(prices: number[]): {
+  macd: number | null;
+  signal: number | null;
+  histogram: number | null;
+  trend: "bullish" | "bearish" | "neutral";
+} {
+  const ema12 = calculateEMA(prices, 12);
+  const ema26 = calculateEMA(prices, 26);
+
+  if (ema12 === null || ema26 === null) {
+    return { macd: null, signal: null, histogram: null, trend: "neutral" };
+  }
+
+  const macdLine = ema12 - ema26;
+
+  // คำนวณ Signal Line (EMA 9 ของ MACD Line)
+  // สร้าง array ของ MACD values สำหรับคำนวณ Signal
+  const macdValues: number[] = [];
+  for (let i = 26; i <= prices.length; i++) {
+    const ema12Part = calculateEMA(prices.slice(0, i), 12);
+    const ema26Part = calculateEMA(prices.slice(0, i), 26);
+    if (ema12Part !== null && ema26Part !== null) {
+      macdValues.push(ema12Part - ema26Part);
+    }
+  }
+
+  const signalLine =
+    macdValues.length >= 9 ? calculateEMA(macdValues, 9) : null;
+  const histogram = signalLine !== null ? macdLine - signalLine : null;
+
+  // วิเคราะห์ trend
+  let trend: "bullish" | "bearish" | "neutral" = "neutral";
+  if (histogram !== null) {
+    if (histogram > 0 && macdLine > 0) {
+      trend = "bullish"; // MACD > Signal และ MACD > 0
+    } else if (histogram < 0 && macdLine < 0) {
+      trend = "bearish"; // MACD < Signal และ MACD < 0
+    }
+  }
+
+  return { macd: macdLine, signal: signalLine, histogram, trend };
+}
+
 interface PriceResult {
   symbol: string;
   currentPrice: number;
@@ -104,6 +237,18 @@ interface PriceResult {
   resistance?: number;
   high52w?: number;
   low52w?: number;
+  // Moving Averages
+  ma20?: number;
+  ma50?: number;
+  ma200?: number;
+  maSignal?: "bullish" | "bearish" | "neutral";
+  // RSI & MACD
+  rsi?: number;
+  rsiSignal?: "overbought" | "oversold" | "neutral";
+  macd?: number;
+  macdSignal?: number;
+  macdHistogram?: number;
+  macdTrend?: "bullish" | "bearish" | "neutral";
 }
 
 export async function GET(request: Request) {
@@ -128,9 +273,9 @@ export async function GET(request: Request) {
   await Promise.all(
     symbols.map(async (symbol) => {
       try {
-        // ดึงข้อมูลย้อนหลัง 3 เดือน สำหรับคำนวณแนวรับ/ต้าน
+        // ดึงข้อมูลย้อนหลัง 1 ปี สำหรับคำนวณ MA200
         const response = await fetch(
-          `${YAHOO_API_BASE}/${symbol}?interval=1d&range=3mo`,
+          `${YAHOO_API_BASE}/${symbol}?interval=1d&range=1y`,
           {
             headers: {
               "User-Agent":
@@ -161,12 +306,14 @@ export async function GET(request: Request) {
         const high52w = meta.fiftyTwoWeekHigh;
         const low52w = meta.fiftyTwoWeekLow;
 
-        // ดึง historical data สำหรับคำนวณ support/resistance
+        // ดึง historical data สำหรับคำนวณ support/resistance และ MA
         const indicators = result.indicators?.quote?.[0];
         const highs: number[] =
           indicators?.high?.filter((h: number | null) => h !== null) || [];
         const lows: number[] =
           indicators?.low?.filter((l: number | null) => l !== null) || [];
+        const closes: number[] =
+          indicators?.close?.filter((c: number | null) => c !== null) || [];
 
         // คำนวณแนวรับ/ต้าน
         const { support, resistance } = calculateSupportResistance(
@@ -174,6 +321,19 @@ export async function GET(request: Request) {
           lows,
           actualPrice,
         );
+
+        // คำนวณ Moving Averages
+        const ma20 = calculateEMA(closes, 20);
+        const ma50 = calculateSMA(closes, 50);
+        const ma200 = calculateSMA(closes, 200);
+        const maSignal = analyzeMASignal(actualPrice, ma20, ma50, ma200);
+
+        // คำนวณ RSI
+        const rsi = calculateRSI(closes);
+        const rsiSignal = analyzeRSISignal(rsi);
+
+        // คำนวณ MACD
+        const macdResult = calculateMACD(closes);
 
         // ถ้าเป็น SLV และมีราคาเงิน ให้แสดงข้อมูลละเอียด
         if (symbol === "SLV" && silverPrice) {
@@ -204,6 +364,18 @@ export async function GET(request: Request) {
             resistance,
             high52w,
             low52w,
+            // Moving Averages
+            ma20: ma20 ?? undefined,
+            ma50: ma50 ?? undefined,
+            ma200: ma200 ?? undefined,
+            maSignal,
+            // RSI & MACD
+            rsi: rsi ?? undefined,
+            rsiSignal,
+            macd: macdResult.macd ?? undefined,
+            macdSignal: macdResult.signal ?? undefined,
+            macdHistogram: macdResult.histogram ?? undefined,
+            macdTrend: macdResult.trend,
           };
           return;
         }
@@ -222,6 +394,18 @@ export async function GET(request: Request) {
           resistance,
           high52w,
           low52w,
+          // Moving Averages
+          ma20: ma20 ?? undefined,
+          ma50: ma50 ?? undefined,
+          ma200: ma200 ?? undefined,
+          maSignal,
+          // RSI & MACD
+          rsi: rsi ?? undefined,
+          rsiSignal,
+          macd: macdResult.macd ?? undefined,
+          macdSignal: macdResult.signal ?? undefined,
+          macdHistogram: macdResult.histogram ?? undefined,
+          macdTrend: macdResult.trend,
         };
       } catch (error) {
         console.error(`Error fetching ${symbol}:`, error);
