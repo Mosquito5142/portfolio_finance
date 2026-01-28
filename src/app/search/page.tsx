@@ -659,163 +659,270 @@ export default function SearchPage() {
                     </div>
                   </div>
 
-                  {/* 🤖 AI TACTICAL COMMAND */}
+                  {/* 🧠 CEO DECISION MATRIX */}
                   {stockData.ema5 && (
-                    <div className="mb-4 p-4 bg-gradient-to-r from-gray-900 via-slate-900 to-gray-900 rounded-2xl border-2 border-cyan-500/50 shadow-lg shadow-cyan-500/10">
-                      <div className="flex items-center gap-3 mb-4 pb-3 border-b border-cyan-500/30">
-                        <span className="text-2xl">🤖</span>
+                    <div className="mb-4 p-4 bg-gradient-to-br from-slate-900 via-gray-900 to-slate-800 rounded-2xl border-2 border-amber-500/40 shadow-lg shadow-amber-500/10">
+                      <div className="flex items-center gap-3 mb-4 pb-3 border-b border-amber-500/30">
+                        <span className="text-2xl">🧠</span>
                         <div>
-                          <h3 className="text-cyan-400 font-bold text-lg">
-                            AI TACTICAL COMMAND
+                          <h3 className="text-amber-400 font-bold text-lg">
+                            CEO DECISION MATRIX
                           </h3>
                           <p className="text-gray-500 text-xs">
-                            คำแนะนำเฉพาะสถานะของคุณ
+                            ตารางตัดสินใจสำหรับนักลงทุน
                           </p>
                         </div>
                       </div>
 
                       {(() => {
-                        // Calculate tactical data
+                        // === 3 PILLARS CHECK ===
                         const ema5Val =
                           stockData.ema5 || stockData.currentPrice;
                         const rsiVal = stockData.rsi || 50;
-                        const trendUp = stockData.ma50
-                          ? stockData.currentPrice > stockData.ma50
-                          : true;
+                        const sma50Val =
+                          stockData.ma50 || stockData.currentPrice;
+                        const volChangePercent =
+                          stockData.volumeChangePercent || 0;
+                        const macdStrong = stockData.macdTrend === "bullish";
+
+                        // 1️⃣ Trend: Price > SMA50?
+                        const trendPass = stockData.currentPrice > sma50Val;
+                        const trendIcon = trendPass ? "✅" : "❌";
+                        const trendText = trendPass
+                          ? "ผ่าน (ขาขึ้นแข็งแกร่ง)"
+                          : "ไม่ผ่าน (ขาลง/Sideway)";
+                        const trendColor = trendPass
+                          ? "text-green-400"
+                          : "text-red-400";
+
+                        // 2️⃣ Value: RSI < 60?
+                        let valuePass = 0; // 0 = fail, 0.5 = warning, 1 = pass
+                        let valueIcon = "❌";
+                        let valueText = "แพงมาก (Overbought)";
+                        let valueColor = "text-red-400";
+                        if (rsiVal < 50) {
+                          valuePass = 1;
+                          valueIcon = "✅";
+                          valueText = `ดี (RSI ${rsiVal.toFixed(0)} ยังมี Upside)`;
+                          valueColor = "text-green-400";
+                        } else if (rsiVal < 65) {
+                          valuePass = 0.5;
+                          valueIcon = "⚠️";
+                          valueText = `เริ่มตึง (RSI ${rsiVal.toFixed(0)})`;
+                          valueColor = "text-yellow-400";
+                        } else {
+                          valuePass = 0;
+                          valueIcon = "❌";
+                          valueText = `แพง (RSI ${rsiVal.toFixed(0)} Overbought)`;
+                          valueColor = "text-red-400";
+                        }
+
+                        // 3️⃣ Momentum: Vol > Avg OR MACD Strong?
+                        const momentumPass = volChangePercent > 0 || macdStrong;
+                        const momentumIcon = momentumPass ? "✅" : "❌";
+                        const momentumText = momentumPass
+                          ? `ผ่าน (${volChangePercent > 0 ? `Vol +${volChangePercent.toFixed(0)}%` : "MACD Bullish"})`
+                          : `ไม่ผ่าน (Vol ${volChangePercent.toFixed(0)}% แห้ง)`;
+                        const momentumColor = momentumPass
+                          ? "text-green-400"
+                          : "text-red-400";
+
+                        // === FINAL SCORE ===
+                        const score =
+                          (trendPass ? 1 : 0) +
+                          valuePass +
+                          (momentumPass ? 1 : 0);
+                        let scoreStatus = "";
+                        let scoreColor = "";
+                        if (score >= 2.5) {
+                          scoreStatus = "🟢 สวยมาก / ลุยได้เลย!";
+                          scoreColor = "text-green-400";
+                        } else if (score >= 1.5) {
+                          scoreStatus = "🟡 ก้ำกึ่ง / ต้องใช้ฝีมือ";
+                          scoreColor = "text-yellow-400";
+                        } else {
+                          scoreStatus = "🔴 เสี่ยงสูง / ไม่แนะนำ";
+                          scoreColor = "text-red-400";
+                        }
+
+                        // === STRATEGY GENERATION ===
                         const priceAboveEma5 = stockData.currentPrice > ema5Val;
-                        const distanceFromEma5 =
-                          ((stockData.currentPrice - ema5Val) / ema5Val) * 100;
-                        const volHigh =
-                          stockData.volumeSignal === "strong" ||
-                          (stockData.volumeChangePercent || 0) > 0;
+                        const stopLossRebound = sma50Val * 0.95; // 5% below SMA50
 
-                        // 1. Logic for NEW BUYERS 🛒
-                        let newBuyerStatus = "";
-                        let newBuyerColor = "";
-                        let newBuyerIcon = "";
-                        let newBuyerAdvice = "";
-
-                        if (trendUp && rsiVal < 50) {
-                          newBuyerStatus = "🟢 เข้าได้เลย (Strong Buy)";
-                          newBuyerColor = "text-green-400";
-                          newBuyerIcon = "✅";
-                          newBuyerAdvice = `ราคาและโมเมนตัมกำลังสวย RSI ${rsiVal.toFixed(0)} + ยืนเหนือเส้น 50 วัน เข้าได้ตาม Position Size!`;
-                        } else if (trendUp && rsiVal > 75) {
-                          newBuyerStatus = "🟡 รอจังหวะย่อ (Wait on Dip)";
-                          newBuyerColor = "text-yellow-400";
-                          newBuyerIcon = "⏳";
-                          newBuyerAdvice = `อย่าไล่ราคา! RSI ${rsiVal.toFixed(0)} สูงเกินไป ตั้งรอที่ ${formatUSD(ema5Val)} (EMA5) จะได้เปรียบกว่า`;
-                        } else if (trendUp && rsiVal >= 50) {
-                          newBuyerStatus = "🟡 ระวังหน่อย (Caution)";
-                          newBuyerColor = "text-yellow-400";
-                          newBuyerIcon = "⚠️";
-                          newBuyerAdvice = `RSI ${rsiVal.toFixed(0)} เริ่มสูง แนะนำรอราคาย่อลงมาใกล้ ${formatUSD(ema5Val)} แล้วค่อยเข้า`;
-                        } else {
-                          newBuyerStatus = "🔴 ห้ามเข้า! (Don't Catch Knife)";
-                          newBuyerColor = "text-red-400";
-                          newBuyerIcon = "❌";
-                          newBuyerAdvice = `เป็นขาลง ราคาต่ำกว่า SMA50 รอให้กลับไปยืนเหนือเส้น 50 วันก่อน`;
-                        }
-
-                        // 2. Logic for HOLDERS 💎
-                        let holderStatus = "";
-                        let holderColor = "";
-                        let holderIcon = "";
-                        let holderAdvice = "";
-
-                        if (priceAboveEma5 && volHigh) {
-                          holderStatus = "🔥 ถือต่อ 100% (Strong Hold)";
-                          holderColor = "text-green-400";
-                          holderIcon = "💎";
-                          holderAdvice = `Volume ยังพีคและราคายืนเหนือ EMA5 สบายๆ ห้ามขายหมูเด็ดขาด! เลื่อน Stop Loss ตามมาที่ ${formatUSD(ema5Val)}`;
-                        } else if (priceAboveEma5 && !volHigh) {
-                          holderStatus =
-                            "⚠️ ถือได้แต่ระวัง (Hold with Caution)";
-                          holderColor = "text-yellow-400";
-                          holderIcon = "👀";
-                          holderAdvice = `ราคายังเหนือ EMA5 แต่แรงซื้อเริ่มแผ่ว จับตาดูเส้น ${formatUSD(ema5Val)} ถ้าหลุดให้เตรียมขาย`;
-                        } else {
-                          holderStatus = "🚨 หนี! ขายทันที (Take Profit)";
-                          holderColor = "text-red-400";
-                          holderIcon = "🏃";
-                          holderAdvice = `โมเมนตัมเสียแล้ว! ราคาหลุด EMA5 (${formatUSD(ema5Val)}) ขายล็อกกำไรทันที ก่อนลงไปมากกว่านี้`;
-                        }
-
-                        // 3. Logic for PYRAMIDERS 🧱
-                        let pyramidStatus = "";
-                        let pyramidColor = "";
-                        let pyramidIcon = "";
-                        let pyramidAdvice = "";
+                        // Aggressive Strategy
+                        let aggAction = "";
+                        let aggReason = "";
+                        let aggPlan = "";
 
                         if (!priceAboveEma5) {
-                          // 🔴 ราคาหลุด EMA5 = ห้ามเติม
-                          pyramidStatus = "🔴 ห้ามเติม! (Don't Add)";
-                          pyramidColor = "text-red-400";
-                          pyramidIcon = "⛔";
-                          pyramidAdvice = `ราคาหลุด EMA5 (${formatUSD(ema5Val)}) โมเมนตัมเสียแล้ว การเติมตอนนี้คือการถัวขาลง (อันตราย!)`;
-                        } else if (priceAboveEma5 && !volHigh) {
-                          // ⚠️ ราคายืนได้แต่ Volume แห้ง = รอก่อน
-                          pyramidStatus = "⚠️ รอก่อน (Wait)";
-                          pyramidColor = "text-yellow-400";
-                          pyramidIcon = "⏳";
-                          pyramidAdvice = `ราคายืนเหนือ EMA5 ได้ แต่ Volume แห้ง ระวัง False Break รอให้มี Volume ยืนยันก่อน`;
+                          // 🔥 Price BELOW EMA5 = Rebound Trade
+                          aggAction = `ตั้งรับที่ ${formatUSD(sma50Val)} (แนวรับ SMA50)`;
+                          aggReason =
+                            "ราคาร่วงลงมาหาแนวรับ SMA50 ลุ้นเด้งสั้นๆ";
+                          aggPlan = `หลุด ${formatUSD(stopLossRebound)} (หลุดแนวรับ) ต้องคัททันที! ✂️`;
+                        } else if (trendPass) {
+                          aggAction = "ใส่ก่อน 1 ไม้ (5-8% พอร์ต)";
+                          aggReason =
+                            rsiVal > 60
+                              ? "เทรนด์แรง แต่ RSI สูง ลด Size ไว้ก่อน"
+                              : "เทรนด์แรง RSI ดี ลุยได้!";
+                          aggPlan = `ถ้าหลุด ${formatUSD(ema5Val)} (EMA5) ต้อง Cut ทันที`;
                         } else {
-                          // 🟢 ราคาเหนือ EMA5 + Volume ดี = เติมได้
-                          pyramidStatus = "🟢 เติมได้ (Pyramid Up)";
-                          pyramidColor = "text-green-400";
-                          pyramidIcon = "➕";
-                          pyramidAdvice = `ราคายืนเหนือ EMA5 + Volume ยืนยัน เติมได้เลย! ตั้ง Stop Loss ที่ ${formatUSD(ema5Val)}`;
+                          aggAction = "รอ Breakout เหนือ SMA50 ก่อน";
+                          aggReason = "ยังไม่มีสัญญาณขาขึ้นชัด";
+                          aggPlan = `ถ้าเบรก ${formatUSD(sma50Val)} ค่อย Follow Buy`;
+                        }
+
+                        // Conservative Strategy
+                        let conAction = "";
+                        let conReason = "";
+                        let conPlan = "";
+                        const passCount =
+                          (trendPass ? 1 : 0) +
+                          (valuePass >= 0.5 ? 1 : 0) +
+                          (momentumPass ? 1 : 0);
+
+                        if (!priceAboveEma5) {
+                          // 🐢 Price BELOW EMA5 = Don't Touch
+                          conAction = "ห้ามเข้า! (Don't Touch)";
+                          conReason = `กราฟระยะสั้นเสียทรง (หลุด EMA5) รอให้กลับมายืนเหนือ ${formatUSD(ema5Val)} ก่อน`;
+                          conPlan = `Entry Trigger: Breakout > ${formatUSD(ema5Val)} พร้อม Vol+`;
+                        } else if (passCount >= 2) {
+                          conAction = `เข้าได้ที่ ${formatUSD(ema5Val)} (EMA5)`;
+                          conReason = "ผ่าน 2/3 เงื่อนไข รอราคาย่อแล้วเข้า";
+                          conPlan = `Stop Loss ที่ ${formatUSD(sma50Val * 0.97)}`;
+                        } else {
+                          conAction = `นั่งทับมือ รอราคา ${formatUSD(sma50Val)} (SMA50)`;
+                          conReason = momentumPass
+                            ? "Volume ดีแต่ RSI สูง"
+                            : "Volume แห้ง เสี่ยงติดดอยระยะสั้น";
+                          conPlan = stockData.resistance
+                            ? `ถ้าเบรก ${formatUSD(stockData.resistance)} ค่อย Follow Buy`
+                            : `รอยืน SMA50 แล้วค่อยเข้า`;
                         }
 
                         return (
                           <div className="space-y-4">
-                            {/* New Buyers */}
-                            <div className="p-3 bg-gray-800/50 rounded-xl border border-gray-700/50">
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="text-lg">{newBuyerIcon}</span>
-                                <span className="text-gray-400 text-sm">
-                                  👤 สำหรับคน &quot;ว่างพอร์ต&quot; (New Entry)
-                                </span>
-                              </div>
-                              <p className={`font-bold ${newBuyerColor}`}>
-                                {newBuyerStatus}
+                            {/* 3 Pillars Check */}
+                            <div className="bg-gray-800/50 rounded-xl p-4">
+                              <p className="text-gray-400 text-xs mb-3 font-medium">
+                                📊 สรุปปัจจัยสำคัญ (3 Pillars Check)
                               </p>
-                              <p className="text-gray-400 text-sm mt-1">
-                                {newBuyerAdvice}
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between p-2 bg-gray-900/50 rounded-lg">
+                                  <span className="text-gray-400 text-sm">
+                                    1️⃣ Trend (แนวโน้ม)
+                                  </span>
+                                  <span
+                                    className={`text-sm font-medium ${trendColor}`}
+                                  >
+                                    {trendIcon} {trendText}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between p-2 bg-gray-900/50 rounded-lg">
+                                  <span className="text-gray-400 text-sm">
+                                    2️⃣ Value (ราคา/RSI)
+                                  </span>
+                                  <span
+                                    className={`text-sm font-medium ${valueColor}`}
+                                  >
+                                    {valueIcon} {valueText}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between p-2 bg-gray-900/50 rounded-lg">
+                                  <span className="text-gray-400 text-sm">
+                                    3️⃣ Momentum (Volume)
+                                  </span>
+                                  <span
+                                    className={`text-sm font-medium ${momentumColor}`}
+                                  >
+                                    {momentumIcon} {momentumText}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Final Score */}
+                            <div className="bg-gray-800/70 rounded-xl p-4 text-center">
+                              <p className="text-gray-400 text-xs mb-2">
+                                📊 Final Score
+                              </p>
+                              <p className="text-3xl font-bold text-white mb-1">
+                                {score.toFixed(1)} / 3
+                              </p>
+                              <p
+                                className={`text-sm font-medium ${scoreColor}`}
+                              >
+                                {scoreStatus}
                               </p>
                             </div>
 
-                            {/* Holders */}
-                            <div className="p-3 bg-gray-800/50 rounded-xl border border-gray-700/50">
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="text-lg">{holderIcon}</span>
-                                <span className="text-gray-400 text-sm">
-                                  👤 สำหรับคน &quot;มีของแล้ว&quot; (Profit Run)
-                                </span>
-                              </div>
-                              <p className={`font-bold ${holderColor}`}>
-                                {holderStatus}
-                              </p>
-                              <p className="text-gray-400 text-sm mt-1">
-                                {holderAdvice}
-                              </p>
-                            </div>
+                            {/* Divider */}
+                            <div className="border-t border-gray-700 my-4"></div>
 
-                            {/* Pyramiders */}
-                            <div className="p-3 bg-gray-800/50 rounded-xl border border-gray-700/50">
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="text-lg">{pyramidIcon}</span>
-                                <span className="text-gray-400 text-sm">
-                                  👤 สำหรับคน &quot;จะเติมของ&quot; (Sniper
-                                  Add-on)
-                                </span>
+                            {/* Strategy Paths */}
+                            <p className="text-gray-400 text-sm font-medium text-center">
+                              🎯 ทางเลือกของคุณ (Choose Your Path)
+                            </p>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {/* Aggressive Strategy */}
+                              <div className="p-4 bg-gradient-to-br from-orange-900/30 to-red-900/20 rounded-xl border border-orange-500/40">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <span className="text-xl">🐆</span>
+                                  <div>
+                                    <p className="text-orange-400 font-bold text-sm">
+                                      สายซิ่ง (Aggressive)
+                                    </p>
+                                    <p className="text-orange-300 text-xs">
+                                      &quot;อยากลุย ลุยได้เลยครับ!&quot;
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="space-y-2 text-sm">
+                                  <p className="text-gray-400">
+                                    <span className="text-gray-500">
+                                      เหตุผล:
+                                    </span>{" "}
+                                    {aggReason}
+                                  </p>
+                                  <p className="text-orange-300 font-medium">
+                                    👉 Action: {aggAction}
+                                  </p>
+                                  <p className="text-gray-500 text-xs">
+                                    📋 แผนสำรอง: {aggPlan}
+                                  </p>
+                                </div>
                               </div>
-                              <p className={`font-bold ${pyramidColor}`}>
-                                {pyramidStatus}
-                              </p>
-                              <p className="text-gray-400 text-sm mt-1">
-                                {pyramidAdvice}
-                              </p>
+
+                              {/* Conservative Strategy */}
+                              <div className="p-4 bg-gradient-to-br from-blue-900/30 to-cyan-900/20 rounded-xl border border-blue-500/40">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <span className="text-xl">🐢</span>
+                                  <div>
+                                    <p className="text-blue-400 font-bold text-sm">
+                                      สายชัวร์ (Conservative)
+                                    </p>
+                                    <p className="text-blue-300 text-xs">
+                                      &quot;แนะนำให้รอก่อนครับ&quot;
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="space-y-2 text-sm">
+                                  <p className="text-gray-400">
+                                    <span className="text-gray-500">
+                                      เหตุผล:
+                                    </span>{" "}
+                                    {conReason}
+                                  </p>
+                                  <p className="text-blue-300 font-medium">
+                                    👉 Action: {conAction}
+                                  </p>
+                                  <p className="text-gray-500 text-xs">
+                                    📋 แผนสำรอง: {conPlan}
+                                  </p>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         );
