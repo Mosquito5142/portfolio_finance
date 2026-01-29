@@ -164,6 +164,13 @@ export default function Home() {
                 <span className="hidden sm:inline">ค้นหาหุ้น</span>
               </a>
               <a
+                href="/patterns"
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-800 to-emerald-800 hover:from-green-700 hover:to-emerald-700 rounded-lg text-white transition-colors"
+              >
+                <span>📊</span>
+                <span className="hidden sm:inline">Pattern Screener</span>
+              </a>
+              <a
                 href="/compare"
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-800 to-pink-800 hover:from-purple-700 hover:to-pink-700 rounded-lg text-white transition-colors"
               >

@@ -123,6 +123,34 @@ interface InsiderSocialData {
   social: SocialDataResult | null;
 }
 
+// Pattern Scanner Types
+interface PatternResult {
+  name: string;
+  type: "reversal" | "continuation";
+  signal: "bullish" | "bearish" | "neutral";
+  confidence: number;
+  description: string;
+  targetPrice?: number;
+  stopLoss?: number;
+}
+
+interface TrendAnalysis {
+  shortTerm: "up" | "down" | "sideways";
+  longTerm: "up" | "down" | "sideways";
+  sma20: number;
+  sma50: number;
+  currentPrice: number;
+  strength: number;
+}
+
+interface PatternData {
+  symbol: string;
+  patterns: PatternResult[];
+  trend: TrendAnalysis;
+  overallSignal: "BUY" | "SELL" | "HOLD";
+  signalStrength: number;
+}
+
 export default function SearchPage() {
   const [symbol, setSymbol] = useState("");
   const [loading, setLoading] = useState(false);
@@ -133,6 +161,7 @@ export default function SearchPage() {
   const [error, setError] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [patternData, setPatternData] = useState<PatternData | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
@@ -199,6 +228,7 @@ export default function SearchPage() {
     setStockData(null);
     setMacroData(null);
     setInsiderSocialData(null);
+    setPatternData(null);
 
     try {
       // ดึงข้อมูลหุ้น
@@ -243,6 +273,18 @@ export default function SearchPage() {
             }
           })
           .catch(() => console.log("Insider data fetch failed")),
+      );
+
+      // ดึงข้อมูล Pattern Scanner
+      fetchPromises.push(
+        fetch(`/api/patterns?symbol=${sym.toUpperCase()}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((patternResult) => {
+            if (patternResult && patternResult.currentPrice > 0) {
+              setPatternData(patternResult);
+            }
+          })
+          .catch(() => console.log("Pattern data fetch failed")),
       );
 
       await Promise.all(fetchPromises);
@@ -2132,6 +2174,174 @@ export default function SearchPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Pattern Scanner Section */}
+        {patternData && (
+          <div className="bg-gray-800/50 rounded-2xl border border-purple-500/30 p-6 mt-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">📊</span>
+                <h3 className="text-white font-bold text-lg">
+                  Pattern Scanner
+                </h3>
+              </div>
+              <div
+                className={`px-4 py-2 rounded-full font-bold ${
+                  patternData.overallSignal === "BUY"
+                    ? "bg-green-900/50 text-green-400 border border-green-500/50"
+                    : patternData.overallSignal === "SELL"
+                      ? "bg-red-900/50 text-red-400 border border-red-500/50"
+                      : "bg-yellow-900/50 text-yellow-400 border border-yellow-500/50"
+                }`}
+              >
+                {patternData.overallSignal === "BUY"
+                  ? "🟢 BUY"
+                  : patternData.overallSignal === "SELL"
+                    ? "🔴 SELL"
+                    : "🟡 HOLD"}
+                <span className="text-xs ml-2">
+                  ({patternData.signalStrength.toFixed(0)}%)
+                </span>
+              </div>
+            </div>
+
+            {/* Trend Analysis */}
+            <div className="grid grid-cols-4 gap-3 mb-4">
+              <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                <p className="text-gray-500 text-xs">Short Term</p>
+                <p
+                  className={`font-bold ${
+                    patternData.trend.shortTerm === "up"
+                      ? "text-green-400"
+                      : patternData.trend.shortTerm === "down"
+                        ? "text-red-400"
+                        : "text-yellow-400"
+                  }`}
+                >
+                  {patternData.trend.shortTerm === "up"
+                    ? "⬆️ ขึ้น"
+                    : patternData.trend.shortTerm === "down"
+                      ? "⬇️ ลง"
+                      : "➡️ Sideway"}
+                </p>
+              </div>
+              <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                <p className="text-gray-500 text-xs">Long Term</p>
+                <p
+                  className={`font-bold ${
+                    patternData.trend.longTerm === "up"
+                      ? "text-green-400"
+                      : patternData.trend.longTerm === "down"
+                        ? "text-red-400"
+                        : "text-yellow-400"
+                  }`}
+                >
+                  {patternData.trend.longTerm === "up"
+                    ? "⬆️ ขึ้น"
+                    : patternData.trend.longTerm === "down"
+                      ? "⬇️ ลง"
+                      : "➡️ Sideway"}
+                </p>
+              </div>
+              <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                <p className="text-gray-500 text-xs">SMA 20</p>
+                <p className="text-white font-bold">
+                  {formatUSD(patternData.trend.sma20)}
+                </p>
+              </div>
+              <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                <p className="text-gray-500 text-xs">SMA 50</p>
+                <p className="text-white font-bold">
+                  {formatUSD(patternData.trend.sma50)}
+                </p>
+              </div>
+            </div>
+
+            {/* Detected Patterns */}
+            {patternData.patterns.length > 0 ? (
+              <div className="space-y-3">
+                <p className="text-gray-400 text-sm">
+                  🔍 Pattern ที่พบ ({patternData.patterns.length})
+                </p>
+                {patternData.patterns.map((pattern, index) => (
+                  <div
+                    key={index}
+                    className={`rounded-xl p-4 border ${
+                      pattern.signal === "bullish"
+                        ? "bg-green-900/20 border-green-500/40"
+                        : pattern.signal === "bearish"
+                          ? "bg-red-900/20 border-red-500/40"
+                          : "bg-gray-900/30 border-gray-600/40"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-white font-bold">
+                          {pattern.name}
+                          <span
+                            className={`ml-2 text-sm ${
+                              pattern.signal === "bullish"
+                                ? "text-green-400"
+                                : "text-red-400"
+                            }`}
+                          >
+                            {pattern.signal === "bullish"
+                              ? "🟢 Bullish"
+                              : "🔴 Bearish"}
+                          </span>
+                        </p>
+                        <p className="text-gray-400 text-sm mt-1">
+                          {pattern.description}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p
+                          className={`text-xl font-bold ${
+                            pattern.confidence >= 70
+                              ? "text-green-400"
+                              : pattern.confidence >= 50
+                                ? "text-yellow-400"
+                                : "text-gray-400"
+                          }`}
+                        >
+                          {pattern.confidence}%
+                        </p>
+                        <p className="text-gray-500 text-xs">ความน่าจะเป็น</p>
+                      </div>
+                    </div>
+                    {(pattern.targetPrice || pattern.stopLoss) && (
+                      <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-gray-700/50">
+                        {pattern.targetPrice && (
+                          <div>
+                            <p className="text-gray-500 text-xs">🎯 Target</p>
+                            <p className="text-green-400 font-bold">
+                              {formatUSD(pattern.targetPrice)}
+                            </p>
+                          </div>
+                        )}
+                        {pattern.stopLoss && (
+                          <div>
+                            <p className="text-gray-500 text-xs">
+                              🛑 Stop Loss
+                            </p>
+                            <p className="text-red-400 font-bold">
+                              {formatUSD(pattern.stopLoss)}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-6 text-gray-500">
+                <p className="text-3xl mb-2">🔎</p>
+                <p>ไม่พบ Pattern ที่ชัดเจนในช่วง 3 เดือนนี้</p>
               </div>
             )}
           </div>
