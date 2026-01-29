@@ -72,85 +72,53 @@ interface StockScan {
   status: "pending" | "loading" | "done" | "error";
 }
 
-// Shay Boloor's picks + Popular stocks organized by category
-const SHAY_BOLOOR_PICKS = [
-  // 🌐 AI Infrastructure & Data Center
-  "NBIS", // Nebius Group - AI Compute
-  "CIFR", // Cipher Mining - HPC/AWS Deal
-  "IREN", // Iris Energy - AI Data Center
-  "META", // Meta - AI CapEx King
-
-  // 🖥️ Digital Platform Leaders
-  "MELI", // MercadoLibre - LatAm E-commerce
-  "SOFI", // SoFi - Digital Bank
-  "AXON", // Axon - Public Safety Tech
-
-  // 🔭 Execution Risk Bets
-  "RKLB", // Rocket Lab - Space
-  "ONDS", // Ondas Holdings - Autonomous Systems
-  "BMNR", // BitMine - ETH Treasury
+// 7 นางฟ้า (Magnificent 7)
+const MAGNIFICENT_7 = [
+  "AAPL", // Apple
+  "MSFT", // Microsoft
+  "GOOGL", // Alphabet
+  "AMZN", // Amazon
+  "NVDA", // NVIDIA
+  "META", // Meta
+  "TSLA", // Tesla
 ];
 
-const SCAN_SYMBOLS = [
-  // === Shay Boloor's Picks ===
-  ...SHAY_BOLOOR_PICKS,
-
-  // === AI & Semiconductors ===
-  "NVDA",
-  "AMD",
-  "AVGO",
-  "TSM",
-  "INTC",
-  "QCOM",
-  "ARM",
-  "SMCI",
-  "MRVL",
-
-  // === Big Tech ===
-  "AAPL",
-  "MSFT",
-  "GOOGL",
-  "AMZN",
-  "NFLX",
-  "CRM",
-  "ORCL",
-  "ADBE",
-
-  // === Fintech & Payments ===
-  "V",
-  "MA",
-  "PYPL",
-  "SQ",
-  "COIN",
-  "HOOD",
-  "NU",
-
-  // === Growth & Disruptors ===
-  "TSLA",
-  "PLTR",
-  "SNOW",
-  "NET",
-  "DDOG",
-  "MDB",
-  "ZS",
-  "CRWD",
-
-  // === Crypto & Bitcoin Miners ===
-  "MARA",
-  "RIOT",
-  "CLSK",
-  "BTBT",
-  "WULF",
-  "HUT",
-
-  // === Space & Defense ===
-  "LMT",
-  "RTX",
-  "NOC",
-  "GD",
-  "LUNR",
-  "RDW",
+// User's Portfolio Holdings
+const MY_PORTFOLIO = [
+  "UUUU", // Energy Fuels
+  "ASTS", // AST SpaceMobile
+  "MU", // Micron Technology
+  "IREN", // Iris Energy
+  "AMD", // AMD
+  "LMND", // Lemonade
+  "LRCX", // Lam Research
+  "NVTS", // Navitas Semiconductor
+  "QURE", // uniQure
+  "WULF", // TeraWulf
+  "MP", // MP Materials
+  "CIFR", // Cipher Mining
+  "INTC", // Intel
+  "RKLB", // Rocket Lab
+  "EOSE", // Eos Energy
+  "TMDX", // TransMedics
+  "OKLO", // Oklo
+  "NBIS", // Nebius Group
+  "BMNR", // BitMine
+  "KTOS", // Kratos Defense
+  "QS", // QuantumScape
+  "JOBY", // Joby Aviation
+  "ONDS", // Ondas Holdings
+  "PLTR", // Palantir
+  "PGY", // Pagaya Technologies
+  "CVNA", // Carvana
+  "QBTS", // D-Wave Quantum
+  "HOOD", // Robinhood
+  "OPEN", // Opendoor
+  "SYM", // Symbotic
 ];
+
+// Combined list: Magnificent 7 + Portfolio
+const SCAN_SYMBOLS = [...MAGNIFICENT_7, ...MY_PORTFOLIO];
 
 // Remove duplicates
 const UNIQUE_SYMBOLS = [...new Set(SCAN_SYMBOLS)];
