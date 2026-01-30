@@ -61,7 +61,8 @@ interface PatternResponse {
   overallSignal: "BUY" | "SELL" | "HOLD";
   signalStrength: number;
   entryStatus: "ready" | "wait" | "late";
-  metrics?: KeyMetrics; // NEW
+  metrics?: KeyMetrics;
+  advancedIndicators?: AdvancedIndicators; // NEW: Institutional-grade indicators
 }
 
 // Calculate SMA
@@ -90,6 +91,426 @@ function calculateRSI(prices: number[], period: number = 14): number {
   if (avgLoss === 0) return 100;
   const rs = avgGain / avgLoss;
   return 100 - 100 / (1 + rs);
+}
+
+// ========== ADVANCED INDICATORS (Institutional Grade) ==========
+
+// MACD Result Interface
+interface MACDResult {
+  macdLine: number;
+  signalLine: number;
+  histogram: number;
+  trend: "bullish" | "bearish" | "neutral";
+  histogramTrend: "expanding" | "contracting" | "flat";
+  lossOfMomentum: boolean; // Histogram shrinking = warning!
+}
+
+// OBV Result Interface
+interface OBVResult {
+  obv: number;
+  obvTrend: "up" | "down" | "flat";
+  obvDivergence: "bullish" | "bearish" | "none";
+}
+
+// Divergence Detection Result
+interface DivergenceResult {
+  type: "bullish" | "bearish" | "none";
+  indicator: string;
+  description: string;
+  severity: "strong" | "moderate" | "weak";
+}
+
+// Trend Phase (Dow Theory)
+type TrendPhase =
+  | "accumulation"
+  | "participation"
+  | "distribution"
+  | "markdown"
+  | "unknown";
+
+// Indicator Matrix (Weighted Scoring)
+interface IndicatorMatrix {
+  dowTheory: {
+    signal: "bullish" | "bearish" | "neutral";
+    weight: number;
+    score: number;
+  };
+  rsi: {
+    signal: "bullish" | "bearish" | "neutral";
+    weight: number;
+    score: number;
+  };
+  macd: {
+    signal: "bullish" | "bearish" | "neutral";
+    weight: number;
+    score: number;
+  };
+  volume: {
+    signal: "bullish" | "bearish" | "neutral";
+    weight: number;
+    score: number;
+  };
+  totalScore: number; // -100 to +100
+  recommendation: "STRONG_BUY" | "BUY" | "HOLD" | "SELL" | "STRONG_SELL";
+}
+
+// Advanced Indicators Container
+interface AdvancedIndicators {
+  macd: MACDResult;
+  obv: OBVResult;
+  divergences: DivergenceResult[];
+  trendPhase: TrendPhase;
+  indicatorMatrix: IndicatorMatrix;
+  volumeConfirmation: boolean;
+  rsiInterpretation: string;
+}
+
+// Calculate EMA (for MACD)
+function calculateEMA(prices: number[], period: number): number {
+  if (prices.length < period) return prices[prices.length - 1];
+  const multiplier = 2 / (period + 1);
+  let ema = prices.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < prices.length; i++) {
+    ema = (prices[i] - ema) * multiplier + ema;
+  }
+  return ema;
+}
+
+// Calculate MACD with Histogram Analysis
+function calculateMACD(closes: number[]): MACDResult {
+  const ema12 = calculateEMA(closes, 12);
+  const ema26 = calculateEMA(closes, 26);
+  const macdLine = ema12 - ema26;
+
+  // Calculate Signal Line (9-period EMA of MACD)
+  const macdValues: number[] = [];
+  for (let i = 26; i <= closes.length; i++) {
+    const slice = closes.slice(0, i);
+    const e12 = calculateEMA(slice, 12);
+    const e26 = calculateEMA(slice, 26);
+    macdValues.push(e12 - e26);
+  }
+  const signalLine =
+    macdValues.length >= 9 ? calculateEMA(macdValues, 9) : macdLine;
+  const histogram = macdLine - signalLine;
+
+  // Analyze histogram trend (last 5 values)
+  const recentHistograms: number[] = [];
+  for (let i = Math.max(0, macdValues.length - 5); i < macdValues.length; i++) {
+    const sig =
+      macdValues.length >= 9
+        ? calculateEMA(macdValues.slice(0, i + 1), 9)
+        : macdValues[i];
+    recentHistograms.push(macdValues[i] - sig);
+  }
+
+  let histogramTrend: "expanding" | "contracting" | "flat" = "flat";
+  if (recentHistograms.length >= 3) {
+    const absRecent = recentHistograms.map(Math.abs);
+    const isExpanding =
+      absRecent[absRecent.length - 1] > absRecent[absRecent.length - 2];
+    const isContracting =
+      absRecent[absRecent.length - 1] < absRecent[absRecent.length - 2];
+    histogramTrend = isExpanding
+      ? "expanding"
+      : isContracting
+        ? "contracting"
+        : "flat";
+  }
+
+  // Loss of Momentum: Histogram shrinking while price making new highs
+  const lossOfMomentum =
+    histogramTrend === "contracting" &&
+    Math.abs(histogram) < Math.abs(recentHistograms[0] || 0);
+
+  return {
+    macdLine,
+    signalLine,
+    histogram,
+    trend:
+      macdLine > signalLine
+        ? "bullish"
+        : macdLine < signalLine
+          ? "bearish"
+          : "neutral",
+    histogramTrend,
+    lossOfMomentum,
+  };
+}
+
+// Calculate OBV (On-Balance Volume)
+function calculateOBV(closes: number[], volumes: number[]): OBVResult {
+  if (closes.length < 2 || volumes.length < 2) {
+    return { obv: 0, obvTrend: "flat", obvDivergence: "none" };
+  }
+
+  let obv = 0;
+  const obvHistory: number[] = [0];
+
+  for (let i = 1; i < closes.length; i++) {
+    if (closes[i] > closes[i - 1]) {
+      obv += volumes[i] || 0;
+    } else if (closes[i] < closes[i - 1]) {
+      obv -= volumes[i] || 0;
+    }
+    obvHistory.push(obv);
+  }
+
+  // Determine OBV trend (last 10 days)
+  const recent10OBV = obvHistory.slice(-10);
+  const obvStart = recent10OBV[0];
+  const obvEnd = recent10OBV[recent10OBV.length - 1];
+  const obvTrend: "up" | "down" | "flat" =
+    obvEnd > obvStart * 1.05
+      ? "up"
+      : obvEnd < obvStart * 0.95
+        ? "down"
+        : "flat";
+
+  // Detect OBV Divergence
+  const priceStart = closes[closes.length - 10] || closes[0];
+  const priceEnd = closes[closes.length - 1];
+  const priceUp = priceEnd > priceStart;
+  const priceDown = priceEnd < priceStart;
+
+  let obvDivergence: "bullish" | "bearish" | "none" = "none";
+  if (priceUp && obvTrend === "down") {
+    obvDivergence = "bearish"; // Price up but OBV down = bearish divergence
+  } else if (priceDown && obvTrend === "up") {
+    obvDivergence = "bullish"; // Price down but OBV up = bullish divergence
+  }
+
+  return { obv, obvTrend, obvDivergence };
+}
+
+// Detect RSI Divergence
+function detectRSIDivergence(
+  closes: number[],
+  period: number = 14,
+): DivergenceResult {
+  if (closes.length < period + 20) {
+    return {
+      type: "none",
+      indicator: "RSI",
+      description: "",
+      severity: "weak",
+    };
+  }
+
+  // Get RSI values for last 20 periods
+  const rsiValues: number[] = [];
+  for (let i = period + 1; i <= closes.length; i++) {
+    const slice = closes.slice(0, i);
+    rsiValues.push(calculateRSI(slice, period));
+  }
+
+  const recent20RSI = rsiValues.slice(-20);
+  const recent20Price = closes.slice(-20);
+
+  // Find peaks and valleys
+  const priceHigh1 = Math.max(...recent20Price.slice(0, 10));
+  const priceHigh2 = Math.max(...recent20Price.slice(10));
+  const rsiHigh1 = Math.max(...recent20RSI.slice(0, 10));
+  const rsiHigh2 = Math.max(...recent20RSI.slice(10));
+
+  const priceLow1 = Math.min(...recent20Price.slice(0, 10));
+  const priceLow2 = Math.min(...recent20Price.slice(10));
+  const rsiLow1 = Math.min(...recent20RSI.slice(0, 10));
+  const rsiLow2 = Math.min(...recent20RSI.slice(10));
+
+  // Bearish Divergence: Higher High in price, Lower High in RSI
+  if (priceHigh2 > priceHigh1 && rsiHigh2 < rsiHigh1 * 0.95) {
+    const severity = rsiHigh2 < rsiHigh1 * 0.85 ? "strong" : "moderate";
+    return {
+      type: "bearish",
+      indicator: "RSI",
+      description: `ราคาทำ Higher High แต่ RSI ทำ Lower High = Momentum อ่อนแรง!`,
+      severity,
+    };
+  }
+
+  // Bullish Divergence: Lower Low in price, Higher Low in RSI
+  if (priceLow2 < priceLow1 && rsiLow2 > rsiLow1 * 1.05) {
+    const severity = rsiLow2 > rsiLow1 * 1.15 ? "strong" : "moderate";
+    return {
+      type: "bullish",
+      indicator: "RSI",
+      description: `ราคาทำ Lower Low แต่ RSI ทำ Higher Low = กำลังจะกลับตัวขึ้น!`,
+      severity,
+    };
+  }
+
+  return { type: "none", indicator: "RSI", description: "", severity: "weak" };
+}
+
+// Detect Trend Phase (Dow Theory)
+function detectTrendPhase(
+  closes: number[],
+  volumes: number[],
+  rsi: number,
+): TrendPhase {
+  if (closes.length < 40) return "unknown";
+
+  const recent10 = closes.slice(-10);
+  const prev10 = closes.slice(-20, -10);
+  const prev30 = closes.slice(-40, -10);
+
+  const avgRecent = recent10.reduce((a, b) => a + b, 0) / 10;
+  const avgPrev10 = prev10.reduce((a, b) => a + b, 0) / 10;
+  const avgPrev30 = prev30.reduce((a, b) => a + b, 0) / 30;
+
+  const recentVolume = volumes.slice(-10).reduce((a, b) => a + b, 0) / 10;
+  const prevVolume = volumes.slice(-20, -10).reduce((a, b) => a + b, 0) / 10;
+
+  // Accumulation: Price flat/slightly up, low volume, RSI recovering from oversold
+  if (
+    avgRecent > avgPrev30 &&
+    avgRecent < avgPrev10 * 1.05 &&
+    rsi < 50 &&
+    recentVolume < prevVolume
+  ) {
+    return "accumulation";
+  }
+
+  // Participation: Strong uptrend with increasing volume
+  if (
+    avgRecent > avgPrev10 * 1.05 &&
+    avgRecent > avgPrev30 * 1.1 &&
+    recentVolume > prevVolume
+  ) {
+    return "participation";
+  }
+
+  // Distribution: Price near highs but volume declining, RSI overbought
+  if (
+    avgRecent > avgPrev30 * 1.1 &&
+    rsi > 60 &&
+    recentVolume < prevVolume * 0.8
+  ) {
+    return "distribution";
+  }
+
+  // Markdown: Downtrend with increasing volume
+  if (avgRecent < avgPrev10 * 0.95 && avgRecent < avgPrev30 * 0.9) {
+    return "markdown";
+  }
+
+  return "unknown";
+}
+
+// Interpret RSI by Market Regime
+function interpretRSI(
+  rsi: number,
+  shortTrend: "up" | "down" | "sideways",
+): string {
+  if (shortTrend === "up") {
+    // Strong Bull: RSI 40-50 is support
+    if (rsi >= 40 && rsi <= 55) return "RSI ลงมาแตะแนวรับ = Buy on Dip!";
+    if (rsi > 70) return "RSI Overbought แต่ในขาขึ้น ยังไม่ต้องขาย";
+    if (rsi < 40) return "RSI หลุดแนวรับ = อาจเปลี่ยนเทรนด์";
+    return "RSI ปกติในขาขึ้น";
+  }
+
+  if (shortTrend === "down") {
+    // Strong Bear: RSI 50-60 is resistance
+    if (rsi >= 50 && rsi <= 60) return "RSI ขึ้นมาชนแนวต้าน = Short on Rally!";
+    if (rsi < 30) return "RSI Oversold แต่ในขาลง อาจลงต่อ";
+    if (rsi > 60) return "RSI ทะลุแนวต้าน = อาจเปลี่ยนเทรนด์";
+    return "RSI ปกติในขาลง";
+  }
+
+  // Sideways: Use overbought/oversold
+  if (rsi > 70) return "RSI Overbought = Mean Reversion ขายได้";
+  if (rsi < 30) return "RSI Oversold = Mean Reversion ซื้อได้";
+  return "RSI ปกติในตลาด Sideways";
+}
+
+// Calculate Indicator Matrix (Weighted Scoring)
+function calculateIndicatorMatrix(
+  closes: number[],
+  highs: number[],
+  lows: number[],
+  volumes: number[],
+  trend: TrendAnalysis,
+  rsi: number,
+  macd: MACDResult,
+  obv: OBVResult,
+): IndicatorMatrix {
+  // Dow Theory (40% weight) - Based on price structure
+  const currentPrice = closes[closes.length - 1];
+  const recentHighs = highs.slice(-20);
+  const recentLows = lows.slice(-20);
+  const higherHigh =
+    Math.max(...recentHighs.slice(-10)) > Math.max(...recentHighs.slice(0, 10));
+  const higherLow =
+    Math.min(...recentLows.slice(-10)) > Math.min(...recentLows.slice(0, 10));
+  const lowerLow =
+    Math.min(...recentLows.slice(-10)) < Math.min(...recentLows.slice(0, 10));
+  const lowerHigh =
+    Math.max(...recentHighs.slice(-10)) < Math.max(...recentHighs.slice(0, 10));
+
+  let dowSignal: "bullish" | "bearish" | "neutral" = "neutral";
+  let dowScore = 0;
+  if (higherHigh && higherLow) {
+    dowSignal = "bullish";
+    dowScore = 40;
+  } else if (lowerLow && lowerHigh) {
+    dowSignal = "bearish";
+    dowScore = -40;
+  }
+
+  // RSI (20% weight)
+  let rsiSignal: "bullish" | "bearish" | "neutral" = "neutral";
+  let rsiScore = 0;
+  if (rsi < 35) {
+    rsiSignal = "bullish";
+    rsiScore = 20;
+  } // Oversold = buy opportunity
+  else if (rsi > 65) {
+    rsiSignal = "bearish";
+    rsiScore = -20;
+  } // Overbought
+
+  // MACD (20% weight)
+  let macdSignal: "bullish" | "bearish" | "neutral" = macd.trend;
+  let macdScore =
+    macd.trend === "bullish" ? 20 : macd.trend === "bearish" ? -20 : 0;
+  // Reduce score if loss of momentum
+  if (macd.lossOfMomentum) macdScore = Math.round(macdScore * 0.5);
+
+  // Volume (20% weight) - OBV confirmation
+  let volumeSignal: "bullish" | "bearish" | "neutral" = "neutral";
+  let volumeScore = 0;
+  if (obv.obvTrend === "up" && trend.shortTerm === "up") {
+    volumeSignal = "bullish";
+    volumeScore = 20; // Volume confirms uptrend
+  } else if (obv.obvTrend === "down" && trend.shortTerm === "down") {
+    volumeSignal = "bearish";
+    volumeScore = -20; // Volume confirms downtrend
+  } else if (obv.obvDivergence === "bearish") {
+    volumeSignal = "bearish";
+    volumeScore = -15; // Divergence warning
+  } else if (obv.obvDivergence === "bullish") {
+    volumeSignal = "bullish";
+    volumeScore = 15;
+  }
+
+  const totalScore = dowScore + rsiScore + macdScore + volumeScore;
+
+  let recommendation: IndicatorMatrix["recommendation"] = "HOLD";
+  if (totalScore >= 60) recommendation = "STRONG_BUY";
+  else if (totalScore >= 30) recommendation = "BUY";
+  else if (totalScore <= -60) recommendation = "STRONG_SELL";
+  else if (totalScore <= -30) recommendation = "SELL";
+
+  return {
+    dowTheory: { signal: dowSignal, weight: 40, score: dowScore },
+    rsi: { signal: rsiSignal, weight: 20, score: rsiScore },
+    macd: { signal: macdSignal, weight: 20, score: macdScore },
+    volume: { signal: volumeSignal, weight: 20, score: volumeScore },
+    totalScore,
+    recommendation,
+  };
 }
 
 // Find support and resistance levels
@@ -586,6 +1007,165 @@ export async function GET(request: Request) {
       rrStatus,
     };
 
+    // ========== CALCULATE ADVANCED INDICATORS ==========
+    const macd = calculateMACD(closes);
+    const obv = calculateOBV(closes, volumes);
+    const rsiDivergence = detectRSIDivergence(closes);
+    const trendPhase = detectTrendPhase(closes, volumes, rsi);
+    const rsiInterpretation = interpretRSI(rsi, trend.shortTerm);
+    const indicatorMatrix = calculateIndicatorMatrix(
+      closes,
+      highs,
+      lows,
+      volumes,
+      trend,
+      rsi,
+      macd,
+      obv,
+    );
+
+    // Check volume confirmation
+    const volumeConfirmation =
+      (trend.shortTerm === "up" && obv.obvTrend === "up") ||
+      (trend.shortTerm === "down" && obv.obvTrend === "down");
+
+    // Collect all divergences
+    const divergences: DivergenceResult[] = [];
+    if (rsiDivergence.type !== "none") {
+      divergences.push(rsiDivergence);
+    }
+    if (obv.obvDivergence !== "none") {
+      divergences.push({
+        type: obv.obvDivergence,
+        indicator: "OBV",
+        description:
+          obv.obvDivergence === "bearish"
+            ? "⚠️ ราคาขึ้นแต่ OBV ลง = Smart Money กำลังขาย!"
+            : "✅ ราคาลงแต่ OBV ขึ้น = Smart Money กำลังซื้อ!",
+        severity: "moderate",
+      });
+    }
+    if (macd.lossOfMomentum) {
+      divergences.push({
+        type: macd.trend === "bullish" ? "bearish" : "bullish",
+        indicator: "MACD",
+        description: "⚠️ MACD Histogram หดตัว = Momentum กำลังหมด!",
+        severity: "moderate",
+      });
+    }
+
+    const advancedIndicators: AdvancedIndicators = {
+      macd,
+      obv,
+      divergences,
+      trendPhase,
+      indicatorMatrix,
+      volumeConfirmation,
+      rsiInterpretation,
+    };
+
+    // ========== FIX: UNIFIED SIGNAL LOGIC (Matrix + Divergence Integrated) ==========
+    // Rule 1: Matrix score determines base signal (not just patterns)
+    // Rule 2: Divergences penalize confidence
+    // Rule 3: Overbought/Late status overrides positive scores
+
+    const matrixScore = indicatorMatrix.totalScore;
+    const hasBearishDivergence = divergences.some((d) => d.type === "bearish");
+    const hasBullishDivergence = divergences.some((d) => d.type === "bullish");
+    const isOverbought = rsi > 70;
+    const isOversold = rsi < 30;
+
+    // Start with Matrix recommendation as base
+    let finalSignal: "BUY" | "SELL" | "HOLD" = "HOLD";
+    let finalStrength = 50;
+
+    // === DETERMINE BASE SIGNAL FROM MATRIX ===
+    if (matrixScore >= 60) {
+      finalSignal = "BUY";
+      finalStrength = 80;
+    } else if (matrixScore >= 30) {
+      finalSignal = "BUY";
+      finalStrength = 65;
+    } else if (matrixScore <= -60) {
+      finalSignal = "SELL";
+      finalStrength = 80;
+    } else if (matrixScore <= -30) {
+      finalSignal = "SELL";
+      finalStrength = 65;
+    } else {
+      finalSignal = "HOLD";
+      finalStrength = 50;
+    }
+
+    // === RULE: If score < 20, NEVER show BUY (user's fix #1) ===
+    if (matrixScore < 20 && finalSignal === "BUY") {
+      finalSignal = "HOLD";
+      finalStrength = Math.min(55, finalStrength); // Cap at 55% (wait for dip)
+    }
+
+    // === RULE: Bearish Divergence = Max 70% confidence (user's fix #2) ===
+    if (hasBearishDivergence && finalSignal === "BUY") {
+      finalStrength = Math.min(70, finalStrength);
+      // If strong divergence, downgrade further
+      const strongDivergence = divergences.some((d) => d.severity === "strong");
+      if (strongDivergence) {
+        finalStrength = Math.min(60, finalStrength);
+      }
+    }
+
+    // === RULE: Bullish Divergence on SELL = boost confidence ===
+    if (hasBullishDivergence && finalSignal === "SELL") {
+      finalStrength = Math.min(70, finalStrength); // Be cautious on sells with bullish divergence
+    }
+
+    // === RULE: Overbought = Late, cap confidence (user's fix #3) ===
+    if (isOverbought) {
+      // Overbought = "late" regardless of what Matrix says
+      if (finalSignal === "BUY") {
+        finalSignal = "HOLD";
+        finalStrength = 35; // Late = low confidence
+      }
+      // Update entry status
+      entryStatus = "late";
+    }
+
+    // === RULE: Oversold with bullish signal = good entry ===
+    if (isOversold && matrixScore > 0) {
+      finalSignal = "BUY";
+      finalStrength = Math.max(finalStrength, 65); // Boost confidence for oversold bounces
+      entryStatus = "ready";
+    }
+
+    // === RULE: If entry was marked late from patterns, respect that ===
+    if (entryStatus === "late" && finalSignal === "BUY") {
+      finalStrength = Math.min(40, finalStrength); // Late = low confidence even if Matrix is positive
+    }
+
+    // === RULE: R/R Ratio affects recommendation ===
+    if (rrStatus === "bad" && finalSignal === "BUY") {
+      // R/R not worth it = suggest WAIT instead
+      finalStrength = Math.min(50, finalStrength);
+    } else if (rrStatus === "excellent" && finalSignal === "BUY") {
+      finalStrength = Math.min(90, finalStrength + 10); // Boost for excellent R/R
+    }
+
+    // === RULE: Volume must confirm (reduce confidence if not) ===
+    if (!volumeConfirmation && finalSignal !== "HOLD") {
+      finalStrength = Math.max(40, finalStrength - 10);
+    }
+
+    // === RULE: Loss of Momentum warning ===
+    if (macd.lossOfMomentum && finalSignal === "BUY") {
+      finalStrength = Math.min(65, finalStrength);
+    }
+
+    // Cap final strength
+    finalStrength = Math.max(20, Math.min(90, finalStrength));
+
+    // Override the original values
+    overallSignal = finalSignal;
+    signalStrength = finalStrength;
+
     return NextResponse.json({
       symbol,
       currentPrice,
@@ -597,6 +1177,7 @@ export async function GET(request: Request) {
       signalStrength,
       entryStatus,
       metrics,
+      advancedIndicators,
     } as PatternResponse);
   } catch (error) {
     console.error("Pattern API Error:", error);

@@ -52,6 +52,59 @@ interface KeyMetrics {
   rrStatus?: "excellent" | "good" | "risky" | "bad";
 }
 
+// Advanced Indicator Types
+interface MACDResult {
+  macdLine: number;
+  signalLine: number;
+  histogram: number;
+  trend: "bullish" | "bearish" | "neutral";
+  histogramTrend: "expanding" | "contracting" | "flat";
+  lossOfMomentum: boolean;
+}
+
+interface OBVResult {
+  obv: number;
+  obvTrend: "up" | "down" | "flat";
+  obvDivergence: "bullish" | "bearish" | "none";
+}
+
+interface DivergenceResult {
+  type: "bullish" | "bearish" | "none";
+  indicator: string;
+  description: string;
+  severity: "strong" | "moderate" | "weak";
+}
+
+interface IndicatorMatrixItem {
+  signal: "bullish" | "bearish" | "neutral";
+  weight: number;
+  score: number;
+}
+
+interface IndicatorMatrix {
+  dowTheory: IndicatorMatrixItem;
+  rsi: IndicatorMatrixItem;
+  macd: IndicatorMatrixItem;
+  volume: IndicatorMatrixItem;
+  totalScore: number;
+  recommendation: "STRONG_BUY" | "BUY" | "HOLD" | "SELL" | "STRONG_SELL";
+}
+
+interface AdvancedIndicators {
+  macd: MACDResult;
+  obv: OBVResult;
+  divergences: DivergenceResult[];
+  trendPhase:
+    | "accumulation"
+    | "participation"
+    | "distribution"
+    | "markdown"
+    | "unknown";
+  indicatorMatrix: IndicatorMatrix;
+  volumeConfirmation: boolean;
+  rsiInterpretation: string;
+}
+
 interface PatternResponse {
   symbol: string;
   currentPrice: number;
@@ -63,6 +116,7 @@ interface PatternResponse {
   signalStrength: number;
   entryStatus?: "ready" | "wait" | "late";
   metrics?: KeyMetrics;
+  advancedIndicators?: AdvancedIndicators;
   error?: string;
 }
 
@@ -698,6 +752,272 @@ export default function PatternScreenerPage() {
                           </span>
                         </div>
                       </div>
+
+                      {/* ========== ADVANCED INDICATORS SECTION ========== */}
+                      {scan.data.advancedIndicators && (
+                        <div className="mt-3 pt-3 border-t border-gray-700/50">
+                          <p className="text-gray-400 text-xs font-medium mb-2">
+                            📊 Indicator Matrix (Institutional Grade)
+                          </p>
+
+                          {/* Indicator Matrix Summary */}
+                          <div className="grid grid-cols-2 gap-2 mb-2">
+                            {/* Dow Theory */}
+                            <div
+                              className={`px-2 py-1 rounded text-xs ${
+                                scan.data.advancedIndicators.indicatorMatrix
+                                  .dowTheory.signal === "bullish"
+                                  ? "bg-green-900/30 text-green-300"
+                                  : scan.data.advancedIndicators.indicatorMatrix
+                                        .dowTheory.signal === "bearish"
+                                    ? "bg-red-900/30 text-red-300"
+                                    : "bg-gray-700/30 text-gray-400"
+                              }`}
+                            >
+                              <span className="opacity-70">Dow (40%): </span>
+                              <span className="font-medium">
+                                {scan.data.advancedIndicators.indicatorMatrix
+                                  .dowTheory.signal === "bullish"
+                                  ? "↑"
+                                  : scan.data.advancedIndicators.indicatorMatrix
+                                        .dowTheory.signal === "bearish"
+                                    ? "↓"
+                                    : "→"}{" "}
+                                {scan.data.advancedIndicators.indicatorMatrix
+                                  .dowTheory.score > 0
+                                  ? "+"
+                                  : ""}
+                                {
+                                  scan.data.advancedIndicators.indicatorMatrix
+                                    .dowTheory.score
+                                }
+                              </span>
+                            </div>
+
+                            {/* RSI */}
+                            <div
+                              className={`px-2 py-1 rounded text-xs ${
+                                scan.data.advancedIndicators.indicatorMatrix.rsi
+                                  .signal === "bullish"
+                                  ? "bg-green-900/30 text-green-300"
+                                  : scan.data.advancedIndicators.indicatorMatrix
+                                        .rsi.signal === "bearish"
+                                    ? "bg-red-900/30 text-red-300"
+                                    : "bg-gray-700/30 text-gray-400"
+                              }`}
+                            >
+                              <span className="opacity-70">RSI (20%): </span>
+                              <span className="font-medium">
+                                {scan.data.advancedIndicators.indicatorMatrix
+                                  .rsi.signal === "bullish"
+                                  ? "↑"
+                                  : scan.data.advancedIndicators.indicatorMatrix
+                                        .rsi.signal === "bearish"
+                                    ? "↓"
+                                    : "→"}{" "}
+                                {scan.data.advancedIndicators.indicatorMatrix
+                                  .rsi.score > 0
+                                  ? "+"
+                                  : ""}
+                                {
+                                  scan.data.advancedIndicators.indicatorMatrix
+                                    .rsi.score
+                                }
+                              </span>
+                            </div>
+
+                            {/* MACD */}
+                            <div
+                              className={`px-2 py-1 rounded text-xs ${
+                                scan.data.advancedIndicators.indicatorMatrix
+                                  .macd.signal === "bullish"
+                                  ? "bg-green-900/30 text-green-300"
+                                  : scan.data.advancedIndicators.indicatorMatrix
+                                        .macd.signal === "bearish"
+                                    ? "bg-red-900/30 text-red-300"
+                                    : "bg-gray-700/30 text-gray-400"
+                              }`}
+                            >
+                              <span className="opacity-70">MACD (20%): </span>
+                              <span className="font-medium">
+                                {scan.data.advancedIndicators.indicatorMatrix
+                                  .macd.signal === "bullish"
+                                  ? "↑"
+                                  : scan.data.advancedIndicators.indicatorMatrix
+                                        .macd.signal === "bearish"
+                                    ? "↓"
+                                    : "→"}{" "}
+                                {scan.data.advancedIndicators.indicatorMatrix
+                                  .macd.score > 0
+                                  ? "+"
+                                  : ""}
+                                {
+                                  scan.data.advancedIndicators.indicatorMatrix
+                                    .macd.score
+                                }
+                                {scan.data.advancedIndicators.macd
+                                  .lossOfMomentum && " ⚠️"}
+                              </span>
+                            </div>
+
+                            {/* Volume */}
+                            <div
+                              className={`px-2 py-1 rounded text-xs ${
+                                scan.data.advancedIndicators.indicatorMatrix
+                                  .volume.signal === "bullish"
+                                  ? "bg-green-900/30 text-green-300"
+                                  : scan.data.advancedIndicators.indicatorMatrix
+                                        .volume.signal === "bearish"
+                                    ? "bg-red-900/30 text-red-300"
+                                    : "bg-gray-700/30 text-gray-400"
+                              }`}
+                            >
+                              <span className="opacity-70">Vol (20%): </span>
+                              <span className="font-medium">
+                                {scan.data.advancedIndicators.indicatorMatrix
+                                  .volume.signal === "bullish"
+                                  ? "↑"
+                                  : scan.data.advancedIndicators.indicatorMatrix
+                                        .volume.signal === "bearish"
+                                    ? "↓"
+                                    : "→"}{" "}
+                                {scan.data.advancedIndicators.indicatorMatrix
+                                  .volume.score > 0
+                                  ? "+"
+                                  : ""}
+                                {
+                                  scan.data.advancedIndicators.indicatorMatrix
+                                    .volume.score
+                                }
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Total Score & Recommendation */}
+                          <div
+                            className={`px-3 py-2 rounded-lg text-sm font-bold text-center ${
+                              scan.data.advancedIndicators.indicatorMatrix
+                                .recommendation === "STRONG_BUY"
+                                ? "bg-green-600/40 text-green-200"
+                                : scan.data.advancedIndicators.indicatorMatrix
+                                      .recommendation === "BUY"
+                                  ? "bg-green-600/30 text-green-300"
+                                  : scan.data.advancedIndicators.indicatorMatrix
+                                        .recommendation === "STRONG_SELL"
+                                    ? "bg-red-600/40 text-red-200"
+                                    : scan.data.advancedIndicators
+                                          .indicatorMatrix.recommendation ===
+                                        "SELL"
+                                      ? "bg-red-600/30 text-red-300"
+                                      : "bg-gray-700/30 text-gray-300"
+                            }`}
+                          >
+                            {scan.data.advancedIndicators.indicatorMatrix
+                              .recommendation === "STRONG_BUY" &&
+                              "🚀 STRONG BUY"}
+                            {scan.data.advancedIndicators.indicatorMatrix
+                              .recommendation === "BUY" && "✅ BUY"}
+                            {scan.data.advancedIndicators.indicatorMatrix
+                              .recommendation === "HOLD" && "⏸️ HOLD"}
+                            {scan.data.advancedIndicators.indicatorMatrix
+                              .recommendation === "SELL" && "⚠️ SELL"}
+                            {scan.data.advancedIndicators.indicatorMatrix
+                              .recommendation === "STRONG_SELL" &&
+                              "🔻 STRONG SELL"}
+                            <span className="ml-2 opacity-70">
+                              (Score:{" "}
+                              {scan.data.advancedIndicators.indicatorMatrix
+                                .totalScore > 0
+                                ? "+"
+                                : ""}
+                              {
+                                scan.data.advancedIndicators.indicatorMatrix
+                                  .totalScore
+                              }
+                              )
+                            </span>
+                          </div>
+
+                          {/* Trend Phase Badge */}
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            <div
+                              className={`px-2 py-1 rounded text-xs ${
+                                scan.data.advancedIndicators.trendPhase ===
+                                "accumulation"
+                                  ? "bg-blue-900/30 text-blue-300"
+                                  : scan.data.advancedIndicators.trendPhase ===
+                                      "participation"
+                                    ? "bg-green-900/30 text-green-300"
+                                    : scan.data.advancedIndicators
+                                          .trendPhase === "distribution"
+                                      ? "bg-orange-900/30 text-orange-300"
+                                      : scan.data.advancedIndicators
+                                            .trendPhase === "markdown"
+                                        ? "bg-red-900/30 text-red-300"
+                                        : "bg-gray-700/30 text-gray-400"
+                              }`}
+                            >
+                              {scan.data.advancedIndicators.trendPhase ===
+                                "accumulation" &&
+                                "🔵 Accumulation (Smart Money กำลังซื้อ)"}
+                              {scan.data.advancedIndicators.trendPhase ===
+                                "participation" &&
+                                "🟢 Participation (ขาขึ้นรุนแรง)"}
+                              {scan.data.advancedIndicators.trendPhase ===
+                                "distribution" &&
+                                "🟠 Distribution (Smart Money กำลังขาย)"}
+                              {scan.data.advancedIndicators.trendPhase ===
+                                "markdown" && "🔴 Markdown (ขาลงรุนแรง)"}
+                              {scan.data.advancedIndicators.trendPhase ===
+                                "unknown" && "⚪ Unknown Phase"}
+                            </div>
+
+                            {/* Volume Confirmation */}
+                            <div
+                              className={`px-2 py-1 rounded text-xs ${
+                                scan.data.advancedIndicators.volumeConfirmation
+                                  ? "bg-green-900/30 text-green-300"
+                                  : "bg-yellow-900/30 text-yellow-300"
+                              }`}
+                            >
+                              {scan.data.advancedIndicators.volumeConfirmation
+                                ? "✅ Volume ยืนยัน"
+                                : "⚠️ Volume ไม่ยืนยัน"}
+                            </div>
+                          </div>
+
+                          {/* RSI Interpretation */}
+                          <div className="mt-2 px-2 py-1 bg-gray-700/20 rounded text-xs text-gray-400">
+                            💡 {scan.data.advancedIndicators.rsiInterpretation}
+                          </div>
+
+                          {/* Divergence Warnings */}
+                          {scan.data.advancedIndicators.divergences.length >
+                            0 && (
+                            <div className="mt-2 space-y-1">
+                              {scan.data.advancedIndicators.divergences.map(
+                                (div, idx) => (
+                                  <div
+                                    key={idx}
+                                    className={`px-2 py-1 rounded text-xs ${
+                                      div.type === "bearish"
+                                        ? "bg-red-900/40 text-red-200 border border-red-500/50"
+                                        : "bg-green-900/40 text-green-200 border border-green-500/50"
+                                    }`}
+                                  >
+                                    <span className="font-medium">
+                                      [{div.indicator}]
+                                    </span>{" "}
+                                    {div.description}
+                                    {div.severity === "strong" && " ⚠️⚠️"}
+                                    {div.severity === "moderate" && " ⚠️"}
+                                  </div>
+                                ),
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
