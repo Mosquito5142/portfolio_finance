@@ -1,192 +1,253 @@
-# 🚀 Stock Portfolio Analyzer - God Tier Edition
+# 📊 Portfolio Finance - Stock Pattern Screener
 
-ระบบวิเคราะห์หุ้นระดับมืออาชีพ พร้อมคำแนะนำอัจฉริยะแบบ AI
+ระบบวิเคราะห์หุ้นระดับสถาบัน (Institutional-Grade) พร้อม Pattern Screener สำหรับหาหุ้นน่าลงทุน
 
 ![Next.js](https://img.shields.io/badge/Next.js-15-black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3-38bdf8)
 
-## ✨ Features
+---
 
-### 🔍 Smart Stock Search
+## 🚀 Features
 
-- ค้นหาหุ้นแบบ Autocomplete (60+ หุ้นยอดนิยม)
-- รองรับทั้งชื่อหุ้นและ Symbol
-- Keyboard Navigation (↑↓ Enter Escape)
+### 📈 Pattern Screener
 
-### 🤖 AI TACTICAL COMMAND
+- สแกนหุ้น 30+ ตัวพร้อมกัน
+- วิเคราะห์ Technical Indicators ระดับสถาบัน
+- แยก **Tier 1 (Safe)** vs **Tier 2 (Speculative)**
 
-คำแนะนำอัจฉริยะสำหรับ 3 กลุ่มนักลงทุน:
+### 💎 Value Hunting Mode
 
-| กลุ่ม                         | Logic             |
-| ----------------------------- | ----------------- |
-| 👤 **New Entry** (ว่างพอร์ต)  | RSI + Trend       |
-| 👤 **Holders** (มีของแล้ว)    | EMA5 + Volume     |
-| 👤 **Pyramiders** (จะเติมของ) | Distance from EMA |
+- หาหุ้นพื้นฐานดีราคาถูก (Good Stock, Bad Price)
+- เรียงตาม RSI ต่ำสุด = โอกาสซื้อ!
+- Badge พิเศษ: 💎 Oversold! / 🏷️ Sale!
 
-### 📈 Technical Indicators
+### 🏆 Tiered Stock System
 
-#### Moving Averages
+| Tier  | ความหมาย                 | Action                      |
+| ----- | ------------------------ | --------------------------- |
+| 🏆 T1 | Safe Haven (พื้นฐานแน่น) | เจอ Oversold = ซื้อเลย!     |
+| 🎢 T2 | Speculative (เสี่ยงสูง)  | เจอ Oversold = เช็คข่าวก่อน |
 
-- **EMA 5** - Trailing Stop Line (ขายถ้าหลุด!)
-- **EMA 20** - Short-term trend
-- **SMA 50** - Medium-term trend
-- **SMA 200** - Long-term trend
+---
 
-#### Momentum Indicators
+## 📊 Advanced Indicators
 
-- **RSI 14** - Overbought/Oversold detection
-- **MACD** - Trend momentum
-- **Volume Analysis** - Strong/Weak/Panic signals
+### Indicator Matrix (Weighted Scoring)
 
-### 📊 Volume Analysis (Momentum Check)
+| Indicator    | Weight | Logic                            |
+| ------------ | ------ | -------------------------------- |
+| Dow Theory   | 40%    | HH/HL = Bullish, LL/LH = Bearish |
+| RSI          | 20%    | <35 = Oversold, >65 = Overbought |
+| MACD         | 20%    | Crossover + Histogram Analysis   |
+| Volume (OBV) | 20%    | Volume Confirmation + Divergence |
 
-| สัญญาณ             | เงื่อนไข             | Action    |
-| ------------------ | -------------------- | --------- |
-| 💪 Strong          | Vol สูง + Price ขึ้น | ถือต่อ!   |
-| ⚠️ Weak Divergence | Vol ต่ำ + Price ขึ้น | เตรียมขาย |
-| 🚨 Panic Sell      | Vol สูง + Price ลง   | ขายทันที! |
+### Signal Output
 
-### 🌍 Macro Indicators
+- 🚀 **STRONG_BUY** (Score ≥ 60)
+- ✅ **BUY** (Score ≥ 30)
+- ⏸️ **HOLD** (Score -29 to +29)
+- ⚠️ **SELL** (Score ≤ -30)
+- 🔻 **STRONG_SELL** (Score ≤ -60)
 
-- **DXY** - Dollar Index (กระทบ Commodities)
-- **US10Y** - 10-Year Treasury Yield
+### Additional Indicators
 
-### 🐳 Insider & Social Data
+- **RSI Divergence** - เตือนก่อนกลับตัว
+- **MACD Histogram** - Loss of Momentum Warning
+- **OBV Divergence** - Smart Money Detection
+- **Trend Phase** - Accumulation / Distribution
 
-- Insider Trading sentiment
-- News Tier Analysis (Tier 1-3)
-- Buzz Score & Social Sentiment
-
-### ⚔️ Stock Gladiator (Compare)
-
-เปรียบเทียบหุ้นแบบ Battle Arena:
-
-| Dimension            | Max Score |
-| -------------------- | --------- |
-| 📈 Trend Score       | 30 pts    |
-| 🛡️ Safety/RSI Score  | 20 pts    |
-| 💰 Risk/Reward Ratio | 30 pts    |
-| 📰 News Tier Score   | 20 pts    |
-
-## 🛠️ Installation
-
-```bash
-# Clone repository
-git clone <your-repo-url>
-cd portfolio_finance
-
-# Install dependencies
-npm install
-
-# Run development server
-npm run dev
-```
-
-เปิด [http://localhost:3000](http://localhost:3000) ในเบราว์เซอร์
+---
 
 ## 📁 Project Structure
 
 ```
-src/
-├── app/
-│   ├── page.tsx          # หน้าหลัก Portfolio
-│   ├── search/
-│   │   └── page.tsx      # 🔍 หน้าค้นหาหุ้น (God Tier Analysis)
-│   ├── compare/
-│   │   └── page.tsx      # ⚔️ Stock Gladiator
-│   └── api/
-│       ├── prices/       # ราคาหุ้น + Technical
-│       ├── insider/      # Insider + Social data
-│       └── macro/        # DXY + Bond Yields
-├── components/
-│   └── Portfolio.tsx     # Portfolio management
-└── types/
-    └── stock.ts          # TypeScript interfaces
+portfolio_finance/
+├── src/
+│   ├── app/
+│   │   ├── page.tsx           # Homepage
+│   │   ├── patterns/
+│   │   │   └── page.tsx       # Pattern Screener UI
+│   │   ├── search/
+│   │   │   └── page.tsx       # Stock Search
+│   │   ├── gold/
+│   │   │   └── page.tsx       # Gold Price HUD
+│   │   └── api/
+│   │       ├── patterns/
+│   │       │   └── route.ts   # Pattern Analysis API
+│   │       └── gold/
+│   │           └── route.ts   # Gold Price API
+│   └── lib/
+│       └── stockApi.ts        # Stock API Utils
+├── public/
+└── package.json
 ```
+
+---
+
+## 🎯 Stock Tiers
+
+### 🏆 TIER 1: Safe Havens (27 หุ้น)
+
+#### Tech Giants (Magnificent 7+)
+
+```
+MSFT, GOOGL, NVDA, AMZN, META, AAPL, TSLA
+TSM, ASML, AMD, AVGO, CRM, ADBE, NFLX, ORCL
+```
+
+#### Heroes (คัดแล้ว)
+
+```
+RBRK (Cybersecurity), AXON (AI Police), CLS (AI Hardware)
+PLTR (AI Software), LRCX (Chip Equipment)
+```
+
+#### Growth Warriors
+
+```
+RKLB (Space), ASTS (5G Space), HOOD (Crypto/Retail)
+SYM (Robotics), KTOS (Defense), MU (Memory)
+```
+
+#### Energy/Hardware
+
+```
+MP (Rare Earth), UUUU (Uranium), OKLO (Nuclear), NVTS (Power Chips)
+```
+
+### 🎢 TIER 2: Speculative (7 หุ้น)
+
+```
+QS (Battery), IONQ (Quantum), EOSE (Energy Storage)
+ONDS (Drone), JOBY (Flying Car), QBTS (Quantum), LMND (InsureTech)
+```
+
+### ❌ Blacklist (ลบออกแล้ว)
+
+```
+INTC (Value Trap), OPEN/PGY/CVNA (Real Estate Risk)
+QURE/TMDX (Biotech FDA), BMNR/CIFR/WULF/IREN/NBIS (Crypto Miners)
+```
+
+---
+
+## 🛠️ Installation
+
+```bash
+# Clone
+git clone <repo-url>
+cd portfolio_finance
+
+# Install
+npm install
+
+# Run
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000)
+
+---
+
+## 📖 Usage
+
+### Pattern Screener
+
+1. ไปที่ `/patterns`
+2. เลือกโหมด:
+   - 💎 **Value Hunting** - หาของถูก (เรียงตาม RSI ต่ำ)
+   - 📈 **Trend Following** - ตามเทรนด์ (เรียงตาม BUY ก่อน)
+3. กด **🚀 เริ่มสแกน**
+4. ดู Badge:
+   - **💎 Oversold!** = RSI < 35 (ซื้อได้!)
+   - **🏷️ Sale!** = SELL signal + RSI ต่ำ (ของดีลดราคา)
+   - **🏆 T1** = TIER 1 Safe
+   - **🎢 T2** = TIER 2 Speculative
+
+### Gold Price HUD
+
+- ไปที่ `/gold`
+- ดูราคาทอง XAU/USD + เงิน SLV
+
+### Stock Search
+
+- ไปที่ `/search`
+- พิมพ์ Symbol เช่น `NVDA`
+- ดู Technical Analysis + Pattern
+
+---
+
+## 📊 API Endpoints
+
+### GET `/api/patterns?symbol=NVDA`
+
+Returns:
+
+```json
+{
+  "symbol": "NVDA",
+  "currentPrice": 123.45,
+  "priceChange": 2.5,
+  "priceChangePercent": 2.1,
+  "patterns": [...],
+  "trend": { "shortTerm": "up", "longTerm": "up", ... },
+  "overallSignal": "BUY",
+  "signalStrength": 75,
+  "entryStatus": "ready",
+  "metrics": {
+    "rsi": 45,
+    "supportLevel": 115.00,
+    "resistanceLevel": 130.00,
+    ...
+  },
+  "advancedIndicators": {
+    "macd": { ... },
+    "obv": { ... },
+    "indicatorMatrix": { ... },
+    ...
+  }
+}
+```
+
+---
 
 ## 🔧 Tech Stack
 
 - **Framework**: Next.js 15 (App Router)
 - **Language**: TypeScript
-- **Styling**: TailwindCSS + DaisyUI
+- **Styling**: TailwindCSS
 - **Data**: Yahoo Finance API
 - **State**: React Hooks
 
-## 📊 API Endpoints
+---
 
-### GET /api/prices
+## 📝 Changelog
 
-```
-?symbols=NVDA,AAPL,TSLA
-```
+### v2.0 - Value Hunting Update
 
-Returns: ราคา, MA, RSI, MACD, Volume Profile, Support/Resistance
+- ✅ Added Value Hunting Mode
+- ✅ Added Tiered Stock System (T1/T2)
+- ✅ Added RBRK, IONQ, CLS, AXON, TSM, ASML, ADBE, NFLX, ORCL
+- ✅ Removed junk stocks (Crypto Miners, Biotech, Value Traps)
+- ✅ Added Indicator Matrix with weighted scoring
+- ✅ Added RSI/OBV/MACD Divergence Detection
+- ✅ Added Trend Phase Detection (Accumulation/Distribution)
 
-### GET /api/insider
+### v1.0 - Initial Release
 
-```
-?symbol=NVDA
-```
+- Pattern Scanner
+- Technical Indicators (RSI, SMA, Volume)
+- Gold Price HUD
 
-Returns: Insider trading, Social sentiment, News tiers
+---
 
-### GET /api/macro
+## 📄 License
 
-Returns: DXY, US10Y yields
+MIT
 
-## 🎯 Usage Guide
+---
 
-### 1️⃣ ค้นหาหุ้น
+## 👨‍💻 Author
 
-1. ไปที่ `/search`
-2. พิมพ์ชื่อหุ้น เช่น "NVDA" หรือ "Apple"
-3. ดูคำแนะนำจาก AI TACTICAL COMMAND
-
-### 2️⃣ เปรียบเทียบหุ้น
-
-1. ไปที่ `/compare`
-2. เพิ่มหุ้น 2-5 ตัว
-3. กด **⚔️ FIGHT!**
-4. ดูผลการจัดอันดับพร้อมคะแนน
-
-### 3️⃣ Position Sizing
-
-- ดูค่า **Position Size %** ที่แนะนำ
-- ดู **Entry/Stop Loss/Target** prices
-
-## 🧠 AI Logic Summary
-
-### New Buyers (ว่างพอร์ต)
-
-```
-IF Trend Up + RSI < 50  → 🟢 Strong Buy
-IF Trend Up + RSI > 75  → 🟡 Wait on Dip
-IF Trend Down           → 🔴 Don't Catch Knife
-```
-
-### Holders (มีของแล้ว)
-
-```
-IF Price > EMA5 + Vol High  → 🔥 Strong Hold
-IF Price > EMA5 + Vol Low   → ⚠️ Hold with Caution
-IF Price < EMA5             → 🚨 Take Profit!
-```
-
-### Pyramiders (เติมของ)
-
-```
-IF Distance ≤ 2%  → 🟢 Buy on Support
-IF Distance 2-5%  → ⚠️ Risky to Chase
-IF Distance > 5%  → 🔴 Too Extended
-```
-
-## 📝 License
-
-MIT License
-
-## 🙏 Credits
-
-- Yahoo Finance API for market data
-- News data from various tiers
-- Built with ❤️ using Next.js
+Built with ❤️ for Value Hunters
