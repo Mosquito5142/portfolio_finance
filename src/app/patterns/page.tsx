@@ -126,56 +126,97 @@ interface StockScan {
   status: "pending" | "loading" | "done" | "error";
 }
 
-// 7 นางฟ้า (Magnificent 7)
-const MAGNIFICENT_7 = [
-  "AAPL", // Apple
-  "MSFT", // Microsoft
-  "GOOGL", // Alphabet
-  "AMZN", // Amazon
-  "NVDA", // NVIDIA
-  "META", // Meta
-  "TSLA", // Tesla
+// ============================================================================
+// 🎯 TIERED STOCK LIST - Organized by Risk Level
+// ============================================================================
+
+// 🏆 TIER 1: SAFE HAVENS (ปลอดภัยสูง - เจอ Oversold ให้รีบตะครุบ!)
+// พื้นฐานแน่นปึ้ก ถ้าตกแรง = โอกาสซื้อ ไม่ใช่หนี
+const TIER_1_TECH_GIANTS = [
+  // --- The Magnificent 7 (เจ้าโลก) ---
+  "MSFT", // Microsoft - Cloud/AI/OS
+  "GOOGL", // Alphabet - Search/Data
+  "NVDA", // NVIDIA - AI Chips
+  "AMZN", // Amazon - E-commerce/Cloud
+  "META", // Meta - Social/Ads
+  "AAPL", // Apple - Hardware Ecosystem
+  "TSLA", // Tesla - EV/Robot/Energy
+
+  // --- The Chip Infrastructure (ขาดไม่ได้) ---
+  "TSM", // TSMC - คนผลิตชิปให้โลก (Must Have!)
+  "ASML", // ASML - คนขายเครื่องทำชิป (Monopoly)
+  "AMD", // AMD - คู่แข่ง NVDA/Intel
+  "AVGO", // Broadcom - AI Networking
+
+  // --- The Software Kings (กินรวบ) ---
+  "CRM", // Salesforce - Enterprise OS
+  "ADBE", // Adobe - Creative OS
+  "NFLX", // Netflix - Streaming King
+  "ORCL", // Oracle - Database/Cloud (มาแรงเรื่อง AI)
 ];
 
-// User's Portfolio Holdings
-const MY_PORTFOLIO = [
-  "UUUU", // Energy Fuels
-  "ASTS", // AST SpaceMobile
-  "MU", // Micron Technology
-  "IREN", // Iris Energy
-  "AMD", // AMD
-  "LMND", // Lemonade
-  "LRCX", // Lam Research
-  "NVTS", // Navitas Semiconductor
-  "QURE", // uniQure
-  "WULF", // TeraWulf
-  "MP", // MP Materials
-  "CIFR", // Cipher Mining
-  "INTC", // Intel
-  "RKLB", // Rocket Lab
-  "EOSE", // Eos Energy
-  "TMDX", // TransMedics
-  "OKLO", // Oklo
-  "NBIS", // Nebius Group
-  "BMNR", // BitMine
-  "KTOS", // Kratos Defense
-  "QS", // QuantumScape
-  "JOBY", // Joby Aviation
-  "ONDS", // Ondas Holdings
-  "PLTR", // Palantir
-  "PGY", // Pagaya Technologies
-  "CVNA", // Carvana
-  "QBTS", // D-Wave Quantum
-  "HOOD", // Robinhood
-  "OPEN", // Opendoor
-  "SYM", // Symbotic
+const TIER_1_HEROES = [
+  "RBRK", // Rubrik - Cybersecurity (ลูกรัก!)
+  "AXON", // Axon/Taser - AI Police/Body Cam
+  "CLS", // Celestica - AI Hardware Manufacturing
+  "PLTR", // Palantir - AI Software (Sam ชอบ)
+  "LRCX", // Lam Research - เครื่องผลิตชิป
 ];
 
-// Combined list: Magnificent 7 + Portfolio
-const SCAN_SYMBOLS = [...MAGNIFICENT_7, ...MY_PORTFOLIO];
+// 🚀 TIER 1.5: GROWTH WARRIORS (AI, Energy, Space - มีอนาคต)
+const TIER_1_GROWTH = [
+  "RKLB", // Rocket Lab - Space Leader
+  "ASTS", // AST SpaceMobile - 5G from Space
+  "HOOD", // Robinhood - Retail/Crypto ตัวแทน
+  "SYM", // Symbotic - Warehouse Robotics
+  "KTOS", // Kratos Defense - Drone/UAV
+  "MU", // Micron - Memory Chip (รอบๆ)
+];
+
+// ⚡ TIER 1: HARDWARE/ENERGY (พลังงาน + วัสดุ)
+const TIER_1_ENERGY = [
+  "MP", // MP Materials - Rare Earth (จำเป็น)
+  "UUUU", // Energy Fuels - Uranium (Nuclear)
+  "OKLO", // Oklo - Nuclear (ลูกรัก Sam Altman)
+  "NVTS", // Navitas - Power Semiconductors
+];
+
+// 🎢 TIER 2: SPECULATIVE (เสี่ยงสูง - ซื้อหวย ใส่น้อยๆ)
+// ต้องเช็คข่าวก่อนซื้อเสมอ!
+const TIER_2_SPECULATIVE = [
+  "QS", // QuantumScape - Solid State Battery (รอนาน)
+  "IONQ", // IonQ - Quantum Computing (ลูกรัก!)
+  "EOSE", // Eos Energy - Zinc Battery (คู่แข่งเยอะ)
+  "ONDS", // Ondas - Drone Network (สภาพคล่องต่ำ)
+  "JOBY", // Joby Aviation - Flying Car (ฝันไกล)
+  "QBTS", // D-Wave - Quantum (Speculative)
+  "LMND", // Lemonade - InsureTech (ยังขาดทุน)
+];
+
+// ❌ BLACKLIST: ลบออกแล้ว (Value Trap / เสี่ยงเกิน)
+// "INTC" - Intel (ยักษ์ป่วย ถูกแล้วถูกได้อีก)
+// "OPEN", "PGY", "CVNA" - กลุ่มอสังหา/สินเชื่อ (เสี่ยงล้มละลาย)
+// "QURE", "TMDX" - Biotech (FDA Risk สูง)
+// "BMNR", "CIFR", "WULF", "IREN", "NBIS" - Crypto Miners (HOOD ตัวเดียวพอ)
+
+// Combine all tiers
+const ALL_TIER_1 = [
+  ...TIER_1_TECH_GIANTS,
+  ...TIER_1_HEROES,
+  ...TIER_1_GROWTH,
+  ...TIER_1_ENERGY,
+];
+const ALL_TIER_2 = [...TIER_2_SPECULATIVE];
+
+// Combined list with tier info
+const SCAN_SYMBOLS = [...ALL_TIER_1, ...ALL_TIER_2];
 
 // Remove duplicates
 const UNIQUE_SYMBOLS = [...new Set(SCAN_SYMBOLS)];
+
+// Helper: Check if symbol is Tier 1 (Safe)
+const isTier1 = (symbol: string) => ALL_TIER_1.includes(symbol);
+const isTier2 = (symbol: string) => ALL_TIER_2.includes(symbol);
 
 export default function PatternScreenerPage() {
   const [scans, setScans] = useState<StockScan[]>([]);
@@ -185,6 +226,8 @@ export default function PatternScreenerPage() {
     "ALL" | "BUY" | "SELL" | "HOLD"
   >("ALL");
   const [mounted, setMounted] = useState(false);
+  // NEW: Scan Mode - Trend Following vs Value Hunting
+  const [scanMode, setScanMode] = useState<"trend" | "value">("value");
 
   useEffect(() => {
     setMounted(true);
@@ -247,19 +290,27 @@ export default function PatternScreenerPage() {
     setScanning(false);
   };
 
-  // Filter and sort results
+  // Filter and sort results based on mode
   const filteredScans = scans
     .filter((s) => s.status === "done" && s.data)
     .filter(
       (s) => filterSignal === "ALL" || s.data?.overallSignal === filterSignal,
     )
     .sort((a, b) => {
-      // Sort by signal: BUY first, then by strength
-      const signalOrder = { BUY: 0, SELL: 1, HOLD: 2 };
-      const aOrder = signalOrder[a.data?.overallSignal || "HOLD"];
-      const bOrder = signalOrder[b.data?.overallSignal || "HOLD"];
-      if (aOrder !== bOrder) return aOrder - bOrder;
-      return (b.data?.signalStrength || 0) - (a.data?.signalStrength || 0);
+      if (scanMode === "value") {
+        // VALUE HUNTING: Prioritize low RSI (oversold) = buying opportunity
+        const aRSI = a.data?.metrics?.rsi ?? 100;
+        const bRSI = b.data?.metrics?.rsi ?? 100;
+        // Lower RSI = better opportunity
+        return aRSI - bRSI;
+      } else {
+        // TREND FOLLOWING: Sort by signal: BUY first, then by strength
+        const signalOrder = { BUY: 0, SELL: 1, HOLD: 2 };
+        const aOrder = signalOrder[a.data?.overallSignal || "HOLD"];
+        const bOrder = signalOrder[b.data?.overallSignal || "HOLD"];
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return (b.data?.signalStrength || 0) - (a.data?.signalStrength || 0);
+      }
     });
 
   const buyCount = scans.filter((s) => s.data?.overallSignal === "BUY").length;
@@ -268,6 +319,10 @@ export default function PatternScreenerPage() {
   ).length;
   const holdCount = scans.filter(
     (s) => s.data?.overallSignal === "HOLD",
+  ).length;
+  // NEW: Count of oversold stocks (Value Hunting targets)
+  const oversoldGemsCount = scans.filter(
+    (s) => s.data?.metrics?.rsi !== undefined && s.data.metrics.rsi < 35,
   ).length;
 
   const formatUSD = (value: number | undefined | null) => {
@@ -319,12 +374,14 @@ export default function PatternScreenerPage() {
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
         {/* Scan Controls */}
         <div className="bg-gray-800/50 rounded-2xl border border-gray-700/50 p-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <h2 className="text-white font-bold text-lg">🔍 Mass Scan</h2>
               <p className="text-gray-500 text-sm">
-                สแกน {UNIQUE_SYMBOLS.length} หุ้น (รวม Shay Boloor Picks)
-                หาหุ้นหน้าซื้อ
+                สแกน {UNIQUE_SYMBOLS.length} หุ้น
+                {scanMode === "value"
+                  ? " - หาของดีราคาถูก (Value Hunting)"
+                  : " - ตามเทรนด์ (Trend Following)"}
               </p>
             </div>
             <button
@@ -340,6 +397,60 @@ export default function PatternScreenerPage() {
                 ? `กำลังสแกน... ${scanProgress.toFixed(0)}%`
                 : "🚀 เริ่มสแกน"}
             </button>
+          </div>
+
+          {/* Mode Toggle */}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              onClick={() => setScanMode("value")}
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                scanMode === "value"
+                  ? "bg-green-600 text-white"
+                  : "bg-gray-700 text-gray-400 hover:bg-gray-600"
+              }`}
+            >
+              💎 Value Hunting (หาของถูก)
+            </button>
+            <button
+              onClick={() => setScanMode("trend")}
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                scanMode === "trend"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-700 text-gray-400 hover:bg-gray-600"
+              }`}
+            >
+              📈 Trend Following (ตามเทรนด์)
+            </button>
+          </div>
+
+          {/* Mode Explanation */}
+          <div
+            className={`mt-3 p-3 rounded-lg text-sm ${
+              scanMode === "value"
+                ? "bg-green-900/30 border border-green-700/50"
+                : "bg-blue-900/30 border border-blue-700/50"
+            }`}
+          >
+            {scanMode === "value" ? (
+              <div className="text-green-300">
+                <span className="font-bold">💎 Value Hunting Mode:</span>{" "}
+                มองหาหุ้นที่ RSI ต่ำ (Oversold) + พื้นฐานดี = โอกาสซื้อ!
+                <br />
+                <span className="text-green-400/70 text-xs">
+                  หุ้นที่ตกแรงแต่พื้นฐานดี คือโอกาสทอง - &quot;SELL&quot;
+                  อาจแปลว่า &quot;Sale!&quot;
+                </span>
+              </div>
+            ) : (
+              <div className="text-blue-300">
+                <span className="font-bold">📈 Trend Following Mode:</span>{" "}
+                ติดตามแนวโน้ม - BUY เมื่อขาขึ้น, SELL เมื่อขาลง
+                <br />
+                <span className="text-blue-400/70 text-xs">
+                  ซื้อตามเทรนด์ ระวัง RSI สูง = อาจซื้อที่ดอย
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Progress Bar */}
@@ -379,7 +490,9 @@ export default function PatternScreenerPage() {
 
         {/* Results Summary */}
         {scans.length > 0 && !scanning && (
-          <div className="grid grid-cols-4 gap-4">
+          <div
+            className={`grid gap-4 ${scanMode === "value" ? "grid-cols-5" : "grid-cols-4"}`}
+          >
             <button
               onClick={() => setFilterSignal("ALL")}
               className={`p-4 rounded-xl border transition-all ${
@@ -393,6 +506,23 @@ export default function PatternScreenerPage() {
                 {scans.filter((s) => s.data).length}
               </p>
             </button>
+
+            {/* Value Hunting Mode: Show Oversold Gems first */}
+            {scanMode === "value" && (
+              <button
+                onClick={() => setFilterSignal("ALL")} // Will be sorted by RSI anyway
+                className="p-4 rounded-xl border transition-all bg-gradient-to-br from-green-900/50 to-emerald-900/50 border-green-500 animate-pulse"
+              >
+                <p className="text-green-300 text-xs font-medium">
+                  💎 Oversold Gems
+                </p>
+                <p className="text-2xl font-bold text-green-400">
+                  {oversoldGemsCount}
+                </p>
+                <p className="text-green-400/60 text-xs">RSI &lt; 35</p>
+              </button>
+            )}
+
             <button
               onClick={() => setFilterSignal("BUY")}
               className={`p-4 rounded-xl border transition-all ${
@@ -412,7 +542,9 @@ export default function PatternScreenerPage() {
                   : "bg-gray-800/50 border-gray-700/50 hover:border-red-500/50"
               }`}
             >
-              <p className="text-gray-500 text-xs">🔴 หน้าขาย</p>
+              <p className="text-gray-500 text-xs">
+                {scanMode === "value" ? "🔴 โอกาสซื้อ?" : "🔴 หน้าขาย"}
+              </p>
               <p className="text-2xl font-bold text-red-400">{sellCount}</p>
             </button>
             <button
@@ -472,6 +604,34 @@ export default function PatternScreenerPage() {
                       >
                         {scan.symbol}
                       </Link>
+                      {/* Value Hunter Badge for Oversold Stocks */}
+                      {scanMode === "value" &&
+                        scan.data?.metrics?.rsi !== undefined &&
+                        scan.data.metrics.rsi < 35 && (
+                          <span className="ml-2 px-2 py-0.5 bg-green-600/50 text-green-300 text-xs rounded-full animate-pulse">
+                            💎 Oversold!
+                          </span>
+                        )}
+                      {/* Value Mode: Invert interpretation hint */}
+                      {scanMode === "value" &&
+                        scan.data?.overallSignal === "SELL" &&
+                        scan.data?.metrics?.rsi !== undefined &&
+                        scan.data.metrics.rsi < 40 && (
+                          <span className="ml-2 px-2 py-0.5 bg-emerald-600/40 text-emerald-300 text-xs rounded-full">
+                            🏷️ Sale!
+                          </span>
+                        )}
+                      {/* Tier Badge - Show risk level */}
+                      {isTier1(scan.symbol) && (
+                        <span className="ml-2 px-2 py-0.5 bg-blue-600/40 text-blue-300 text-xs rounded-full">
+                          🏆 T1
+                        </span>
+                      )}
+                      {isTier2(scan.symbol) && (
+                        <span className="ml-2 px-2 py-0.5 bg-orange-600/40 text-orange-300 text-xs rounded-full">
+                          🎢 T2
+                        </span>
+                      )}
                       <p className="text-gray-400 text-sm">
                         {formatUSD(scan.data?.currentPrice || 0)}
                         <span
