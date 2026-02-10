@@ -161,6 +161,8 @@ const TIER_1_HEROES = [
   "CLS", // Celestica - AI Hardware Manufacturing
   "PLTR", // Palantir - AI Software (Sam ชอบ)
   "LRCX", // Lam Research - เครื่องผลิตชิป
+  "GC=F", // Gold
+  "SI=F", // Silver
 ];
 
 // 🚀 TIER 1.5: GROWTH WARRIORS (AI, Energy, Space - มีอนาคต)
