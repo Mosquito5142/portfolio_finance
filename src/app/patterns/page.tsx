@@ -173,6 +173,7 @@ const TIER_1_GROWTH = [
   "SYM", // Symbotic - Warehouse Robotics
   "KTOS", // Kratos Defense - Drone/UAV
   "MU", // Micron - Memory Chip (รอบๆ)
+  "RBLX", // Roblox - Gaming/Metaverse
 ];
 
 // ⚡ TIER 1: HARDWARE/ENERGY (พลังงาน + วัสดุ)
