@@ -128,6 +128,18 @@ type TrendPhase =
   | "markdown"
   | "unknown";
 
+// Candlestick Pattern Interface
+interface CandlePattern {
+  name:
+    | "Bullish Hammer"
+    | "Bullish Engulfing"
+    | "Doji"
+    | "Inverted Hammer"
+    | "None";
+  signal: "bullish" | "neutral";
+  confidence: number; // 0-100
+}
+
 // Indicator Matrix (Weighted Scoring)
 interface IndicatorMatrix {
   dowTheory: {
@@ -150,6 +162,11 @@ interface IndicatorMatrix {
     weight: number;
     score: number;
   };
+  candle?: {
+    signal: "bullish" | "bearish" | "neutral";
+    weight: number;
+    score: number;
+  };
   totalScore: number; // -100 to +100
   recommendation: "STRONG_BUY" | "BUY" | "HOLD" | "SELL" | "STRONG_SELL";
 }
@@ -163,6 +180,15 @@ interface AdvancedIndicators {
   indicatorMatrix: IndicatorMatrix;
   volumeConfirmation: boolean;
   rsiInterpretation: string;
+  // NEW: Sniper Bot v3 Features
+  candlePattern: CandlePattern;
+  atr: number;
+  marketContext: {
+    vixValue: number;
+    qqqTrend: "bullish" | "bearish" | "neutral";
+    marketTemperature: "hot" | "normal" | "cold";
+  };
+  daysToEarnings?: number;
 }
 
 // Calculate EMA (for MACD)
@@ -274,13 +300,79 @@ function calculateOBV(closes: number[], volumes: number[]): OBVResult {
   const priceDown = priceEnd < priceStart;
 
   let obvDivergence: "bullish" | "bearish" | "none" = "none";
-  if (priceUp && obvTrend === "down") {
-    obvDivergence = "bearish"; // Price up but OBV down = bearish divergence
-  } else if (priceDown && obvTrend === "up") {
-    obvDivergence = "bullish"; // Price down but OBV up = bullish divergence
-  }
+  if (priceDown && obvTrend === "up") obvDivergence = "bullish";
+  else if (priceUp && obvTrend === "down") obvDivergence = "bearish";
 
   return { obv, obvTrend, obvDivergence };
+}
+
+// Calculate ATR (Average True Range) - 14 period
+function calculateATR(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+): number {
+  if (highs.length < 15) return 0;
+
+  const trs: number[] = [];
+  for (let i = 1; i < highs.length; i++) {
+    const hl = highs[i] - lows[i];
+    const hpc = Math.abs(highs[i] - closes[i - 1]);
+    const lpc = Math.abs(lows[i] - closes[i - 1]);
+    trs.push(Math.max(hl, hpc, lpc));
+  }
+
+  // Return SMA of TR for the last 14 periods
+  return calculateSMA(trs, 14);
+}
+
+// Candlestick Pattern Detection
+function detectCandlePattern(
+  opens: number[],
+  highs: number[],
+  lows: number[],
+  closes: number[],
+): CandlePattern {
+  const i = closes.length - 1;
+  if (i < 1) return { name: "None", signal: "neutral", confidence: 0 };
+
+  const currentClose = closes[i];
+  const currentOpen = opens[i];
+  const currentHigh = highs[i];
+  const currentLow = lows[i];
+  const bodySize = Math.abs(currentClose - currentOpen);
+  const candleRange = currentHigh - currentLow;
+  const upperShadow = currentHigh - Math.max(currentOpen, currentClose);
+  const lowerShadow = Math.min(currentOpen, currentClose) - currentLow;
+
+  // 1. Hammer (Bottom reversal)
+  if (lowerShadow > bodySize * 2 && upperShadow < bodySize * 0.5) {
+    return { name: "Bullish Hammer", signal: "bullish", confidence: 75 };
+  }
+
+  // 2. Bullish Engulfing
+  const prevClose = closes[i - 1];
+  const prevOpen = opens[i - 1];
+  if (
+    currentClose > currentOpen &&
+    prevClose < prevOpen &&
+    currentClose > prevOpen &&
+    currentOpen < prevClose
+  ) {
+    return { name: "Bullish Engulfing", signal: "bullish", confidence: 85 };
+  }
+
+  // 3. Doji (Indecision)
+  if (bodySize < candleRange * 0.1) {
+    return { name: "Doji", signal: "neutral", confidence: 50 };
+  }
+
+  // 4. Inverted Hammer
+  if (upperShadow > bodySize * 2 && lowerShadow < bodySize * 0.5) {
+    return { name: "Inverted Hammer", signal: "bullish", confidence: 60 };
+  }
+
+  return { name: "None", signal: "neutral", confidence: 0 };
 }
 
 // Detect RSI Divergence
@@ -435,6 +527,7 @@ function calculateIndicatorMatrix(
   rsi: number,
   macd: MACDResult,
   obv: OBVResult,
+  candle: CandlePattern,
 ): IndicatorMatrix {
   // Dow Theory (40% weight) - Based on price structure
   const currentPrice = closes[closes.length - 1];
@@ -495,7 +588,16 @@ function calculateIndicatorMatrix(
     volumeScore = 15;
   }
 
-  const totalScore = dowScore + rsiScore + macdScore + volumeScore;
+  // NEW: Candlestick Confirmation (Bonus 20%)
+  let candleSignal: "bullish" | "bearish" | "neutral" = "neutral";
+  let candleScore = 0;
+  if (candle.signal === "bullish") {
+    candleSignal = "bullish";
+    candleScore = 20;
+  }
+
+  const totalScore =
+    dowScore + rsiScore + macdScore + volumeScore + candleScore;
 
   let recommendation: IndicatorMatrix["recommendation"] = "HOLD";
   if (totalScore >= 60) recommendation = "STRONG_BUY";
@@ -508,6 +610,7 @@ function calculateIndicatorMatrix(
     rsi: { signal: rsiSignal, weight: 20, score: rsiScore },
     macd: { signal: macdSignal, weight: 20, score: macdScore },
     volume: { signal: volumeSignal, weight: 20, score: volumeScore },
+    candle: { signal: candleSignal, weight: 20, score: candleScore },
     totalScore,
     recommendation,
   };
@@ -788,6 +891,74 @@ function analyzeTrend(closes: number[]): TrendAnalysis {
   return { shortTerm, longTerm, sma20, sma50, currentPrice, strength };
 }
 
+// ========== MARKET CONTEXT (VIX/QQQ) ==========
+let cachedMarketContext: {
+  vixValue: number;
+  qqqTrend: "bullish" | "bearish" | "neutral";
+  marketTemperature: "hot" | "normal" | "cold";
+  timestamp: number;
+} | null = null;
+
+async function getMarketContext() {
+  const now = Date.now();
+  if (cachedMarketContext && now - cachedMarketContext.timestamp < 300000) {
+    // 5 min cache
+    return cachedMarketContext;
+  }
+
+  try {
+    // Fetch VIX and QQQ
+    const [vixRes, qqqRes] = await Promise.all([
+      fetch(
+        "https://query1.finance.yahoo.com/v8/finance/chart/^VIX?interval=1d&range=1mo",
+        { headers: { "User-Agent": "Mozilla/5.0" } },
+      ),
+      fetch(
+        "https://query1.finance.yahoo.com/v8/finance/chart/QQQ?interval=1d&range=3mo",
+        { headers: { "User-Agent": "Mozilla/5.0" } },
+      ),
+    ]);
+
+    const vixData = await vixRes.json();
+    const qqqData = await qqqRes.json();
+
+    const vixValue = vixData.chart.result?.[0]?.meta?.regularMarketPrice || 20;
+    const qqqCloses =
+      qqqData.chart.result?.[0]?.indicators?.quote?.[0]?.close || [];
+
+    // QQQ Trend (last 10 days)
+    const qqqSma20 = calculateSMA(qqqCloses, 20);
+    const qqqPrice = qqqCloses[qqqCloses.length - 1] || 0;
+    const qqqTrend =
+      qqqPrice > qqqSma20
+        ? "bullish"
+        : qqqPrice < qqqSma20 * 0.98
+          ? "bearish"
+          : "neutral";
+
+    // Market Temperature based on VIX
+    // VIX > 25 = Hot (Scary/Volatile), VIX < 15 = Cold (Calm/Greedy)
+    const marketTemperature =
+      vixValue > 25 ? "hot" : vixValue < 15 ? "cold" : "normal";
+
+    cachedMarketContext = {
+      vixValue,
+      qqqTrend,
+      marketTemperature,
+      timestamp: now,
+    };
+    return cachedMarketContext;
+  } catch (e) {
+    console.error("Failed to fetch market context:", e);
+    return {
+      vixValue: 20,
+      qqqTrend: "neutral" as const,
+      marketTemperature: "normal" as const,
+      timestamp: now,
+    };
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const symbol = searchParams.get("symbol")?.toUpperCase() || "AAPL";
@@ -818,6 +989,9 @@ export async function GET(request: Request) {
       (p: number | null) => p !== null,
     );
     const lows: number[] = quotes.low.filter((p: number | null) => p !== null);
+    const opens: number[] = quotes.open.filter(
+      (p: number | null) => p !== null,
+    );
 
     if (closes.length < 30) throw new Error(`Insufficient data for ${symbol}`);
 
@@ -1013,6 +1187,9 @@ export async function GET(request: Request) {
     const rsiDivergence = detectRSIDivergence(closes);
     const trendPhase = detectTrendPhase(closes, volumes, rsi);
     const rsiInterpretation = interpretRSI(rsi, trend.shortTerm);
+    const candlePattern = detectCandlePattern(opens, highs, lows, closes);
+    const atr = calculateATR(highs, lows, closes);
+
     const indicatorMatrix = calculateIndicatorMatrix(
       closes,
       highs,
@@ -1022,6 +1199,7 @@ export async function GET(request: Request) {
       rsi,
       macd,
       obv,
+      candlePattern,
     );
 
     // Check volume confirmation
@@ -1054,6 +1232,38 @@ export async function GET(request: Request) {
       });
     }
 
+    const marketContextData = await getMarketContext();
+    const marketContext = {
+      vixValue: marketContextData.vixValue,
+      qqqTrend: marketContextData.qqqTrend,
+      marketTemperature: marketContextData.marketTemperature,
+    };
+
+    // ========== FETCH EARNINGS DATA (Sniper Tip #3) ==========
+    let daysToEarnings: number | undefined;
+    try {
+      const earningsRes = await fetch(
+        `https://query1.finance.yahoo.com/v11/finance/quoteSummary/${symbol}?modules=calendarEvents`,
+        {
+          headers: { "User-Agent": "Mozilla/5.0" },
+          next: { revalidate: 3600 },
+        },
+      );
+      if (earningsRes.ok) {
+        const eData = await earningsRes.json();
+        const earningsDateStr =
+          eData.quoteSummary?.result?.[0]?.calendarEvents?.earnings
+            ?.earningsDate?.[0]?.fmt;
+        if (earningsDateStr) {
+          const eDate = new Date(earningsDateStr);
+          const diff = eDate.getTime() - Date.now();
+          daysToEarnings = Math.ceil(diff / (1000 * 60 * 60 * 24));
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch earnings for", symbol);
+    }
+
     const advancedIndicators: AdvancedIndicators = {
       macd,
       obv,
@@ -1062,6 +1272,10 @@ export async function GET(request: Request) {
       indicatorMatrix,
       volumeConfirmation,
       rsiInterpretation,
+      candlePattern,
+      atr,
+      marketContext,
+      daysToEarnings,
     };
 
     // ========== FIX: UNIFIED SIGNAL LOGIC (Matrix + Divergence Integrated) ==========
@@ -1095,6 +1309,11 @@ export async function GET(request: Request) {
     } else {
       finalSignal = "HOLD";
       finalStrength = 50;
+    }
+
+    // === RULE: Candlestick Confirmation boost ===
+    if (candlePattern.signal === "bullish" && finalSignal === "BUY") {
+      finalStrength += 15;
     }
 
     // === RULE: If score < 20, NEVER show BUY (user's fix #1) ===

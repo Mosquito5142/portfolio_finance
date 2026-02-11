@@ -86,8 +86,15 @@ interface IndicatorMatrix {
   rsi: IndicatorMatrixItem;
   macd: IndicatorMatrixItem;
   volume: IndicatorMatrixItem;
+  candle?: IndicatorMatrixItem;
   totalScore: number;
   recommendation: "STRONG_BUY" | "BUY" | "HOLD" | "SELL" | "STRONG_SELL";
+}
+
+interface CandlePattern {
+  name: string;
+  signal: "bullish" | "neutral";
+  confidence: number;
 }
 
 interface AdvancedIndicators {
@@ -103,6 +110,15 @@ interface AdvancedIndicators {
   indicatorMatrix: IndicatorMatrix;
   volumeConfirmation: boolean;
   rsiInterpretation: string;
+  // NEW: Sniper Bot v3 Features
+  candlePattern: CandlePattern;
+  atr: number;
+  marketContext: {
+    vixValue: number;
+    qqqTrend: "bullish" | "bearish" | "neutral";
+    marketTemperature: "hot" | "normal" | "cold";
+  };
+  daysToEarnings?: number;
 }
 
 interface PatternResponse {
@@ -169,7 +185,6 @@ const TIER_1_HEROES = [
 const TIER_1_GROWTH = [
   "RKLB", // Rocket Lab - Space Leader
   "ASTS", // AST SpaceMobile - 5G from Space
-  "HOOD", // Robinhood - Retail/Crypto ตัวแทน
   "SYM", // Symbotic - Warehouse Robotics
   "KTOS", // Kratos Defense - Drone/UAV
   "MU", // Micron - Memory Chip (รอบๆ)
@@ -178,22 +193,16 @@ const TIER_1_GROWTH = [
 
 // ⚡ TIER 1: HARDWARE/ENERGY (พลังงาน + วัสดุ)
 const TIER_1_ENERGY = [
-  "MP", // MP Materials - Rare Earth (จำเป็น)
   "UUUU", // Energy Fuels - Uranium (Nuclear)
   "OKLO", // Oklo - Nuclear (ลูกรัก Sam Altman)
-  "NVTS", // Navitas - Power Semiconductors
 ];
 
 // 🎢 TIER 2: SPECULATIVE (เสี่ยงสูง - ซื้อหวย ใส่น้อยๆ)
 // ต้องเช็คข่าวก่อนซื้อเสมอ!
 const TIER_2_SPECULATIVE = [
-  "QS", // QuantumScape - Solid State Battery (รอนาน)
   "IONQ", // IonQ - Quantum Computing (ลูกรัก!)
   "EOSE", // Eos Energy - Zinc Battery (คู่แข่งเยอะ)
   "ONDS", // Ondas - Drone Network (สภาพคล่องต่ำ)
-  "JOBY", // Joby Aviation - Flying Car (ฝันไกล)
-  "QBTS", // D-Wave - Quantum (Speculative)
-  "LMND", // Lemonade - InsureTech (ยังขาดทุน)
 ];
 
 // ❌ BLACKLIST: ลบออกแล้ว (Value Trap / เสี่ยงเกิน)
@@ -229,8 +238,10 @@ export default function PatternScreenerPage() {
     "ALL" | "BUY" | "SELL" | "HOLD"
   >("ALL");
   const [mounted, setMounted] = useState(false);
-  // NEW: Scan Mode - Trend Following vs Value Hunting
-  const [scanMode, setScanMode] = useState<"trend" | "value">("value");
+  // NEW: Scan Mode - Trend Following vs Value Hunting vs Sniper Trading
+  const [scanMode, setScanMode] = useState<"trend" | "value" | "sniper">(
+    "value",
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -306,6 +317,17 @@ export default function PatternScreenerPage() {
         const bRSI = b.data?.metrics?.rsi ?? 100;
         // Lower RSI = better opportunity
         return aRSI - bRSI;
+      } else if (scanMode === "sniper") {
+        // SNIPER TRADING: Prioritize stocks closest to support level (%)
+        const aPrice = a.data?.currentPrice || 0;
+        const aSupport = a.data?.metrics?.supportLevel || 0;
+        const aDist = aSupport > 0 ? Math.abs(aPrice - aSupport) / aSupport : 1;
+
+        const bPrice = b.data?.currentPrice || 0;
+        const bSupport = b.data?.metrics?.supportLevel || 0;
+        const bDist = bSupport > 0 ? Math.abs(bPrice - bSupport) / bSupport : 1;
+
+        return aDist - bDist; // Lower distance first
       } else {
         // TREND FOLLOWING: Sort by signal: BUY first, then by strength
         const signalOrder = { BUY: 0, SELL: 1, HOLD: 2 };
@@ -315,6 +337,88 @@ export default function PatternScreenerPage() {
         return (b.data?.signalStrength || 0) - (a.data?.signalStrength || 0);
       }
     });
+
+  // ========== TOP PICKS LOGIC ==========
+  const topPicks = scans
+    .filter((s) => s.status === "done" && s.data)
+    .map((s) => {
+      const data = s.data!;
+      const matrixScore =
+        data.advancedIndicators?.indicatorMatrix.totalScore || 0;
+      const rsi = data.metrics?.rsi || 50;
+      const support = data.metrics?.supportLevel || 0;
+      const distanceToSupport =
+        support > 0 ? (data.currentPrice - support) / support : 1;
+
+      // Calculate a "Ranking Score"
+      let rankingScore = 0;
+      if (scanMode === "value") {
+        rankingScore = 100 - rsi + matrixScore / 2;
+      } else if (scanMode === "sniper") {
+        // High score for being CLOSE to support (e.g. within 1-3%)
+        const absDist = Math.abs(distanceToSupport);
+        rankingScore = (1 - absDist) * 100 + matrixScore / 4;
+
+        // 🕯️ SNIPER BOOST: Bullish Candle at Support = SUPER BUY
+        if (
+          data.advancedIndicators?.candlePattern &&
+          data.advancedIndicators.candlePattern.signal === "bullish"
+        ) {
+          rankingScore += 30; // Significant boost
+        }
+      } else {
+        rankingScore = matrixScore + data.signalStrength;
+      }
+
+      return { ...s, rankingScore, distanceToSupport };
+    })
+    .sort((a, b) => b.rankingScore - a.rankingScore)
+    .slice(0, 5);
+
+  const copyTopPicksToClipboard = () => {
+    if (topPicks.length === 0) return;
+
+    const date = new Date().toLocaleDateString("th-TH");
+    const modeLabel =
+      scanMode === "value"
+        ? "Value Hunting"
+        : scanMode === "sniper"
+          ? "Sniper Trading"
+          : "Trend Following";
+
+    let text = `🚀 TOP PICKS TODAY (${date}) - Mode: ${modeLabel}\n`;
+    text += `--------------------------------------------------\n`;
+
+    topPicks.forEach((pick, index) => {
+      const data = pick.data!;
+      const support = data.metrics?.supportLevel || 0;
+      const resistance = data.metrics?.resistanceLevel || 0;
+
+      // Use ATR-based Cut Loss for Sniper Bot precision
+      const atr = data.advancedIndicators?.atr || 0;
+      const cutLoss =
+        atr > 0
+          ? data.currentPrice - 1.5 * atr
+          : support > 0
+            ? support * 0.97
+            : data.currentPrice * 0.95;
+
+      const candle =
+        data.advancedIndicators?.candlePattern?.name !== "None"
+          ? ` (🕯️ ${data.advancedIndicators?.candlePattern?.name})`
+          : "";
+
+      text += `${index + 1}. ${pick.symbol} (${data.overallSignal})${candle}\n`;
+      text += `   💰 รับ (Entry): $${support.toFixed(2)}\n`;
+      text += `   🛑 คัด (Cut): $${cutLoss.toFixed(2)}\n`;
+      text += `   🎯 เป้า (Target): $${resistance.toFixed(2)}\n`;
+      text += `   📝 Note: ${data.advancedIndicators?.rsiInterpretation || ""}\n`;
+      text += `--------------------------------------------------\n`;
+    });
+
+    navigator.clipboard.writeText(text);
+    alert("คัดลองโพยลง Clipboard เรียบร้อยแล้ว! 📋");
+  };
 
   const buyCount = scans.filter((s) => s.data?.overallSignal === "BUY").length;
   const sellCount = scans.filter(
@@ -327,6 +431,15 @@ export default function PatternScreenerPage() {
   const oversoldGemsCount = scans.filter(
     (s) => s.data?.metrics?.rsi !== undefined && s.data.metrics.rsi < 35,
   ).length;
+
+  // NEW: Count of stocks near support (Sniper Trading targets)
+  const sniperGemsCount = scans.filter((s) => {
+    if (!s.data?.metrics?.supportLevel) return false;
+    const dist =
+      Math.abs(s.data.currentPrice - s.data.metrics.supportLevel) /
+      s.data.metrics.supportLevel;
+    return dist < 0.02; // Within 2% of support
+  }).length;
 
   const formatUSD = (value: number | undefined | null) => {
     if (value === undefined || value === null) return "-";
@@ -375,6 +488,74 @@ export default function PatternScreenerPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+        {/* Market Context HUD */}
+        {scans.length > 0 && !scanning && (
+          <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+            {/* VIX / Market Temperature */}
+            <div
+              className={`flex-1 min-w-[200px] flex items-center justify-between p-4 rounded-xl border ${
+                scans[0]?.data?.advancedIndicators?.marketContext
+                  .marketTemperature === "hot"
+                  ? "bg-red-900/30 border-red-500/50"
+                  : scans[0]?.data?.advancedIndicators?.marketContext
+                        .marketTemperature === "cold"
+                    ? "bg-green-900/30 border-green-500/50"
+                    : "bg-gray-800/50 border-gray-700/50"
+              }`}
+            >
+              <div>
+                <p className="text-gray-500 text-xs">🌡️ Market Temp (VIX)</p>
+                <p className="text-white font-bold">
+                  {scans[0]?.data?.advancedIndicators?.marketContext
+                    .marketTemperature === "hot"
+                    ? "🔥 HOT (High Risk)"
+                    : scans[0]?.data?.advancedIndicators?.marketContext
+                          .marketTemperature === "cold"
+                      ? "❄️ COLD (Safe)"
+                      : "🟢 NORMAL"}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-gray-500 text-xs">VIX Value</p>
+                <p className="text-white font-mono">
+                  {scans[0]?.data?.advancedIndicators?.marketContext.vixValue.toFixed(
+                    2,
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* QQQ Trend */}
+            <div
+              className={`flex-1 min-w-[200px] flex items-center justify-between p-4 rounded-xl border ${
+                scans[0]?.data?.advancedIndicators?.marketContext.qqqTrend ===
+                "bullish"
+                  ? "bg-green-900/30 border-green-500/50"
+                  : scans[0]?.data?.advancedIndicators?.marketContext
+                        .qqqTrend === "bearish"
+                    ? "bg-red-900/30 border-red-500/50"
+                    : "bg-gray-800/50 border-gray-700/50"
+              }`}
+            >
+              <div>
+                <p className="text-gray-500 text-xs">🛸 QQQ Direction</p>
+                <p className="text-white font-bold">
+                  {scans[0]?.data?.advancedIndicators?.marketContext
+                    .qqqTrend === "bullish"
+                    ? "📈 BULLISH"
+                    : scans[0]?.data?.advancedIndicators?.marketContext
+                          .qqqTrend === "bearish"
+                      ? "📉 BEARISH"
+                      : "➡️ NEUTRAL"}
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-4xl opacity-20">📊</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Scan Controls */}
         <div className="bg-gray-800/50 rounded-2xl border border-gray-700/50 p-6">
           <div className="flex items-center justify-between flex-wrap gap-4">
@@ -384,7 +565,9 @@ export default function PatternScreenerPage() {
                 สแกน {UNIQUE_SYMBOLS.length} หุ้น
                 {scanMode === "value"
                   ? " - หาของดีราคาถูก (Value Hunting)"
-                  : " - ตามเทรนด์ (Trend Following)"}
+                  : scanMode === "sniper"
+                    ? " - จ่อแนวรับที่สุด (Sniper Trading)"
+                    : " - ตามเทรนด์ (Trend Following)"}
               </p>
             </div>
             <button
@@ -409,20 +592,30 @@ export default function PatternScreenerPage() {
               className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
                 scanMode === "value"
                   ? "bg-green-600 text-white"
-                  : "bg-gray-700 text-gray-400 hover:bg-gray-600"
+                  : "bg-gray-700/50 text-gray-400 hover:bg-gray-700"
               }`}
             >
-              💎 Value Hunting (หาของถูก)
+              💎 Value Hunting
             </button>
             <button
               onClick={() => setScanMode("trend")}
               className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
                 scanMode === "trend"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-700 text-gray-400 hover:bg-gray-600"
+                  ? "bg-purple-600 text-white"
+                  : "bg-gray-700/50 text-gray-400 hover:bg-gray-700"
               }`}
             >
-              📈 Trend Following (ตามเทรนด์)
+              📈 Trend Following
+            </button>
+            <button
+              onClick={() => setScanMode("sniper")}
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                scanMode === "sniper"
+                  ? "bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)]"
+                  : "bg-gray-700/50 text-gray-400 hover:bg-gray-700"
+              }`}
+            >
+              🎯 Sniper Trading
             </button>
           </div>
 
@@ -440,17 +633,26 @@ export default function PatternScreenerPage() {
                 มองหาหุ้นที่ RSI ต่ำ (Oversold) + พื้นฐานดี = โอกาสซื้อ!
                 <br />
                 <span className="text-green-400/70 text-xs">
-                  หุ้นที่ตกแรงแต่พื้นฐานดี คือโอกาสทอง - &quot;SELL&quot;
-                  อาจแปลว่า &quot;Sale!&quot;
+                  หุ้นที่ตกแรงแต่พื้นฐานดี คือโอกาสทอง - "SELL" อาจแปลว่า
+                  "Sale!"
                 </span>
               </div>
-            ) : (
+            ) : scanMode === "trend" ? (
               <div className="text-blue-300">
                 <span className="font-bold">📈 Trend Following Mode:</span>{" "}
                 ติดตามแนวโน้ม - BUY เมื่อขาขึ้น, SELL เมื่อขาลง
                 <br />
                 <span className="text-blue-400/70 text-xs">
                   ซื้อตามเทรนด์ ระวัง RSI สูง = อาจซื้อที่ดอย
+                </span>
+              </div>
+            ) : (
+              <div className="text-red-300">
+                <span className="font-bold">🎯 Sniper Trading Mode:</span>{" "}
+                เน้นเข้าซื้อที่แนวรับ + ต้องมีสัญญาณกลับตัว (Candle)
+                <br />
+                <span className="text-red-400/70 text-xs">
+                  สแกนหา Hammer 🕯️ ณ แนวรับ เพื่อความแม่นยำสูงสุด
                 </span>
               </div>
             )}
@@ -491,6 +693,99 @@ export default function PatternScreenerPage() {
           )}
         </div>
 
+        {/* TOP PICKS HERO SECTION */}
+        {scans.length > 0 && !scanning && topPicks.length > 0 && (
+          <div className="bg-gradient-to-r from-purple-900/40 to-indigo-900/40 rounded-2xl border border-purple-500/30 p-6 overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-4 opacity-10 text-9xl">
+              🚀
+            </div>
+            <div className="flex items-center justify-between mb-6 relative z-10">
+              <div>
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  🚀 TOP PICKS TODAY
+                  <span
+                    className={`text-xs font-normal px-2 py-1 rounded-lg ${
+                      scanMode === "value"
+                        ? "bg-green-600"
+                        : scanMode === "sniper"
+                          ? "bg-red-600"
+                          : "bg-purple-600"
+                    }`}
+                  >
+                    {scanMode === "value"
+                      ? "Value Hunting"
+                      : scanMode === "sniper"
+                        ? "Sniper Trading"
+                        : "Trend Following"}
+                  </span>
+                </h2>
+                <p className="text-purple-300/70 text-sm mt-1">
+                  หุ้นที่คะแนนดีที่สุด 5 อันดับแรก พร้อมแผนการเล่นรายวัน
+                </p>
+              </div>
+              <button
+                onClick={copyTopPicksToClipboard}
+                className="bg-white hover:bg-gray-100 text-purple-900 px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95 shadow-lg"
+              >
+                📋 Copy ทั้งหมด
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 relative z-10">
+              {topPicks.map((pick, idx) => {
+                const data = pick.data!;
+                const support = data.metrics?.supportLevel || 0;
+                const resistance = data.metrics?.resistanceLevel || 0;
+                const cutLoss =
+                  support > 0 ? support * 0.97 : data.currentPrice * 0.95;
+
+                return (
+                  <div
+                    key={pick.symbol}
+                    className="bg-gray-900/60 backdrop-blur-md rounded-xl p-4 border border-white/10 hover:border-purple-400/50 transition-all group"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-purple-400 font-bold text-lg">
+                        {pick.symbol}
+                      </span>
+                      <span className="text-[10px] text-gray-500 font-mono">
+                        #{idx + 1}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-gray-400">💰 รับ (Entry)</span>
+                        <span className="text-green-400 font-bold">
+                          ${support.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-gray-400">🛑 คัด (Cut)</span>
+                        <span className="text-red-400 font-bold">
+                          ${cutLoss.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs border-t border-white/5 pt-2">
+                        <span className="text-gray-400">🎯 เป้า (Target)</span>
+                        <span className="text-blue-400 font-bold">
+                          ${resistance.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-white/5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="text-[10px] text-purple-300 line-clamp-2">
+                        {data.advancedIndicators?.rsiInterpretation}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Results Summary */}
         {scans.length > 0 && !scanning && (
           <div
@@ -523,6 +818,22 @@ export default function PatternScreenerPage() {
                   {oversoldGemsCount}
                 </p>
                 <p className="text-green-400/60 text-xs">RSI &lt; 35</p>
+              </button>
+            )}
+
+            {/* Sniper Trading Mode: Show Sniper Opportunities first */}
+            {scanMode === "sniper" && (
+              <button
+                onClick={() => setFilterSignal("ALL")}
+                className="p-4 rounded-xl border transition-all bg-gradient-to-br from-red-900/50 to-rose-900/50 border-red-500 animate-pulse"
+              >
+                <p className="text-red-300 text-xs font-medium">
+                  🎯 Sniper Opportunities
+                </p>
+                <p className="text-2xl font-bold text-red-400">
+                  {sniperGemsCount}
+                </p>
+                <p className="text-red-400/60 text-xs">จ่อแนวรับ (&lt; 2%)</p>
               </button>
             )}
 
@@ -635,6 +946,29 @@ export default function PatternScreenerPage() {
                           🎢 T2
                         </span>
                       )}
+
+                      {/* Earnings Warning Badge */}
+                      {scan.data?.advancedIndicators?.daysToEarnings !==
+                        undefined &&
+                        scan.data.advancedIndicators.daysToEarnings <= 3 &&
+                        scan.data.advancedIndicators.daysToEarnings >= 0 && (
+                          <span className="ml-2 px-2 py-0.5 bg-yellow-600/50 text-yellow-200 text-xs rounded-full border border-yellow-500/50">
+                            ⚠️ Earnings in{" "}
+                            {scan.data.advancedIndicators.daysToEarnings}d
+                          </span>
+                        )}
+                      {/* Sniper Zone Badge */}
+                      {scan.data?.metrics?.supportLevel &&
+                        Math.abs(
+                          scan.data.currentPrice -
+                            scan.data.metrics.supportLevel,
+                        ) /
+                          scan.data.metrics.supportLevel <
+                          0.02 && (
+                          <span className="ml-2 px-2 py-0.5 bg-red-600/50 text-red-300 text-xs rounded-full animate-pulse border border-red-500/50">
+                            🎯 Sniper Zone
+                          </span>
+                        )}
                       <p className="text-gray-400 text-sm">
                         {formatUSD(scan.data?.currentPrice || 0)}
                         <span
@@ -685,6 +1019,21 @@ export default function PatternScreenerPage() {
                             : "⏳ รอจังหวะ"}
                       </span>
                     )}
+                    {/* Candle Pattern Badge */}
+                    {scan.data?.advancedIndicators?.candlePattern &&
+                      scan.data.advancedIndicators.candlePattern.name !==
+                        "None" && (
+                        <span
+                          className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-bold border ${
+                            scan.data.advancedIndicators.candlePattern
+                              .signal === "bullish"
+                              ? "bg-emerald-900/40 text-emerald-300 border-emerald-500/30"
+                              : "bg-gray-700/50 text-gray-300 border-gray-600/30"
+                          }`}
+                        >
+                          🕯️ {scan.data.advancedIndicators.candlePattern.name}
+                        </span>
+                      )}
                   </div>
                 </div>
 
@@ -778,6 +1127,33 @@ export default function PatternScreenerPage() {
                       )}
                     </div>
                   )}
+
+                  {/* ATR-based Cut Loss (Sniper Tip #2) */}
+                  {scan.data?.advancedIndicators?.atr &&
+                    scan.data.advancedIndicators.atr > 0 && (
+                      <div className="mt-3 p-3 bg-purple-900/10 border border-purple-500/20 rounded-xl flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-purple-300 text-sm">
+                          <span className="text-lg">🌊</span>
+                          <div>
+                            <p className="font-bold">ATR-Based Cut Loss</p>
+                            <p className="text-xs opacity-70 italic text-white">
+                              Entry - (1.5 * ATR)
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-red-400 font-mono font-bold">
+                            {formatUSD(
+                              scan.data.currentPrice -
+                                1.5 * scan.data.advancedIndicators.atr,
+                            )}
+                          </p>
+                          <p className="text-[10px] text-gray-500">
+                            Trailing Protection
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                   {/* Key Metrics for Comparison */}
                   {scan.data?.metrics && (
