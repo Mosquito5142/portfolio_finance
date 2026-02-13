@@ -25,6 +25,28 @@ interface TrendAnalysis {
   strength: number;
 }
 
+// Pivot Point Levels (Daily S/R from floor trading formula)
+interface PivotLevels {
+  pivot: number;
+  r1: number;
+  r2: number;
+  r3: number;
+  s1: number;
+  s2: number;
+  s3: number;
+}
+
+// Fibonacci Retracement Levels
+interface FibonacciLevels {
+  swingHigh: number;
+  swingLow: number;
+  fib236: number;
+  fib382: number;
+  fib500: number;
+  fib618: number;
+  fib786: number;
+}
+
 // NEW: Key metrics for comparison
 interface KeyMetrics {
   rsi: number;
@@ -49,6 +71,10 @@ interface KeyMetrics {
   // NEW: Risk/Reward Ratio
   rrRatio?: number;
   rrStatus?: "excellent" | "good" | "risky" | "bad";
+  // NEW: Pivot Points & Fibonacci
+  pivotLevels: PivotLevels;
+  fibLevels: FibonacciLevels;
+  confluenceZones: string[]; // e.g. ["Fib 61.8% ≈ SMA50 (Strong Support)"]
 }
 
 interface PatternResponse {
@@ -189,6 +215,13 @@ interface AdvancedIndicators {
     marketTemperature: "hot" | "normal" | "cold";
   };
   daysToEarnings?: number;
+  // NEW: Anti-Knife-Catching (v3.2)
+  ema5: number;
+  isPriceStabilized: boolean;
+  isMomentumReturning: boolean;
+  suggestedStopLoss: number;
+  suggestedTakeProfit: number;
+  atrMultiplier: number;
 }
 
 // Calculate EMA (for MACD)
@@ -640,7 +673,88 @@ function findKeyLevels(
   };
 }
 
-// Detect Pullback to Support (FORMING - Good Entry!)
+// Calculate Pivot Points (Daily S/R from floor trading formula)
+function calculatePivotPoints(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+): PivotLevels {
+  // Use previous day's data
+  const prevHigh = highs[highs.length - 2] || highs[highs.length - 1];
+  const prevLow = lows[lows.length - 2] || lows[lows.length - 1];
+  const prevClose = closes[closes.length - 2] || closes[closes.length - 1];
+
+  const pivot = (prevHigh + prevLow + prevClose) / 3;
+  const r1 = 2 * pivot - prevLow;
+  const s1 = 2 * pivot - prevHigh;
+  const r2 = pivot + (prevHigh - prevLow);
+  const s2 = pivot - (prevHigh - prevLow);
+  const r3 = prevHigh + 2 * (pivot - prevLow);
+  const s3 = prevLow - 2 * (prevHigh - pivot);
+
+  return { pivot, r1, r2, r3, s1, s2, s3 };
+}
+
+// Calculate Fibonacci Retracement Levels from 1Y swing high/low
+function calculateFibLevels(highs: number[], lows: number[]): FibonacciLevels {
+  const swingHigh = Math.max(...highs);
+  const swingLow = Math.min(...lows);
+  const diff = swingHigh - swingLow;
+
+  return {
+    swingHigh,
+    swingLow,
+    fib236: swingHigh - diff * 0.236,
+    fib382: swingHigh - diff * 0.382,
+    fib500: swingHigh - diff * 0.5,
+    fib618: swingHigh - diff * 0.618,
+    fib786: swingHigh - diff * 0.786,
+  };
+}
+
+// Detect Confluence Zones (where Fib overlaps with SMA/Pivot)
+function detectConfluenceZones(
+  fib: FibonacciLevels,
+  pivots: PivotLevels,
+  sma20: number,
+  sma50: number,
+  currentPrice: number,
+): string[] {
+  const zones: string[] = [];
+  const tolerance = 0.02; // 2% overlap = confluence
+
+  const checkNear = (a: number, b: number) =>
+    Math.abs(a - b) / Math.max(a, b) < tolerance;
+
+  // Fib vs SMA confluence
+  if (checkNear(fib.fib382, sma20))
+    zones.push(`Fib 38.2% ≈ SMA20 ($${sma20.toFixed(2)})`);
+  if (checkNear(fib.fib500, sma20))
+    zones.push(`Fib 50% ≈ SMA20 ($${sma20.toFixed(2)})`);
+  if (checkNear(fib.fib618, sma50))
+    zones.push(`Fib 61.8% ≈ SMA50 ($${sma50.toFixed(2)}) 🔥 Strong`);
+  if (checkNear(fib.fib382, sma50))
+    zones.push(`Fib 38.2% ≈ SMA50 ($${sma50.toFixed(2)})`);
+  if (checkNear(fib.fib500, sma50))
+    zones.push(`Fib 50% ≈ SMA50 ($${sma50.toFixed(2)}) 🔥 Strong`);
+
+  // Pivot vs Fib confluence
+  if (checkNear(pivots.s1, fib.fib382))
+    zones.push(`Pivot S1 ≈ Fib 38.2% ($${pivots.s1.toFixed(2)})`);
+  if (checkNear(pivots.s1, fib.fib618))
+    zones.push(`Pivot S1 ≈ Fib 61.8% ($${pivots.s1.toFixed(2)}) 🔥`);
+  if (checkNear(pivots.r1, fib.fib236))
+    zones.push(`Pivot R1 ≈ Fib 23.6% ($${pivots.r1.toFixed(2)})`);
+
+  // Price near key levels
+  if (checkNear(currentPrice, fib.fib618))
+    zones.push(`📍 ราคาอยู่ใกล้ Fib 61.8% (Golden Zone)`);
+  if (checkNear(currentPrice, pivots.pivot))
+    zones.push(`📍 ราคาอยู่ใกล้ Pivot Point`);
+
+  return zones;
+}
+
 function detectPullbackToSupport(
   highs: number[],
   lows: number[],
@@ -965,7 +1079,7 @@ export async function GET(request: Request) {
 
   try {
     const response = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=3mo`,
+      `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1y`,
       {
         headers: { "User-Agent": "Mozilla/5.0" },
         next: { revalidate: 300 },
@@ -1095,7 +1209,7 @@ export async function GET(request: Request) {
     const volumeChange =
       avgVolume10 > 0 ? ((todayVolume - avgVolume10) / avgVolume10) * 100 : 0;
 
-    // 52-week range (use 3-month data)
+    // 52-week range (now uses 1Y data for better coverage)
     const week52High = Math.max(...highs);
     const week52Low = Math.min(...lows);
     const distanceFrom52High = ((week52High - currentPrice) / week52High) * 100;
@@ -1108,6 +1222,10 @@ export async function GET(request: Request) {
     const score3Pillars = [pillarTrend, pillarValue, pillarMomentum].filter(
       Boolean,
     ).length;
+
+    // ========== PIVOT POINTS & FIBONACCI ==========
+    const pivotLevels = calculatePivotPoints(highs, lows, closes);
+    const fibLevels = calculateFibLevels(highs, lows);
 
     // ========== PROPER SUPPORT/RESISTANCE LOGIC ==========
     // Key rule: If price < SMA, then SMA = Resistance (not Support!)
@@ -1132,6 +1250,24 @@ export async function GET(request: Request) {
       supportLevel = week52Low;
       resistanceLevel = trend.sma20; // First resistance to break
     }
+
+    // Enhance support with Pivot S1 if it's closer to price and above current support
+    if (pivotLevels.s1 > supportLevel && pivotLevels.s1 < currentPrice) {
+      supportLevel = pivotLevels.s1;
+    }
+    // Enhance resistance with Pivot R1 if it's closer to price
+    if (pivotLevels.r1 < resistanceLevel && pivotLevels.r1 > currentPrice) {
+      resistanceLevel = pivotLevels.r1;
+    }
+
+    // Confluence detection
+    const confluenceZones = detectConfluenceZones(
+      fibLevels,
+      pivotLevels,
+      trend.sma20,
+      trend.sma50,
+      currentPrice,
+    );
 
     // ========== R/R RATIO CALCULATION ==========
     // Get entry, target, stopLoss from first pattern if available
@@ -1171,14 +1307,18 @@ export async function GET(request: Request) {
       pillarTrend,
       pillarValue,
       pillarMomentum,
-      // NEW: Support/Resistance with proper logic
+      // Support/Resistance with proper logic (enhanced with Pivot)
       supportLevel,
       resistanceLevel,
       sma50Role,
       sma20Role,
-      // NEW: R/R Ratio
+      // R/R Ratio
       rrRatio,
       rrStatus,
+      // Pivot Points & Fibonacci
+      pivotLevels,
+      fibLevels,
+      confluenceZones,
     };
 
     // ========== CALCULATE ADVANCED INDICATORS ==========
@@ -1189,6 +1329,23 @@ export async function GET(request: Request) {
     const rsiInterpretation = interpretRSI(rsi, trend.shortTerm);
     const candlePattern = detectCandlePattern(opens, highs, lows, closes);
     const atr = calculateATR(highs, lows, closes);
+
+    // ========== ANTI-KNIFE-CATCHING: EMA5 Safety Filter (v3.2) ==========
+    const ema5 = calculateEMA(closes, 5);
+    const isPriceStabilized = currentPrice > ema5;
+    // MACD histogram improving = momentum returning
+    const isMomentumReturning =
+      macd.histogramTrend === "expanding" ||
+      (macd.histogram > 0 && macd.trend === "bullish");
+
+    // Dynamic ATR Stop Loss: tighter in downtrend (1.5x), wider in uptrend (2.5x)
+    const atrMultiplier = currentPrice < trend.sma50 ? 1.5 : 2.5;
+    const suggestedStopLoss =
+      atr > 0 ? currentPrice - atr * atrMultiplier : currentPrice * 0.95;
+    const suggestedTakeProfit =
+      atr > 0
+        ? currentPrice + (currentPrice - suggestedStopLoss) * 2
+        : currentPrice * 1.1;
 
     const indicatorMatrix = calculateIndicatorMatrix(
       closes,
@@ -1276,6 +1433,13 @@ export async function GET(request: Request) {
       atr,
       marketContext,
       daysToEarnings,
+      // Anti-Knife-Catching v3.2
+      ema5,
+      isPriceStabilized,
+      isMomentumReturning,
+      suggestedStopLoss,
+      suggestedTakeProfit,
+      atrMultiplier,
     };
 
     // ========== FIX: UNIFIED SIGNAL LOGIC (Matrix + Divergence Integrated) ==========
@@ -1348,11 +1512,36 @@ export async function GET(request: Request) {
       entryStatus = "late";
     }
 
-    // === RULE: Oversold with bullish signal = good entry ===
+    // === RULE: Oversold = check EMA5 before buying (Anti-Knife-Catching v3.2) ===
     if (isOversold && matrixScore > 0) {
-      finalSignal = "BUY";
-      finalStrength = Math.max(finalStrength, 65); // Boost confidence for oversold bounces
-      entryStatus = "ready";
+      if (!isPriceStabilized) {
+        // 🔪 ยังอยู่ใต้ EMA5 = ราคายังตกอยู่ ห้ามรับมีด!
+        finalSignal = "HOLD";
+        finalStrength = Math.min(45, finalStrength);
+        entryStatus = "wait";
+      } else if (isPriceStabilized && isMomentumReturning) {
+        // ✅ ยืนเหนือ EMA5 + Momentum กลับตัว = ซื้อได้!
+        finalSignal = "BUY";
+        finalStrength = Math.max(finalStrength, 70);
+        entryStatus = "ready";
+      } else {
+        // ⏳ ยืนเหนือ EMA5 แต่ Momentum ยังไม่ชัด = รอก่อน
+        finalSignal = "HOLD";
+        finalStrength = Math.max(finalStrength, 55);
+        entryStatus = "wait";
+      }
+    }
+
+    // === RULE: General Anti-Knife filter for ALL BUY signals ===
+    if (
+      finalSignal === "BUY" &&
+      !isPriceStabilized &&
+      currentPrice < trend.sma50
+    ) {
+      // ราคาต่ำกว่า EMA5 และ SMA50 = downtrend แรง ห้ามซื้อ
+      finalSignal = "HOLD";
+      finalStrength = Math.min(40, finalStrength);
+      entryStatus = "wait";
     }
 
     // === RULE: If entry was marked late from patterns, respect that ===

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { UNIQUE_SYMBOLS, isTier1, isTier2 } from "@/lib/stocks";
 
 // Types
 interface PatternResult {
@@ -27,6 +28,26 @@ interface TrendAnalysis {
   strength: number;
 }
 
+interface PivotLevels {
+  pivot: number;
+  r1: number;
+  r2: number;
+  r3: number;
+  s1: number;
+  s2: number;
+  s3: number;
+}
+
+interface FibonacciLevels {
+  swingHigh: number;
+  swingLow: number;
+  fib236: number;
+  fib382: number;
+  fib500: number;
+  fib618: number;
+  fib786: number;
+}
+
 interface KeyMetrics {
   rsi: number;
   rsiStatus: "oversold" | "normal" | "overbought";
@@ -42,14 +63,15 @@ interface KeyMetrics {
   pillarTrend: boolean;
   pillarValue: boolean;
   pillarMomentum: boolean;
-  // Support/Resistance with proper logic
   supportLevel: number;
   resistanceLevel: number;
   sma50Role: "support" | "resistance";
   sma20Role: "support" | "resistance";
-  // R/R Ratio
   rrRatio?: number;
   rrStatus?: "excellent" | "good" | "risky" | "bad";
+  pivotLevels: PivotLevels;
+  fibLevels: FibonacciLevels;
+  confluenceZones: string[];
 }
 
 // Advanced Indicator Types
@@ -119,6 +141,13 @@ interface AdvancedIndicators {
     marketTemperature: "hot" | "normal" | "cold";
   };
   daysToEarnings?: number;
+  // Anti-Knife-Catching v3.2
+  ema5: number;
+  isPriceStabilized: boolean;
+  isMomentumReturning: boolean;
+  suggestedStopLoss: number;
+  suggestedTakeProfit: number;
+  atrMultiplier: number;
 }
 
 interface PatternResponse {
@@ -142,93 +171,7 @@ interface StockScan {
   status: "pending" | "loading" | "done" | "error";
 }
 
-// ============================================================================
-// 🎯 TIERED STOCK LIST - Organized by Risk Level
-// ============================================================================
-
-// 🏆 TIER 1: SAFE HAVENS (ปลอดภัยสูง - เจอ Oversold ให้รีบตะครุบ!)
-// พื้นฐานแน่นปึ้ก ถ้าตกแรง = โอกาสซื้อ ไม่ใช่หนี
-const TIER_1_TECH_GIANTS = [
-  // --- The Magnificent 7 (เจ้าโลก) ---
-  "MSFT", // Microsoft - Cloud/AI/OS
-  "GOOGL", // Alphabet - Search/Data
-  "NVDA", // NVIDIA - AI Chips
-  "AMZN", // Amazon - E-commerce/Cloud
-  "META", // Meta - Social/Ads
-  "AAPL", // Apple - Hardware Ecosystem
-  "TSLA", // Tesla - EV/Robot/Energy
-
-  // --- The Chip Infrastructure (ขาดไม่ได้) ---
-  "TSM", // TSMC - คนผลิตชิปให้โลก (Must Have!)
-  "ASML", // ASML - คนขายเครื่องทำชิป (Monopoly)
-  "AMD", // AMD - คู่แข่ง NVDA/Intel
-  "AVGO", // Broadcom - AI Networking
-
-  // --- The Software Kings (กินรวบ) ---
-  "CRM", // Salesforce - Enterprise OS
-  "ADBE", // Adobe - Creative OS
-  "NFLX", // Netflix - Streaming King
-  "ORCL", // Oracle - Database/Cloud (มาแรงเรื่อง AI)
-];
-
-const TIER_1_HEROES = [
-  "RBRK", // Rubrik - Cybersecurity (ลูกรัก!)
-  "AXON", // Axon/Taser - AI Police/Body Cam
-  "CLS", // Celestica - AI Hardware Manufacturing
-  "PLTR", // Palantir - AI Software (Sam ชอบ)
-  "LRCX", // Lam Research - เครื่องผลิตชิป
-  "GC=F", // Gold
-  "SI=F", // Silver
-];
-
-// 🚀 TIER 1.5: GROWTH WARRIORS (AI, Energy, Space - มีอนาคต)
-const TIER_1_GROWTH = [
-  "RKLB", // Rocket Lab - Space Leader
-  "ASTS", // AST SpaceMobile - 5G from Space
-  "SYM", // Symbotic - Warehouse Robotics
-  "KTOS", // Kratos Defense - Drone/UAV
-  "MU", // Micron - Memory Chip (รอบๆ)
-  "RBLX", // Roblox - Gaming/Metaverse
-];
-
-// ⚡ TIER 1: HARDWARE/ENERGY (พลังงาน + วัสดุ)
-const TIER_1_ENERGY = [
-  "UUUU", // Energy Fuels - Uranium (Nuclear)
-  "OKLO", // Oklo - Nuclear (ลูกรัก Sam Altman)
-];
-
-// 🎢 TIER 2: SPECULATIVE (เสี่ยงสูง - ซื้อหวย ใส่น้อยๆ)
-// ต้องเช็คข่าวก่อนซื้อเสมอ!
-const TIER_2_SPECULATIVE = [
-  "IONQ", // IonQ - Quantum Computing (ลูกรัก!)
-  "EOSE", // Eos Energy - Zinc Battery (คู่แข่งเยอะ)
-  "ONDS", // Ondas - Drone Network (สภาพคล่องต่ำ)
-];
-
-// ❌ BLACKLIST: ลบออกแล้ว (Value Trap / เสี่ยงเกิน)
-// "INTC" - Intel (ยักษ์ป่วย ถูกแล้วถูกได้อีก)
-// "OPEN", "PGY", "CVNA" - กลุ่มอสังหา/สินเชื่อ (เสี่ยงล้มละลาย)
-// "QURE", "TMDX" - Biotech (FDA Risk สูง)
-// "BMNR", "CIFR", "WULF", "IREN", "NBIS" - Crypto Miners (HOOD ตัวเดียวพอ)
-
-// Combine all tiers
-const ALL_TIER_1 = [
-  ...TIER_1_TECH_GIANTS,
-  ...TIER_1_HEROES,
-  ...TIER_1_GROWTH,
-  ...TIER_1_ENERGY,
-];
-const ALL_TIER_2 = [...TIER_2_SPECULATIVE];
-
-// Combined list with tier info
-const SCAN_SYMBOLS = [...ALL_TIER_1, ...ALL_TIER_2];
-
-// Remove duplicates
-const UNIQUE_SYMBOLS = [...new Set(SCAN_SYMBOLS)];
-
-// Helper: Check if symbol is Tier 1 (Safe)
-const isTier1 = (symbol: string) => ALL_TIER_1.includes(symbol);
-const isTier2 = (symbol: string) => ALL_TIER_2.includes(symbol);
+// Stocks are now imported from @/lib/stocks
 
 export default function PatternScreenerPage() {
   const [scans, setScans] = useState<StockScan[]>([]);
@@ -245,19 +188,21 @@ export default function PatternScreenerPage() {
 
   useEffect(() => {
     setMounted(true);
-  }, []);
-
-  const startScan = async () => {
-    setScanning(true);
-    setScanProgress(0);
-
-    // Initialize all scans as pending
+    // Initialize scans with imported symbols
     const initialScans: StockScan[] = UNIQUE_SYMBOLS.map((symbol) => ({
       symbol,
       data: null,
       status: "pending",
     }));
     setScans(initialScans);
+  }, []);
+
+  const startScan = async () => {
+    setScanning(true);
+    setScanProgress(0);
+
+    // Reset status to pending/loading
+    setScans((prev) => prev.map((s) => ({ ...s, status: "pending" })));
 
     // Scan each stock with delay to avoid rate limiting
     for (let i = 0; i < UNIQUE_SYMBOLS.length; i++) {
@@ -338,9 +283,34 @@ export default function PatternScreenerPage() {
       }
     });
 
-  // ========== TOP PICKS LOGIC ==========
+  // ========== TOP PICKS LOGIC (Mode-Specific Filtering) ==========
   const topPicks = scans
     .filter((s) => s.status === "done" && s.data)
+    // 🎯 MODE-SPECIFIC FILTER: ตัดตัวที่ไม่เข้าเกณฑ์ของโหมดทิ้ง
+    .filter((s) => {
+      const data = s.data!;
+      const rsi = data.metrics?.rsi || 50;
+
+      if (scanMode === "sniper") {
+        // 🔫 Sniper: ห้าม Overbought, ห้าม Breakout, ต้องยืนเหนือ EMA5
+        const isNotOverbought = rsi <= 65;
+        const isNotBreakout = !data.patterns?.some((p) =>
+          p.name.toLowerCase().includes("breakout"),
+        );
+        const isNotLate = data.entryStatus !== "late";
+        const isStabilized =
+          data.advancedIndicators?.isPriceStabilized !== false;
+        return isNotOverbought && isNotBreakout && isNotLate && isStabilized;
+      } else if (scanMode === "trend") {
+        // 📈 Trend Following: ต้องเป็นขาขึ้น + score เป็นบวก
+        const isUptrend = data.currentPrice > (data.trend?.sma50 || 0);
+        const hasPositiveScore =
+          (data.advancedIndicators?.indicatorMatrix?.totalScore || 0) > 0;
+        return isUptrend && hasPositiveScore;
+      }
+      // value mode: ไม่กรองเพิ่ม
+      return true;
+    })
     .map((s) => {
       const data = s.data!;
       const matrixScore =
@@ -355,7 +325,7 @@ export default function PatternScreenerPage() {
       if (scanMode === "value") {
         rankingScore = 100 - rsi + matrixScore / 2;
       } else if (scanMode === "sniper") {
-        // High score for being CLOSE to support (e.g. within 1-3%)
+        // Sniper: ยิ่งใกล้แนวรับยิ่งดี + candle confirmation boost
         const absDist = Math.abs(distanceToSupport);
         rankingScore = (1 - absDist) * 100 + matrixScore / 4;
 
@@ -364,15 +334,23 @@ export default function PatternScreenerPage() {
           data.advancedIndicators?.candlePattern &&
           data.advancedIndicators.candlePattern.signal === "bullish"
         ) {
-          rankingScore += 30; // Significant boost
+          rankingScore += 30;
         }
       } else {
+        // Trend: คะแนน Matrix + ความแข็งแกร่ง
         rankingScore = matrixScore + data.signalStrength;
       }
 
       return { ...s, rankingScore, distanceToSupport };
     })
-    .sort((a, b) => b.rankingScore - a.rankingScore)
+    .sort((a, b) => {
+      if (scanMode === "sniper") {
+        // Sniper: เรียงจาก "ใกล้แนวรับที่สุด" ก่อน
+        return Math.abs(a.distanceToSupport) - Math.abs(b.distanceToSupport);
+      }
+      // Value/Trend: เรียงจาก ranking score สูงสุด
+      return b.rankingScore - a.rankingScore;
+    })
     .slice(0, 5);
 
   const copyTopPicksToClipboard = () => {
@@ -420,7 +398,159 @@ export default function PatternScreenerPage() {
     alert("คัดลองโพยลง Clipboard เรียบร้อยแล้ว! 📋");
   };
 
+  // ========== SEND TO GOOGLE SHEET ==========
+  const [sendingToSheet, setSendingToSheet] = useState(false);
+  const [sheetMessage, setSheetMessage] = useState("");
+
+  const sendToGoogleSheet = async () => {
+    // 🔥 ส่งเฉพาะตัวที่ผ่านเกณฑ์ของโหมดปัจจุบัน
+    const modeLabel =
+      scanMode === "value"
+        ? "Value Hunting"
+        : scanMode === "sniper"
+          ? "Sniper Trading"
+          : "Trend Following";
+
+    const candidates = scans
+      .filter((s) => s.status === "done" && s.data)
+      .filter((s) => {
+        const data = s.data!;
+        const support = data.metrics?.supportLevel || 0;
+        const price = data.currentPrice || 0;
+        const rsi = data.metrics?.rsi || 50;
+        if (support <= 0) return false;
+
+        // 1. สัญญาณต้องเป็น BUY หรือ HOLD ที่มี matrix score > 0
+        const isBuySignal = data.overallSignal === "BUY";
+        const isStrongHold =
+          data.overallSignal === "HOLD" &&
+          (data.advancedIndicators?.indicatorMatrix?.totalScore ?? 0) > 0;
+        if (!(isBuySignal || isStrongHold)) return false;
+
+        // 2. ราคาต้องยืนเหนือ EMA5 (ห้ามรับมีด!)
+        if (data.advancedIndicators?.isPriceStabilized === false) return false;
+
+        // 3. ราคาต้องไม่หลุดแนวรับเกิน 2%
+        if (price < support * 0.98) return false;
+
+        // 🎯 4. MODE-SPECIFIC FILTER
+        if (scanMode === "sniper") {
+          if (rsi > 65) return false;
+          if (
+            data.patterns?.some((p) =>
+              p.name.toLowerCase().includes("breakout"),
+            )
+          )
+            return false;
+          if (data.entryStatus === "late") return false;
+        } else if (scanMode === "trend") {
+          if (price <= (data.trend?.sma50 || 0)) return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        if (scanMode === "sniper") {
+          const aS = a.data?.metrics?.supportLevel || 0;
+          const bS = b.data?.metrics?.supportLevel || 0;
+          const aD =
+            aS > 0 ? Math.abs((a.data?.currentPrice || 0) - aS) / aS : 1;
+          const bD =
+            bS > 0 ? Math.abs((b.data?.currentPrice || 0) - bS) / bS : 1;
+          return aD - bD;
+        }
+        return (
+          (b.data?.advancedIndicators?.indicatorMatrix?.totalScore ?? 0) -
+          (a.data?.advancedIndicators?.indicatorMatrix?.totalScore ?? 0)
+        );
+      })
+      .slice(0, 10)
+      .map((s) => ({
+        ticker: s.symbol,
+        entry: Number((s.data?.metrics?.supportLevel || 0).toFixed(2)),
+        cut: Number(
+          (
+            s.data?.advancedIndicators?.suggestedStopLoss ||
+            (s.data?.currentPrice || 0) * 0.95
+          ).toFixed(2),
+        ),
+        target: Number(
+          (
+            s.data?.advancedIndicators?.suggestedTakeProfit ||
+            (s.data?.currentPrice || 0) * 1.1
+          ).toFixed(2),
+        ),
+      }));
+
+    // 🔄 รวบรวมตัวอื่นที่สแกนแล้ว → อัปเดตราคาใน Sheet ให้ทุกตัวที่มีอยู่แล้ว
+    const candidateTickers = new Set(candidates.map((c) => c.ticker));
+    const priceUpdates = scans
+      .filter(
+        (s) =>
+          s.status === "done" &&
+          s.data &&
+          s.data.currentPrice > 0 &&
+          !candidateTickers.has(s.symbol),
+      )
+      .map((s) => ({
+        ticker: s.symbol,
+        entry: Number(
+          (s.data?.metrics?.supportLevel || s.data?.currentPrice || 0).toFixed(
+            2,
+          ),
+        ),
+        cut: Number(
+          (
+            s.data?.advancedIndicators?.suggestedStopLoss ||
+            (s.data?.currentPrice || 0) * 0.95
+          ).toFixed(2),
+        ),
+        target: Number(
+          (
+            s.data?.advancedIndicators?.suggestedTakeProfit ||
+            (s.data?.currentPrice || 0) * 1.1
+          ).toFixed(2),
+        ),
+      }));
+
+    // รวม: ตัวแนะนำ (ใหม่) + ตัวอัปเดตราคา (เดิม)
+    const allItems = [...candidates, ...priceUpdates];
+
+    if (allItems.length === 0) {
+      setSheetMessage(`❌ ไม่มีข้อมูลจากการสแกนรอบนี้`);
+      setTimeout(() => setSheetMessage(""), 3000);
+      return;
+    }
+
+    setSendingToSheet(true);
+    setSheetMessage("");
+
+    try {
+      const res = await fetch("/api/sheets/watchlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: allItems }),
+      });
+
+      const result = await res.json();
+
+      if (res.ok) {
+        setSheetMessage(
+          `✅ ส่ง ${candidates.length} ตัวแนะนำ + อัปเดต ${priceUpdates.length} ตัวเดิม`,
+        );
+      } else {
+        setSheetMessage(`❌ ${result.error || "เกิดข้อผิดพลาด"}`);
+      }
+    } catch {
+      setSheetMessage("❌ ไม่สามารถเชื่อมต่อกับ Google Sheet ได้");
+    }
+
+    setSendingToSheet(false);
+    setTimeout(() => setSheetMessage(""), 5000);
+  };
+
   const buyCount = scans.filter((s) => s.data?.overallSignal === "BUY").length;
+
   const sellCount = scans.filter(
     (s) => s.data?.overallSignal === "SELL",
   ).length;
@@ -562,7 +692,8 @@ export default function PatternScreenerPage() {
             <div>
               <h2 className="text-white font-bold text-lg">🔍 Mass Scan</h2>
               <p className="text-gray-500 text-sm">
-                สแกน {UNIQUE_SYMBOLS.length} หุ้น
+                สแกน {UNIQUE_SYMBOLS.length} หุ้น (Tech, AI, Energy, Consumer,
+                Healthcare, Utilities)
                 {scanMode === "value"
                   ? " - หาของดีราคาถูก (Value Hunting)"
                   : scanMode === "sniper"
@@ -729,15 +860,39 @@ export default function PatternScreenerPage() {
               >
                 📋 Copy ทั้งหมด
               </button>
+              <button
+                onClick={sendToGoogleSheet}
+                disabled={sendingToSheet}
+                className={`px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95 shadow-lg ${
+                  sendingToSheet
+                    ? "bg-gray-500 text-gray-300 cursor-not-allowed"
+                    : "bg-green-500 hover:bg-green-400 text-white"
+                }`}
+              >
+                {sendingToSheet ? "⏳ กำลังส่ง..." : "📤 ส่งเข้า Sheet"}
+              </button>
             </div>
+            {sheetMessage && (
+              <div
+                className={`mt-2 px-4 py-2 rounded-lg text-sm font-medium ${
+                  sheetMessage.startsWith("✅")
+                    ? "bg-green-900/40 text-green-300 border border-green-500/30"
+                    : "bg-red-900/40 text-red-300 border border-red-500/30"
+                }`}
+              >
+                {sheetMessage}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 relative z-10">
               {topPicks.map((pick, idx) => {
                 const data = pick.data!;
                 const support = data.metrics?.supportLevel || 0;
                 const resistance = data.metrics?.resistanceLevel || 0;
+                // Use dynamic ATR-based stop loss from Anti-Knife-Catching v3.2
                 const cutLoss =
-                  support > 0 ? support * 0.97 : data.currentPrice * 0.95;
+                  data.advancedIndicators?.suggestedStopLoss ||
+                  (support > 0 ? support * 0.97 : data.currentPrice * 0.95);
 
                 return (
                   <div
@@ -774,7 +929,71 @@ export default function PatternScreenerPage() {
                       </div>
                     </div>
 
-                    <div className="mt-3 pt-3 border-t border-white/5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="mt-3 pt-3 border-t border-white/5 opacity-0 group-hover:opacity-100 transition-opacity space-y-2">
+                      {/* Pivot Points */}
+                      {data.metrics?.pivotLevels && (
+                        <div className="space-y-1">
+                          <div className="text-[9px] text-amber-400/80 font-bold uppercase tracking-wider">
+                            📐 Pivot
+                          </div>
+                          <div className="grid grid-cols-3 gap-1 text-[9px]">
+                            <div className="text-center">
+                              <span className="text-red-400">S1</span>
+                              <div className="text-gray-300 font-mono">
+                                ${data.metrics.pivotLevels.s1.toFixed(2)}
+                              </div>
+                            </div>
+                            <div className="text-center">
+                              <span className="text-yellow-400">P</span>
+                              <div className="text-gray-300 font-mono">
+                                ${data.metrics.pivotLevels.pivot.toFixed(2)}
+                              </div>
+                            </div>
+                            <div className="text-center">
+                              <span className="text-green-400">R1</span>
+                              <div className="text-gray-300 font-mono">
+                                ${data.metrics.pivotLevels.r1.toFixed(2)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {/* Fibonacci */}
+                      {data.metrics?.fibLevels && (
+                        <div className="space-y-1">
+                          <div className="text-[9px] text-amber-400/80 font-bold uppercase tracking-wider">
+                            🌀 Fibonacci
+                          </div>
+                          <div className="flex justify-between text-[9px]">
+                            <span className="text-gray-500">61.8%</span>
+                            <span className="text-amber-300 font-mono">
+                              ${data.metrics.fibLevels.fib618.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-[9px]">
+                            <span className="text-gray-500">38.2%</span>
+                            <span className="text-amber-300 font-mono">
+                              ${data.metrics.fibLevels.fib382.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      {/* Confluence */}
+                      {data.metrics?.confluenceZones &&
+                        data.metrics.confluenceZones.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {data.metrics.confluenceZones
+                              .slice(0, 2)
+                              .map((z, i) => (
+                                <span
+                                  key={i}
+                                  className="text-[8px] px-1.5 py-0.5 bg-amber-600/30 text-amber-200 rounded-full border border-amber-500/30"
+                                >
+                                  {z}
+                                </span>
+                              ))}
+                          </div>
+                        )}
                       <div className="text-[10px] text-purple-300 line-clamp-2">
                         {data.advancedIndicators?.rsiInterpretation}
                       </div>
@@ -1034,6 +1253,20 @@ export default function PatternScreenerPage() {
                           🕯️ {scan.data.advancedIndicators.candlePattern.name}
                         </span>
                       )}
+                    {/* Anti-Knife-Catching Safety Badge */}
+                    {scan.data?.advancedIndicators && (
+                      <span
+                        className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-bold border ${
+                          scan.data.advancedIndicators.isPriceStabilized
+                            ? "bg-green-900/40 text-green-300 border-green-500/30"
+                            : "bg-red-900/40 text-red-300 border-red-500/30"
+                        }`}
+                      >
+                        {scan.data.advancedIndicators.isPriceStabilized
+                          ? "🛡️ ยืนเหนือ EMA5"
+                          : "🔪 ใต้ EMA5 (ห้ามรับมีด!)"}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -1152,6 +1385,155 @@ export default function PatternScreenerPage() {
                             Trailing Protection
                           </p>
                         </div>
+                      </div>
+                    )}
+
+                  {/* ========== PIVOT POINTS & FIBONACCI ========== */}
+                  {scan.data?.metrics?.pivotLevels &&
+                    scan.data?.metrics?.fibLevels && (
+                      <div className="mt-3 pt-3 border-t border-gray-700/30">
+                        <div className="grid grid-cols-2 gap-4">
+                          {/* Pivot Points */}
+                          <div className="bg-amber-900/10 border border-amber-500/20 rounded-xl p-3">
+                            <p className="text-amber-400 text-xs font-bold mb-2">
+                              📐 Pivot Points (Daily)
+                            </p>
+                            <div className="space-y-1 text-xs">
+                              <div className="flex justify-between">
+                                <span className="text-green-400">R3</span>
+                                <span className="text-gray-300 font-mono">
+                                  {formatUSD(scan.data.metrics.pivotLevels.r3)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-green-400">R2</span>
+                                <span className="text-gray-300 font-mono">
+                                  {formatUSD(scan.data.metrics.pivotLevels.r2)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-green-400">R1</span>
+                                <span className="text-gray-300 font-mono font-bold">
+                                  {formatUSD(scan.data.metrics.pivotLevels.r1)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between border-y border-amber-500/20 py-1">
+                                <span className="text-yellow-400 font-bold">
+                                  P
+                                </span>
+                                <span className="text-yellow-300 font-mono font-bold">
+                                  {formatUSD(
+                                    scan.data.metrics.pivotLevels.pivot,
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-red-400">S1</span>
+                                <span className="text-gray-300 font-mono font-bold">
+                                  {formatUSD(scan.data.metrics.pivotLevels.s1)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-red-400">S2</span>
+                                <span className="text-gray-300 font-mono">
+                                  {formatUSD(scan.data.metrics.pivotLevels.s2)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-red-400">S3</span>
+                                <span className="text-gray-300 font-mono">
+                                  {formatUSD(scan.data.metrics.pivotLevels.s3)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Fibonacci Retracements */}
+                          <div className="bg-purple-900/10 border border-purple-500/20 rounded-xl p-3">
+                            <p className="text-purple-400 text-xs font-bold mb-2">
+                              🌀 Fibonacci (1Y Swing)
+                            </p>
+                            <div className="space-y-1 text-xs">
+                              <div className="flex justify-between text-gray-500">
+                                <span>Swing High</span>
+                                <span className="font-mono">
+                                  {formatUSD(
+                                    scan.data.metrics.fibLevels.swingHigh,
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-purple-300">23.6%</span>
+                                <span className="text-gray-300 font-mono">
+                                  {formatUSD(
+                                    scan.data.metrics.fibLevels.fib236,
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-purple-300">38.2%</span>
+                                <span className="text-gray-300 font-mono">
+                                  {formatUSD(
+                                    scan.data.metrics.fibLevels.fib382,
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-purple-300">50.0%</span>
+                                <span className="text-gray-300 font-mono">
+                                  {formatUSD(
+                                    scan.data.metrics.fibLevels.fib500,
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex justify-between border-y border-purple-500/20 py-1">
+                                <span className="text-amber-400 font-bold">
+                                  61.8% ✨
+                                </span>
+                                <span className="text-amber-300 font-mono font-bold">
+                                  {formatUSD(
+                                    scan.data.metrics.fibLevels.fib618,
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-purple-300">78.6%</span>
+                                <span className="text-gray-300 font-mono">
+                                  {formatUSD(
+                                    scan.data.metrics.fibLevels.fib786,
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-gray-500">
+                                <span>Swing Low</span>
+                                <span className="font-mono">
+                                  {formatUSD(
+                                    scan.data.metrics.fibLevels.swingLow,
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Confluence Zones */}
+                        {scan.data.metrics.confluenceZones.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <span className="text-[10px] text-amber-400/70 font-bold">
+                              🔥 Confluence:
+                            </span>
+                            {scan.data.metrics.confluenceZones.map(
+                              (zone, i) => (
+                                <span
+                                  key={i}
+                                  className="text-[10px] px-2 py-0.5 bg-amber-600/20 text-amber-200 rounded-full border border-amber-500/30"
+                                >
+                                  {zone}
+                                </span>
+                              ),
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
 

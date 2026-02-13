@@ -149,6 +149,25 @@ interface PatternData {
   trend: TrendAnalysis;
   overallSignal: "BUY" | "SELL" | "HOLD";
   signalStrength: number;
+  currentPrice: number;
+  entryStatus?: string;
+  metrics?: {
+    rsi: number;
+    supportLevel: number;
+    resistanceLevel: number;
+  };
+  advancedIndicators?: {
+    atr: number;
+    suggestedStopLoss: number;
+    suggestedTakeProfit: number;
+    isPriceStabilized: boolean;
+    isMomentumReturning: boolean;
+    ema5: number;
+    atrMultiplier: number;
+    indicatorMatrix: { totalScore: number };
+    candlePattern: { name: string; signal: string };
+    rsiInterpretation: string;
+  };
 }
 
 export default function SearchPage() {
@@ -164,6 +183,60 @@ export default function SearchPage() {
   const [patternData, setPatternData] = useState<PatternData | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  // ========== SEND TO GOOGLE SHEET ==========
+  const [sendingToSheet, setSendingToSheet] = useState(false);
+  const [sheetMessage, setSheetMessage] = useState("");
+
+  const sendToGoogleSheet = async () => {
+    if (!stockData) return;
+    setSendingToSheet(true);
+    setSheetMessage("");
+
+    // ใช้ค่าจาก Pattern API (ATR-based) ถ้ามี, ถ้าไม่มีใช้ค่าจาก stockData
+    const support =
+      patternData?.metrics?.supportLevel ||
+      stockData.support ||
+      stockData.currentPrice * 0.95;
+    const resistance =
+      patternData?.metrics?.resistanceLevel ||
+      stockData.resistance ||
+      stockData.currentPrice * 1.1;
+    // Cut Loss: ใช้ ATR-based suggestedStopLoss (ถ้ามี)
+    const cutLoss =
+      patternData?.advancedIndicators?.suggestedStopLoss || support * 0.97;
+    // Target: ใช้ suggestedTakeProfit (ถ้ามี)
+    const target =
+      patternData?.advancedIndicators?.suggestedTakeProfit || resistance;
+
+    const items = [
+      {
+        ticker: stockData.symbol,
+        entry: Number(support.toFixed(2)),
+        cut: Number(cutLoss.toFixed(2)),
+        target: Number(target.toFixed(2)),
+      },
+    ];
+
+    try {
+      const res = await fetch("/api/sheets/watchlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        setSheetMessage(`✅ ส่ง ${stockData.symbol} เข้า Sheet แล้ว!`);
+      } else {
+        setSheetMessage(`❌ ${result.error || "เกิดข้อผิดพลาด"}`);
+      }
+    } catch {
+      setSheetMessage("❌ ไม่สามารถเชื่อมต่อกับ Google Sheet ได้");
+    }
+
+    setSendingToSheet(false);
+    setTimeout(() => setSheetMessage(""), 5000);
+  };
 
   // ฟิลเตอร์หุ้นตาม input
   const filteredStocks = useMemo(() => {
@@ -433,6 +506,30 @@ export default function SearchPage() {
                   <span>({formatPercent(stockData.dayChangePercent)})</span>
                 </div>
               </div>
+            </div>
+
+            {/* 📤 Send to Google Sheet */}
+            <div className="mb-4 flex items-center gap-3">
+              <button
+                onClick={sendToGoogleSheet}
+                disabled={sendingToSheet}
+                className="px-4 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-xl font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+              >
+                {sendingToSheet ? (
+                  <>
+                    <span className="animate-spin">⏳</span> กำลังส่ง...
+                  </>
+                ) : (
+                  <>📤 ส่ง {stockData.symbol} เข้า Google Sheet</>
+                )}
+              </button>
+              {sheetMessage && (
+                <span
+                  className={`text-sm font-medium ${sheetMessage.startsWith("✅") ? "text-green-400" : "text-red-400"}`}
+                >
+                  {sheetMessage}
+                </span>
+              )}
             </div>
 
             {/* 🎯 AI Analysis Summary */}
