@@ -752,9 +752,32 @@ function calculateStdDev(data: number[], period: number): number {
 }
 
 // Calculate Fibonacci Retracement Levels from 1Y swing high/low
-function calculateFibLevels(highs: number[], lows: number[]): FibonacciLevels {
-  const swingHigh = Math.max(...highs);
-  const swingLow = Math.min(...lows);
+// Calculate Fibonacci Retracement Levels (Smart Swing Detection)
+function calculateFibLevels(
+  highs: number[],
+  lows: number[],
+  currentPrice: number,
+): FibonacciLevels {
+  let swingHigh = Math.max(...highs);
+  let swingLow = Math.min(...lows);
+
+  // Smart Swing: If 1Y volatility is extreme (>50%), check if recent range (3M) is more relevant
+  if (swingLow > 0 && (swingHigh - swingLow) / swingLow > 0.5) {
+    const recentHighs = highs.slice(-60); // Approx 3 months
+    const recentLows = lows.slice(-60);
+    const recentSwingHigh = Math.max(...recentHighs);
+    const recentSwingLow = Math.min(...recentLows);
+
+    // If Price is closer to Recent Range, use it
+    if (
+      currentPrice >= recentSwingLow * 0.9 &&
+      currentPrice <= recentSwingHigh * 1.1
+    ) {
+      swingHigh = recentSwingHigh;
+      swingLow = recentSwingLow;
+    }
+  }
+
   const diff = swingHigh - swingLow;
 
   return {
@@ -1281,7 +1304,7 @@ export async function GET(request: Request) {
 
     // ========== PIVOT POINTS & FIBONACCI ==========
     const pivotLevels = calculatePivotPoints(highs, lows, closes);
-    const fibLevels = calculateFibLevels(highs, lows);
+    const fibLevels = calculateFibLevels(highs, lows, currentPrice);
 
     // ========== PROPER SUPPORT/RESISTANCE LOGIC ==========
     // Key rule: If price < SMA, then SMA = Resistance (not Support!)
@@ -1383,6 +1406,8 @@ export async function GET(request: Request) {
     const rsiDivergence = detectRSIDivergence(closes);
     const trendPhase = detectTrendPhase(closes, volumes, rsi);
     const rsiInterpretation = interpretRSI(rsi, trend.shortTerm);
+    const isOversold = rsi < 30;
+    const isOverbought = rsi > 70;
     const candlePattern = detectCandlePattern(opens, highs, lows, closes);
     const atr = calculateATR(highs, lows, closes);
 
@@ -1529,6 +1554,13 @@ export async function GET(request: Request) {
     const volStatus: "weak" | "normal" | "strong" =
       volChg > 20 ? "strong" : volChg < -20 ? "weak" : "normal";
 
+    // Fusion Layer Pre-calc: Warnings
+    let warningCount = 0;
+    if (obv.obvDivergence === "bearish") warningCount++;
+    if (!isPriceStabilized && currentPrice < trend.sma50) warningCount++;
+    if (macd.lossOfMomentum) warningCount++;
+    if (rsiDivergence.type === "bearish") warningCount++;
+
     const fusion = calculateFusionScore(
       indicatorMatrix.totalScore,
       score3Pillars,
@@ -1539,6 +1571,7 @@ export async function GET(request: Request) {
       currentPrice > pivotLevels.pivot ? "above" : "below",
       isPriceStabilized,
       rrRatio,
+      warningCount,
     );
 
     const fusionScore = fusion.score;
@@ -1559,15 +1592,43 @@ export async function GET(request: Request) {
       finalStrength = 50;
     }
 
+    // Refinement: False Bearish in Uptrend (Oversold = WATCH)
+    if (finalSignal === "SELL" && isOversold && trend.shortTerm === "up") {
+      finalSignal = "HOLD";
+      finalStrength = 40; // Watch for rebound
+      // fusion.reason text is immutable string, so we imply it by result
+    }
+
     // Override: Late Entry Check
     if (entryStatus === "late" && finalSignal === "BUY") {
       finalSignal = "HOLD";
       finalStrength = 40;
     }
 
+    // Refinement: Fix SL/TP Direction
+    let finalStopLoss = suggestedStopLoss;
+    let finalTakeProfit = suggestedTakeProfit;
+
+    if (finalSignal === "BUY") {
+      // Must be BELOW price
+      if (finalStopLoss >= currentPrice) {
+        finalStopLoss = currentPrice - (atr > 0 ? atr * 1.5 : stdDev * 2);
+      }
+      finalTakeProfit = currentPrice + (currentPrice - finalStopLoss) * 2;
+    } else if (finalSignal === "SELL") {
+      // Must be ABOVE price
+      if (finalStopLoss <= currentPrice) {
+        finalStopLoss = currentPrice + (atr > 0 ? atr * 1.5 : stdDev * 2);
+      }
+      finalTakeProfit = currentPrice - (finalStopLoss - currentPrice) * 2;
+    }
+
     // Update variables for response
     overallSignal = finalSignal;
     signalStrength = Math.round(finalStrength);
+    // Update SL/TP in advancedIndicators (need to cast or mutate)
+    advancedIndicators.suggestedStopLoss = finalStopLoss;
+    advancedIndicators.suggestedTakeProfit = finalTakeProfit;
 
     return NextResponse.json({
       symbol,
@@ -1617,9 +1678,15 @@ function calculateFusionScore(
   priceVsPivot: "above" | "below",
   isPriceStabilized: boolean,
   rrRatio?: number,
+  warningCount: number = 0,
 ): { score: number; reason: string } {
   let score = baseMatrixScore; // Start with Matrix (-100 to +100)
   const reasons: string[] = [];
+
+  // Fix: Overpower Matrix if Pillars are strong (WMT Case)
+  if (baseMatrixScore > 0 && score3Pillars >= 2) {
+    score += 10; // Boost to ensure at least Weak Buy
+  }
 
   // 1. Pillars Bonus (+30 if 3/3, +15 if 2/3)
   if (score3Pillars === 3) {
@@ -1671,6 +1738,13 @@ function calculateFusionScore(
       score = 40;
       reasons.push("Capped (R/R < 1.5)");
     }
+  }
+
+  // Warning Penalty
+  if (warningCount >= 2) {
+    score -= 20;
+    reasons.push(`Multiple Warnings (${warningCount}) (-20)`);
+    if (score > 50) score = 50; // Cap confidence
   }
 
   return { score, reason: reasons.join(", ") };
