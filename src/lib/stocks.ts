@@ -24,6 +24,8 @@ export const TIER_1_GROWTH = [
   "SYM",
   "KTOS",
   "MU",
+  "SNDK",
+  "STX",
 ];
 
 // กลุ่มพลังงานแห่งอนาคต

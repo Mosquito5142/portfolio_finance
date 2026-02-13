@@ -160,6 +160,7 @@ interface PatternResponse {
   overallSignal: "BUY" | "SELL" | "HOLD";
   signalStrength: number;
   entryStatus?: "ready" | "wait" | "late";
+  decisionReason?: string; // NEW: Fusion logic explanation
   metrics?: KeyMetrics;
   advancedIndicators?: AdvancedIndicators;
   error?: string;
@@ -1220,6 +1221,12 @@ export default function PatternScreenerPage() {
                     <p className="text-gray-500 text-sm">
                       {scan.data?.signalStrength.toFixed(0)}% confidence
                     </p>
+                    {/* Decision Reason (Fusion Layer) */}
+                    {scan.data?.decisionReason && (
+                      <p className="text-[10px] text-gray-400 mt-1 max-w-[150px] ml-auto leading-tight italic">
+                        {scan.data.decisionReason}
+                      </p>
+                    )}
                     {/* Entry Status Badge */}
                     {scan.data?.entryStatus && (
                       <span
