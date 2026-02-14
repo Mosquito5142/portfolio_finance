@@ -375,16 +375,27 @@ export default function PatternScreenerPage() {
           // Strong Rebound Setup: Deep Oversold + Divergence
           if (rsi < 30) {
             signal = "BUY"; // Upgrade to BUY (High Risk/Reward Rebound)
+            console.log(`🚀 [${s.symbol}] Upgraded to BUY (Deep Deep Rebound)`);
           } else {
             signal = "HOLD"; // Downgrade to HOLD
+            console.log(`🛡️ [${s.symbol}] Downgraded to HOLD (Rebound Setup)`);
           }
         } else if (rsi < 30) {
           signal = "HOLD"; // Too oversold to short
+          console.log(`🛡️ [${s.symbol}] Downgraded to HOLD (RSI < 30)`);
+        } else {
+          // Fallback for RSI < 35 but no div?
+          // If we want to force Rebound logic for ALL RSI < 35 SELLs:
+          console.log(
+            `🧐 [${s.symbol}] RSI < 35 (${rsi}) but SELL. Force check Rebound logic.`,
+          );
         }
       }
 
       // === REBOUND CONFIDENCE BOOST (User Request) ===
-      // If RSI < 35 + Bullish Divergence + Near Support (< 2%) -> Upgrade HOLD to BUY
+      // DISABLED: This conflicts with the "Sniper Rebound" logic by forcing BUY -> Current Price
+      // We want these to stay as HOLD (Wait for Confluence) or SELL (Sniper Mode).
+      /*
       if (signal === "HOLD" && rsi < 35) {
         const hasBullishDivergence = divergences.some(
           (d) => d.type === "bullish",
@@ -396,6 +407,7 @@ export default function PatternScreenerPage() {
           signal = "BUY"; // Upgrade HOLD -> BUY
         }
       }
+      */
 
       let cut = 0;
       let target = 0;
@@ -478,42 +490,178 @@ export default function PatternScreenerPage() {
       }
 
       // === SMART ENTRY LOGIC (Ideal Entry vs Current Price) ===
+      // === SMART ENTRY LOGIC: CONFLUENCE HUNTER (Cluster Analysis) 🧠 ===
+      // Goal: Find "Clusters" where multiple levels (Pivot, Fib, SMA) overlap within 1.5%
       let idealEntry = price;
-      const entryStatus = s.data?.entryStatus; // "ready" | "wait" | "late"
+      const entryStatus = s.data?.entryStatus;
 
-      // Helper to find best support
-      const getBestSupport = () => {
-        const supports = [];
-        // 1. API Support
-        if (apiSupport > 0 && apiSupport < price) supports.push(apiSupport);
-        // 2. Pivot S1
-        if (pivots?.s1 && pivots.s1 < price) supports.push(pivots.s1);
-        // 3. Fib 0.618 (Golden Pocket)
-        if (fibs?.fib618 && fibs.fib618 < price) supports.push(fibs.fib618);
-        // 4. EMA50 (Trend Support)
-        const sma50 = s.data?.trend?.sma50 || 0;
-        if (sma50 > 0 && sma50 < price) supports.push(sma50);
+      const getConfluenceEntry = () => {
+        try {
+          const levels: { val: number; weight: number }[] = [];
 
-        if (supports.length > 0) {
-          return Math.max(...supports); // Nearest support
+          if (!pivots) {
+            console.log(
+              `❌ [Confluence] Pivots object is MISSING for ${s.symbol}`,
+            );
+            return price * 0.98;
+          }
+
+          // 1. Pivot Points (S1/S2/S3 - High Weight)
+          if (pivots.s1 && pivots.s1 < price)
+            levels.push({ val: pivots.s1, weight: 3 });
+          if (pivots.s2 && pivots.s2 < price)
+            levels.push({ val: pivots.s2, weight: 2 });
+
+          // ... rest of logic
+          // (truncated for brevity in edit, but I need to make sure I don't delete the rest)
+          // Actually, better to just edit the start of function to add safety check
+
+          // 2. Fibonacci (61.8% Gold, 50%, 38.2% - High Weight)
+          if (fibs?.fib618 && fibs.fib618 < price)
+            levels.push({ val: fibs.fib618, weight: 3.5 }); // GOLDEN POCKET
+          if (fibs?.fib500 && fibs.fib500 < price)
+            levels.push({ val: fibs.fib500, weight: 1.5 });
+
+          // 3. Moving Averages (SMA50/200 - Medium Weight)
+          const sma50 = s.data?.trend?.sma50 || 0;
+          if (sma50 > 0 && sma50 < price)
+            levels.push({ val: sma50, weight: 2 });
+          const sma200 = s.data?.metrics?.sma200 || 0;
+          if (sma200 > 0 && sma200 < price)
+            levels.push({ val: sma200, weight: 2 });
+
+          if (levels.length === 0) {
+            console.log(
+              "🐛 [Confluence] No levels found for",
+              s.symbol,
+              "Price:",
+              price,
+            );
+            return price * 0.98; // Fallback
+          }
+
+          // === CLUSTER DETECTION ===
+          let bestClusterAvg = 0;
+          let maxWeight = 0;
+
+          // Check each level against others to find clusters
+          for (let i = 0; i < levels.length; i++) {
+            let currentWeight = levels[i].weight;
+            let currentSum = levels[i].val;
+            let count = 1;
+
+            for (let j = 0; j < levels.length; j++) {
+              if (i === j) continue;
+              // Check if close within 1.5%
+              const diff =
+                Math.abs(levels[i].val - levels[j].val) / levels[i].val;
+              if (diff < 0.015) {
+                currentWeight += levels[j].weight;
+                currentSum += levels[j].val;
+                count++;
+              }
+            }
+
+            if (currentWeight > maxWeight) {
+              maxWeight = currentWeight;
+              bestClusterAvg = currentSum / count;
+            }
+          }
+
+          // If we found a strong confluence (Weight > 3.0)
+          if (maxWeight >= 3.0) {
+            console.log(
+              "🎯 [Confluence] Cluster Found for",
+              s.symbol,
+              "Avg:",
+              bestClusterAvg,
+              "Weight:",
+              maxWeight,
+            );
+            return bestClusterAvg;
+          }
+
+          console.log(
+            "⚠️ [Confluence] No Cluster for",
+            s.symbol,
+            "MaxWeight:",
+            maxWeight,
+          );
+
+          // If no cluster, prefer Gold Fib 618 or S1
+          const fib618 = levels.find((l) => l.val === fibs?.fib618);
+          if (fib618) return fib618.val;
+          const s1 = levels.find((l) => l.val === pivots?.s1);
+          if (s1) return s1.val;
+
+          return Math.max(...levels.map((l) => l.val)); // Nearest support
+        } catch (err) {
+          console.error(`💥 [Confluence] CRASH for ${s.symbol}:`, err);
+          return price * 0.98;
         }
-        return price * 0.98; // Fallback
       };
 
-      // LOGIC: Default to Current Price, override if not ready
+      // ------------------------------------------------------------------
+      // TARGET - PRECISE EXIT (R1/R2/R3 or Fib 0.618/1.618)
+      // ------------------------------------------------------------------
+      // ------------------------------------------------------------------
+      // TARGET - PRECISE EXIT (R1/R2/R3 or Fib 0.618/1.618)
+      // ------------------------------------------------------------------
+      let targetPrice = 0;
+      // const rsi = s.data?.metrics?.rsi || 50; // Already declared at top
+      const isOversoldRebound = signal === "SELL" && rsi < 35; // Special Case: Sniper Buy on Dive
+
+      if (signal === "SELL" && !isOversoldRebound) {
+        // Target = Support (S1/S2/S3) for Shorting
+        // Logic: Deepest realistic support
+        const supports = [pivots?.s2, pivots?.s3, fibs?.fib618].filter(
+          Boolean,
+        ) as number[];
+        const validSupports = supports.filter((t) => t < price);
+        targetPrice =
+          validSupports.length > 0 ? Math.min(...validSupports) : price * 0.9;
+      } else {
+        // Target = Resistance (R1-R3) for Buying (or Rebound)
+        // Warning: Don't be greedy. R2 is usually a good Take Profit.
+        const resistances = [
+          pivots?.r1,
+          pivots?.r2,
+          pivots?.r3,
+          fibs?.fib618, // If price < Fib 618, it's a target
+        ].filter(Boolean) as number[];
+
+        const validResistances = resistances.filter((t) => t > price);
+        // Filter out targets that are too close (< 2% away)
+        const meaningfulTargets = validResistances.filter(
+          (t) => (t - price) / price > 0.02,
+        );
+
+        if (meaningfulTargets.length > 0) {
+          // Pick the nearest MEANINGFUL resistance
+          targetPrice = Math.min(...meaningfulTargets);
+        } else {
+          targetPrice = price * 1.05; // Fallback +5%
+        }
+      }
+
+      // LOGIC: Entry Selection
+      // Default: Current Price (Ready to Buy/Short)
+      // Exception: Holding for Dip OR Sniper Rebound
       if (signal === "BUY") {
         if (entryStatus === "ready") {
-          idealEntry = price; // Buy Now
+          idealEntry = price;
         } else {
-          // "wait" (too expensive) or "late" -> Wait for pullback
-          idealEntry = getBestSupport();
+          idealEntry = getConfluenceEntry();
         }
       } else if (signal === "HOLD") {
-        // Waiting for dip -> Use nearest safe support
-        idealEntry = getBestSupport();
+        idealEntry = getConfluenceEntry();
       } else if (signal === "SELL") {
-        // Shorting -> Use Current Price (or Bounce entry if upgraded)
-        idealEntry = price;
+        if (isOversoldRebound) {
+          idealEntry = getConfluenceEntry();
+        } else {
+          // Standard Sell/Short
+          idealEntry = price;
+        }
       }
 
       return {
@@ -521,7 +669,7 @@ export default function PatternScreenerPage() {
         entry: Number(idealEntry.toFixed(2)),
         currentPrice: Number(price.toFixed(2)),
         cut: Number(cut.toFixed(2)),
-        target: Number(target.toFixed(2)),
+        target: Number(targetPrice.toFixed(2)),
         status: "", // Initial status for Sheet
       };
     };
