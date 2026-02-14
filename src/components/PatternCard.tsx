@@ -1,0 +1,471 @@
+import Link from "next/link";
+import { formatUSD } from "@/lib/utils";
+import { isTier1, isTier2 } from "@/lib/stocks";
+import { StockScan } from "@/types/stock";
+
+interface PatternCardProps {
+  scan: StockScan;
+  scanMode?: "trend" | "value" | "sniper";
+}
+
+export default function PatternCard({
+  scan,
+  scanMode = "value",
+}: PatternCardProps) {
+  if (!scan.data) return null;
+
+  return (
+    <div
+      className={`bg-gray-800/50 rounded-2xl border p-5 ${
+        scan.data.overallSignal === "BUY"
+          ? "border-green-500/40"
+          : scan.data.overallSignal === "SELL"
+            ? "border-red-500/40"
+            : "border-gray-700/50"
+      }`}
+    >
+      <div className="flex items-start justify-between">
+        {/* Left: Stock Info */}
+        <div className="flex items-center gap-4">
+          <div
+            className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl ${
+              scan.data.overallSignal === "BUY"
+                ? "bg-green-900/50"
+                : scan.data.overallSignal === "SELL"
+                  ? "bg-red-900/50"
+                  : "bg-yellow-900/50"
+            }`}
+          >
+            {scan.data.overallSignal === "BUY"
+              ? "🟢"
+              : scan.data.overallSignal === "SELL"
+                ? "🔴"
+                : "🟡"}
+          </div>
+          <div>
+            <Link
+              href={`/search?symbol=${scan.symbol}`}
+              className="text-white font-bold text-xl hover:text-purple-400 transition-colors"
+            >
+              {scan.symbol}
+            </Link>
+            {/* Value Hunter Badge for Oversold Stocks */}
+            {scanMode === "value" &&
+              scan.data.metrics?.rsi !== undefined &&
+              scan.data.metrics.rsi < 35 && (
+                <span className="ml-2 px-2 py-0.5 bg-green-600/50 text-green-300 text-xs rounded-full animate-pulse">
+                  💎 Oversold!
+                </span>
+              )}
+            {/* Value Mode: Invert interpretation hint */}
+            {scanMode === "value" &&
+              scan.data.overallSignal === "SELL" &&
+              scan.data.metrics?.rsi !== undefined &&
+              scan.data.metrics.rsi < 40 && (
+                <span className="ml-2 px-2 py-0.5 bg-emerald-600/40 text-emerald-300 text-xs rounded-full">
+                  🏷️ Sale!
+                </span>
+              )}
+            {/* Tier Badge - Show risk level */}
+            {isTier1(scan.symbol) && (
+              <span className="ml-2 px-2 py-0.5 bg-blue-600/40 text-blue-300 text-xs rounded-full">
+                🏆 T1
+              </span>
+            )}
+            {isTier2(scan.symbol) && (
+              <span className="ml-2 px-2 py-0.5 bg-orange-600/40 text-orange-300 text-xs rounded-full">
+                🎢 T2
+              </span>
+            )}
+
+            {/* Earnings Warning Badge */}
+            {scan.data.advancedIndicators?.daysToEarnings !== undefined &&
+              scan.data.advancedIndicators.daysToEarnings <= 3 &&
+              scan.data.advancedIndicators.daysToEarnings >= 0 && (
+                <span className="ml-2 px-2 py-0.5 bg-yellow-600/50 text-yellow-200 text-xs rounded-full border border-yellow-500/50">
+                  ⚠️ Earnings in {scan.data.advancedIndicators.daysToEarnings}d
+                </span>
+              )}
+            {/* Sniper Zone Badge */}
+            {scan.data.metrics?.supportLevel &&
+              Math.abs(
+                scan.data.currentPrice - scan.data.metrics.supportLevel,
+              ) /
+                scan.data.metrics.supportLevel <
+                0.02 && (
+                <span className="ml-2 px-2 py-0.5 bg-red-600/50 text-red-300 text-xs rounded-full animate-pulse border border-red-500/50">
+                  🎯 Sniper Zone
+                </span>
+              )}
+            <p className="text-gray-400 text-sm">
+              {formatUSD(scan.data.currentPrice || 0)}
+              <span
+                className={`ml-2 ${
+                  (scan.data.priceChangePercent || 0) >= 0
+                    ? "text-green-400"
+                    : "text-red-400"
+                }`}
+              >
+                {(scan.data.priceChangePercent || 0) >= 0 ? "+" : ""}
+                {(scan.data.priceChangePercent || 0).toFixed(2)}%
+              </span>
+            </p>
+          </div>
+        </div>
+
+        {/* Right: Signal & Strength + Entry Status */}
+        <div className="text-right">
+          <p
+            className={`text-2xl font-bold ${
+              scan.data.overallSignal === "BUY"
+                ? "text-green-400"
+                : scan.data.overallSignal === "SELL"
+                  ? "text-red-400"
+                  : "text-yellow-400"
+            }`}
+          >
+            {scan.data.overallSignal}
+          </p>
+          <p className="text-gray-500 text-sm">
+            {scan.data.signalStrength.toFixed(0)}% confidence
+          </p>
+          {/* Decision Reason (Fusion Layer) */}
+          {scan.data.decisionReason && (
+            <p className="text-[10px] text-gray-400 mt-1 max-w-[150px] ml-auto leading-tight italic">
+              {scan.data.decisionReason}
+            </p>
+          )}
+          {/* Entry Status Badge */}
+          {scan.data.entryStatus && (
+            <span
+              className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium ${
+                scan.data.entryStatus === "ready"
+                  ? "bg-green-600/50 text-green-300"
+                  : scan.data.entryStatus === "late"
+                    ? "bg-red-600/50 text-red-300"
+                    : "bg-gray-600/50 text-gray-300"
+              }`}
+            >
+              {scan.data.entryStatus === "ready"
+                ? "✅ เข้าได้เลย!"
+                : scan.data.entryStatus === "late"
+                  ? "⚠️ สายไปแล้ว"
+                  : "⏳ รอจังหวะ"}
+            </span>
+          )}
+          {/* Candle Pattern Badge */}
+          {scan.data.advancedIndicators?.candlePattern &&
+            scan.data.advancedIndicators.candlePattern.name !== "None" && (
+              <span
+                className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-bold border ${
+                  scan.data.advancedIndicators.candlePattern.signal ===
+                  "bullish"
+                    ? "bg-emerald-900/40 text-emerald-300 border-emerald-500/30"
+                    : "bg-gray-700/50 text-gray-300 border-gray-600/30"
+                }`}
+              >
+                🕯️ {scan.data.advancedIndicators.candlePattern.name}
+              </span>
+            )}
+          {/* Anti-Knife-Catching Safety Badge */}
+          {scan.data.advancedIndicators && (
+            <span
+              className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-bold border ${
+                scan.data.advancedIndicators.isPriceStabilized
+                  ? "bg-green-900/40 text-green-300 border-green-500/30"
+                  : "bg-red-900/40 text-red-300 border-red-500/30"
+              }`}
+            >
+              {scan.data.advancedIndicators.isPriceStabilized
+                ? "🛡️ ยืนเหนือ EMA5"
+                : "🔪 ใต้ EMA5 (ห้ามรับมีด!)"}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Pattern & Trend Info */}
+      <div className="mt-4 pt-4 border-t border-gray-700/50">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Trend */}
+          <div
+            className={`px-3 py-1 rounded-full text-xs ${
+              scan.data.trend.shortTerm === "up"
+                ? "bg-green-900/50 text-green-400"
+                : scan.data.trend.shortTerm === "down"
+                  ? "bg-red-900/50 text-red-400"
+                  : "bg-yellow-900/50 text-yellow-400"
+            }`}
+          >
+            {scan.data.trend.shortTerm === "up"
+              ? "⬆️ Uptrend"
+              : scan.data.trend.shortTerm === "down"
+                ? "⬇️ Downtrend"
+                : "➡️ Sideway"}
+          </div>
+
+          {/* Patterns with status badges */}
+          {scan.data.patterns.map((pattern, i) => (
+            <div
+              key={i}
+              className={`px-3 py-1 rounded-full text-xs ${
+                pattern.status === "ready"
+                  ? "bg-green-600/50 text-green-300 border border-green-500/50"
+                  : pattern.status === "confirmed"
+                    ? "bg-gray-600/50 text-gray-400"
+                    : pattern.signal === "bullish"
+                      ? "bg-green-900/50 text-green-400"
+                      : "bg-red-900/50 text-red-400"
+              }`}
+            >
+              {pattern.status === "ready"
+                ? "✅ "
+                : pattern.status === "confirmed"
+                  ? "⚠️ "
+                  : ""}
+              {pattern.name}
+              {pattern.distanceToBreakout !== undefined &&
+                pattern.distanceToBreakout > 0 && (
+                  <span className="ml-1 opacity-70">
+                    ({pattern.distanceToBreakout.toFixed(1)}% to breakout)
+                  </span>
+                )}
+            </div>
+          ))}
+
+          {scan.data.patterns.length === 0 && (
+            <span className="text-gray-500 text-xs">ไม่พบ Pattern ชัดเจน</span>
+          )}
+        </div>
+
+        {/* Entry Zone & Levels for best pattern */}
+        {scan.data.patterns[0] && (
+          <div className="grid grid-cols-3 gap-3 mt-3">
+            {/* Entry Zone */}
+            {scan.data.patterns[0].entryZone && (
+              <div className="bg-blue-900/20 rounded-lg p-2 text-center">
+                <p className="text-gray-500 text-xs">📍 Entry Zone</p>
+                <p className="text-blue-400 font-bold text-sm">
+                  {formatUSD(scan.data.patterns[0].entryZone.low)} -{" "}
+                  {formatUSD(scan.data.patterns[0].entryZone.high)}
+                </p>
+              </div>
+            )}
+            {/* Target */}
+            {scan.data.patterns[0].targetPrice && (
+              <div className="bg-green-900/20 rounded-lg p-2 text-center">
+                <p className="text-gray-500 text-xs">🎯 Target</p>
+                <p className="text-green-400 font-bold">
+                  {formatUSD(scan.data.patterns[0].targetPrice)}
+                </p>
+              </div>
+            )}
+            {/* Stop Loss */}
+            {scan.data.patterns[0].stopLoss && (
+              <div className="bg-red-900/20 rounded-lg p-2 text-center">
+                <p className="text-gray-500 text-xs">🛑 Stop Loss</p>
+                <p className="text-red-400 font-bold">
+                  {formatUSD(scan.data.patterns[0].stopLoss)}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ATR-based Cut Loss (Sniper Tip #2) */}
+        {scan.data.advancedIndicators?.atr &&
+          scan.data.advancedIndicators.atr > 0 && (
+            <div className="mt-3 p-3 bg-purple-900/10 border border-purple-500/20 rounded-xl flex items-center justify-between">
+              <div className="flex items-center gap-2 text-purple-300 text-sm">
+                <span className="text-lg">🌊</span>
+                <div>
+                  <p className="font-bold">ATR-Based Cut Loss</p>
+                  <p className="text-xs opacity-70 italic text-white">
+                    Entry - (1.5 * ATR)
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-red-400 font-mono font-bold">
+                  {formatUSD(
+                    scan.data.currentPrice -
+                      1.5 * scan.data.advancedIndicators.atr,
+                  )}
+                </p>
+                <p className="text-[10px] text-gray-500">Trailing Protection</p>
+              </div>
+            </div>
+          )}
+
+        {/* ========== PIVOT POINTS & FIBONACCI ========== */}
+        {scan.data.metrics?.pivotLevels && scan.data.metrics?.fibLevels && (
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            {/* Pivot Points (Expanded) */}
+            <div className="bg-gray-800/80 rounded-lg p-3 border border-gray-700">
+              <p className="text-gray-400 text-xs mb-1">📐 Pivot Points</p>
+              <div className="grid grid-cols-3 gap-1 text-[10px] text-center">
+                {/* R3 */}
+                <div className="text-gray-500">R3</div>
+                <div className="text-red-300 col-span-2 text-right">
+                  {formatUSD(scan.data.metrics.pivotLevels.r3)}
+                </div>
+                {/* R2 */}
+                <div className="text-gray-500">R2</div>
+                <div className="text-red-400 col-span-2 text-right">
+                  {formatUSD(scan.data.metrics.pivotLevels.r2)}
+                </div>
+                {/* R1 */}
+                <div className="text-gray-500">R1</div>
+                <div className="text-red-500 col-span-2 text-right">
+                  {formatUSD(scan.data.metrics.pivotLevels.r1)}
+                </div>
+                {/* Pivot */}
+                <div className="text-yellow-500 font-bold border-y border-gray-600 py-0.5">
+                  P
+                </div>
+                <div className="text-yellow-400 font-bold border-y border-gray-600 py-0.5 col-span-2 text-right">
+                  {formatUSD(scan.data.metrics.pivotLevels.pivot)}
+                </div>
+                {/* S1 */}
+                <div className="text-gray-500">S1</div>
+                <div className="text-green-500 col-span-2 text-right">
+                  {formatUSD(scan.data.metrics.pivotLevels.s1)}
+                </div>
+                {/* S2 */}
+                <div className="text-gray-500">S2</div>
+                <div className="text-green-400 col-span-2 text-right">
+                  {formatUSD(scan.data.metrics.pivotLevels.s2)}
+                </div>
+                {/* S3 */}
+                <div className="text-gray-500">S3</div>
+                <div className="text-green-300 col-span-2 text-right">
+                  {formatUSD(scan.data.metrics.pivotLevels.s3)}
+                </div>
+              </div>
+            </div>
+
+            {/* Fibonacci Levels */}
+            <div className="bg-gray-800/80 rounded-lg p-3 border border-gray-700">
+              <p className="text-gray-400 text-xs mb-1">
+                🔢 Fibonacci Retracement
+              </p>
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-yellow-300">0.382</span>
+                  <span className="text-white">
+                    {formatUSD(scan.data.metrics.fibLevels.fib382)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-yellow-500">0.500</span>
+                  <span className="text-white">
+                    {formatUSD(scan.data.metrics.fibLevels.fib500)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  {/* Golden Ratio Highlight */}
+                  <span className="text-amber-400 font-bold">0.618 (Gold)</span>
+                  <span className="text-amber-400 font-bold">
+                    {formatUSD(scan.data.metrics.fibLevels.fib618)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========== ADVANCED INDICATOR MATRIX ========== */}
+        {scan.data.advancedIndicators && (
+          <div className="mt-3 bg-gray-900/50 rounded-xl p-3 border border-gray-700/50">
+            <h4 className="text-xs font-bold text-gray-400 mb-2 uppercase tracking-wide">
+              🔬 Advanced Metrics Matrix
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+              {/* Pillar 1: Trend */}
+              <div
+                className={`p-2 rounded-lg ${
+                  scan.data.metrics?.pillarTrend
+                    ? "bg-green-900/30 border border-green-500/30"
+                    : "bg-red-900/30 border border-red-500/30"
+                }`}
+              >
+                <p className="text-[10px] text-gray-400">Trend Pillar</p>
+                <p
+                  className={`font-bold ${
+                    scan.data.metrics?.pillarTrend
+                      ? "text-green-400"
+                      : "text-red-400"
+                  }`}
+                >
+                  {scan.data.metrics?.pillarTrend ? "BULLISH" : "BEARISH"}
+                </p>
+              </div>
+
+              {/* Pillar 2: Value/RSI */}
+              <div
+                className={`p-2 rounded-lg ${
+                  scan.data.metrics?.pillarValue
+                    ? "bg-green-900/30 border border-green-500/30"
+                    : "bg-yellow-900/30 border border-yellow-500/30"
+                }`}
+              >
+                <p className="text-[10px] text-gray-400">Value (RSI)</p>
+                <p
+                  className={`font-bold ${
+                    scan.data.metrics?.pillarValue
+                      ? "text-green-400"
+                      : "text-yellow-400"
+                  }`}
+                >
+                  {scan.data.metrics?.rsi.toFixed(1)}
+                </p>
+              </div>
+
+              {/* Pillar 3: Momentum/Vol */}
+              <div
+                className={`p-2 rounded-lg ${
+                  scan.data.metrics?.pillarMomentum
+                    ? "bg-green-900/30 border border-green-500/30"
+                    : "bg-gray-800 border border-gray-700"
+                }`}
+              >
+                <p className="text-[10px] text-gray-400">Volume</p>
+                <p
+                  className={`font-bold ${
+                    scan.data.metrics?.pillarMomentum
+                      ? "text-green-400"
+                      : "text-gray-400"
+                  }`}
+                >
+                  {scan.data.metrics?.volumeStatus.toUpperCase()}
+                </p>
+              </div>
+
+              {/* Divergences */}
+              <div
+                className={`p-2 rounded-lg ${
+                  scan.data.advancedIndicators.divergences.some(
+                    (d) => d.type === "bearish",
+                  )
+                    ? "bg-red-900/30 border border-red-500/30"
+                    : scan.data.advancedIndicators.divergences.some(
+                          (d) => d.type === "bullish",
+                        )
+                      ? "bg-green-900/30 border border-green-500/30"
+                      : "bg-gray-800 border border-gray-700"
+                }`}
+              >
+                <p className="text-[10px] text-gray-400">Divergence</p>
+                <p className="font-bold text-white">
+                  {scan.data.advancedIndicators.divergences.length > 0
+                    ? scan.data.advancedIndicators.divergences[0].type.toUpperCase()
+                    : "NONE"}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

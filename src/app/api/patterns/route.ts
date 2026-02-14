@@ -719,6 +719,36 @@ function findKeyLevels(
   };
 }
 
+// Simple Support/Resistance from api/prices/route.ts (User preferred)
+function calculateSimpleSupportResistance(
+  highs: number[],
+  lows: number[],
+  currentPrice: number,
+): { support: number; resistance: number } {
+  const allHighs = [...highs].sort((a, b) => b - a);
+  const allLows = [...lows].sort((a, b) => a - b);
+
+  // Resistance (Logic from api/prices: Returns Highest High > Price)
+  let resistance = currentPrice * 1.1; // Default +10%
+  for (const high of allHighs) {
+    if (high > currentPrice) {
+      resistance = high;
+      break; // EXACTLY matching api/prices: break means we take the FIRST one found (which is the HIGHEST because of sort DESC)
+    }
+  }
+
+  // Support (Logic from api/prices: Returns Nearest Low < Price)
+  let support = currentPrice * 0.95;
+  for (const low of allLows.reverse()) {
+    // Descending (Max -> Min)
+    if (low < currentPrice) {
+      support = low;
+      break; // Finds the FIRST low < Price (which is the HIGHEST low < Price, i.e. Nearest Support)
+    }
+  }
+  return { support, resistance };
+}
+
 // Calculate Pivot Points (Daily S/R from floor trading formula)
 function calculatePivotPoints(
   highs: number[],
@@ -1314,23 +1344,21 @@ export async function GET(request: Request) {
       currentPrice > trend.sma20 ? "support" : "resistance";
 
     // Determine proper support and resistance levels
-    let supportLevel = week52Low;
-    let resistanceLevel = week52High;
+    let supportLevel: number;
+    let resistanceLevel: number;
 
-    if (currentPrice > trend.sma50) {
-      // Price above SMA50 = SMA50 is support
-      supportLevel = trend.sma50;
-    } else if (currentPrice > trend.sma20) {
-      // Price above SMA20 but below SMA50
-      supportLevel = trend.sma20;
-      resistanceLevel = trend.sma50;
-    } else {
-      // Price below both SMAs = recent lows are support, SMAs are resistance
-      supportLevel = week52Low;
-      resistanceLevel = trend.sma20; // First resistance to break
-    }
+    // NEW LOGIC: Use Simple S/R from api/prices (User Request)
+    const simpleSR = calculateSimpleSupportResistance(
+      highs,
+      lows,
+      currentPrice,
+    );
+    supportLevel = simpleSR.support;
+    resistanceLevel = simpleSR.resistance;
 
     // Enhance support with Pivot S1 if it's closer to price and above current support
+    // DISABLED: User wants strict adherence to Search Page logic (Highest High / Nearest Low)
+    /*
     if (pivotLevels.s1 > supportLevel && pivotLevels.s1 < currentPrice) {
       supportLevel = pivotLevels.s1;
     }
@@ -1338,6 +1366,7 @@ export async function GET(request: Request) {
     if (pivotLevels.r1 < resistanceLevel && pivotLevels.r1 > currentPrice) {
       resistanceLevel = pivotLevels.r1;
     }
+    */
 
     // Confluence detection
     const confluenceZones = detectConfluenceZones(

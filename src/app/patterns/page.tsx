@@ -2,175 +2,19 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { UNIQUE_SYMBOLS, isTier1, isTier2 } from "@/lib/stocks";
+import {
+  UNIQUE_SYMBOLS,
+  MAGNIFICENT_SEVEN,
+  isTier1,
+  isTier2,
+} from "@/lib/stocks";
+import PatternCard from "@/components/PatternCard";
+import { StockScan } from "@/types/stock";
 
-// Types
-interface PatternResult {
-  name: string;
-  type: "reversal" | "continuation";
-  signal: "bullish" | "bearish" | "neutral";
-  status?: "forming" | "ready" | "confirmed";
-  confidence: number;
-  description: string;
-  entryZone?: { low: number; high: number };
-  breakoutLevel?: number;
-  distanceToBreakout?: number;
-  targetPrice?: number;
-  stopLoss?: number;
-}
-
-interface TrendAnalysis {
-  shortTerm: "up" | "down" | "sideways";
-  longTerm: "up" | "down" | "sideways";
-  sma20: number;
-  sma50: number;
-  currentPrice: number;
-  strength: number;
-}
-
-interface PivotLevels {
-  pivot: number;
-  r1: number;
-  r2: number;
-  r3: number;
-  s1: number;
-  s2: number;
-  s3: number;
-}
-
-interface FibonacciLevels {
-  swingHigh: number;
-  swingLow: number;
-  fib236: number;
-  fib382: number;
-  fib500: number;
-  fib618: number;
-  fib786: number;
-}
-
-interface KeyMetrics {
-  rsi: number;
-  rsiStatus: "oversold" | "normal" | "overbought";
-  volumeChange: number;
-  volumeStatus: "weak" | "normal" | "strong";
-  sma200: number;
-  aboveSma200: boolean;
-  week52High: number;
-  week52Low: number;
-  distanceFrom52High: number;
-  distanceFrom52Low: number;
-  score3Pillars: number;
-  pillarTrend: boolean;
-  pillarValue: boolean;
-  pillarMomentum: boolean;
-  supportLevel: number;
-  resistanceLevel: number;
-  sma50Role: "support" | "resistance";
-  sma20Role: "support" | "resistance";
-  rrRatio?: number;
-  rrStatus?: "excellent" | "good" | "risky" | "bad";
-  pivotLevels: PivotLevels;
-  fibLevels: FibonacciLevels;
-  confluenceZones: string[];
-}
-
-// Advanced Indicator Types
-interface MACDResult {
-  macdLine: number;
-  signalLine: number;
-  histogram: number;
-  trend: "bullish" | "bearish" | "neutral";
-  histogramTrend: "expanding" | "contracting" | "flat";
-  lossOfMomentum: boolean;
-}
-
-interface OBVResult {
-  obv: number;
-  obvTrend: "up" | "down" | "flat";
-  obvDivergence: "bullish" | "bearish" | "none";
-}
-
-interface DivergenceResult {
-  type: "bullish" | "bearish" | "none";
-  indicator: string;
-  description: string;
-  severity: "strong" | "moderate" | "weak";
-}
-
-interface IndicatorMatrixItem {
-  signal: "bullish" | "bearish" | "neutral";
-  weight: number;
-  score: number;
-}
-
-interface IndicatorMatrix {
-  dowTheory: IndicatorMatrixItem;
-  rsi: IndicatorMatrixItem;
-  macd: IndicatorMatrixItem;
-  volume: IndicatorMatrixItem;
-  candle?: IndicatorMatrixItem;
-  totalScore: number;
-  recommendation: "STRONG_BUY" | "BUY" | "HOLD" | "SELL" | "STRONG_SELL";
-}
-
-interface CandlePattern {
-  name: string;
-  signal: "bullish" | "neutral";
-  confidence: number;
-}
-
-interface AdvancedIndicators {
-  macd: MACDResult;
-  obv: OBVResult;
-  divergences: DivergenceResult[];
-  trendPhase:
-    | "accumulation"
-    | "participation"
-    | "distribution"
-    | "markdown"
-    | "unknown";
-  indicatorMatrix: IndicatorMatrix;
-  volumeConfirmation: boolean;
-  rsiInterpretation: string;
-  // NEW: Sniper Bot v3 Features
-  candlePattern: CandlePattern;
-  atr: number;
-  marketContext: {
-    vixValue: number;
-    qqqTrend: "bullish" | "bearish" | "neutral";
-    marketTemperature: "hot" | "normal" | "cold";
-  };
-  daysToEarnings?: number;
-  // Anti-Knife-Catching v3.2
-  ema5: number;
-  isPriceStabilized: boolean;
-  isMomentumReturning: boolean;
-  suggestedStopLoss: number;
-  suggestedTakeProfit: number;
-  atrMultiplier: number;
-}
-
-interface PatternResponse {
-  symbol: string;
-  currentPrice: number;
-  priceChange: number;
-  priceChangePercent: number;
-  patterns: PatternResult[];
-  trend: TrendAnalysis;
-  overallSignal: "BUY" | "SELL" | "HOLD";
-  signalStrength: number;
-  entryStatus?: "ready" | "wait" | "late";
-  decisionReason?: string; // NEW: Fusion logic explanation
-  metrics?: KeyMetrics;
-  advancedIndicators?: AdvancedIndicators;
-  error?: string;
-}
-
-interface StockScan {
-  symbol: string;
-  data: PatternResponse | null;
-  status: "pending" | "loading" | "done" | "error";
-}
+// Grouping Logic
+const AJARN_C_LIST = UNIQUE_SYMBOLS.filter(
+  (s) => !MAGNIFICENT_SEVEN.includes(s),
+);
 
 // Stocks are now imported from @/lib/stocks
 
@@ -187,6 +31,11 @@ export default function PatternScreenerPage() {
     "value",
   );
 
+  // NEW: Stock Selection State
+  const [selectedTickers, setSelectedTickers] =
+    useState<string[]>(UNIQUE_SYMBOLS);
+  const [isSelectorOpen, setIsSelectorOpen] = useState(false);
+
   useEffect(() => {
     setMounted(true);
     // Initialize scans with imported symbols
@@ -196,25 +45,52 @@ export default function PatternScreenerPage() {
       status: "pending",
     }));
     setScans(initialScans);
+    // Set default selection to "7 Angels" only initially? Or All?
+    // User said "ไม่อยากค้นหาเยอะๆ" -> Maybe default all but easy to uncheck?
+    // Or default to 7 Angels? Let's default to ALL for backward compatibility,
+    // but the UI makes it easy to switch.
   }, []);
 
-  const startScan = async () => {
+  const toggleTicker = (ticker: string) => {
+    setSelectedTickers((prev) =>
+      prev.includes(ticker)
+        ? prev.filter((t) => t !== ticker)
+        : [...prev, ticker],
+    );
+  };
+
+  const toggleGroup = (group: string[]) => {
+    const allSelected = group.every((t) => selectedTickers.includes(t));
+    if (allSelected) {
+      // Deselect all in group
+      setSelectedTickers((prev) => prev.filter((t) => !group.includes(t)));
+    } else {
+      // Select all in group (merge unique)
+      setSelectedTickers((prev) => Array.from(new Set([...prev, ...group])));
+    }
+  };
+
+  const handleScan = async () => {
+    if (scanning) return;
     setScanning(true);
     setScanProgress(0);
 
-    // Reset status to pending/loading
-    setScans((prev) => prev.map((s) => ({ ...s, status: "pending" })));
+    // Reset status only for selected tickers
+    setScans((prev) =>
+      prev.map((s) =>
+        selectedTickers.includes(s.symbol)
+          ? { ...s, status: "loading", data: null }
+          : s,
+      ),
+    );
 
-    // Scan each stock with delay to avoid rate limiting
-    for (let i = 0; i < UNIQUE_SYMBOLS.length; i++) {
-      const symbol = UNIQUE_SYMBOLS[i];
+    // Scan ONLY selected tickers
+    const targets = selectedTickers;
+    let completed = 0;
 
-      // Update status to loading
-      setScans((prev) =>
-        prev.map((s) =>
-          s.symbol === symbol ? { ...s, status: "loading" } : s,
-        ),
-      );
+    for (let i = 0; i < targets.length; i++) {
+      // Stop if user navigates away or unmounts (not handled here but good practice to check logic)
+      const symbol = targets[i];
 
       try {
         const response = await fetch(`/api/patterns?symbol=${symbol}`);
@@ -239,11 +115,12 @@ export default function PatternScreenerPage() {
         );
       }
 
-      setScanProgress(((i + 1) / UNIQUE_SYMBOLS.length) * 100);
+      completed++;
+      setScanProgress((completed / targets.length) * 100);
 
       // Small delay between requests
-      if (i < UNIQUE_SYMBOLS.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
+      if (i < targets.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 300)); // Faster 300ms
       }
     }
 
@@ -342,6 +219,15 @@ export default function PatternScreenerPage() {
         rankingScore = matrixScore + data.signalStrength;
       }
 
+      // 🚀 GLOBAL REBOUND BOOST (Any Mode)
+      // If RSI < 35 + Bullish Divergence -> Huge Boost (+30)
+      if (
+        rsi < 35 &&
+        data.advancedIndicators?.divergences?.some((d) => d.type === "bullish")
+      ) {
+        rankingScore += 30;
+      }
+
       return { ...s, rankingScore, distanceToSupport };
     })
     .sort((a, b) => {
@@ -352,7 +238,7 @@ export default function PatternScreenerPage() {
       // Value/Trend: เรียงจาก ranking score สูงสุด
       return b.rankingScore - a.rankingScore;
     })
-    .slice(0, 5);
+    .slice(0, 5); // Pick Top 5 per mode logic (but scanned all)
 
   const copyTopPicksToClipboard = () => {
     if (topPicks.length === 0) return;
@@ -465,27 +351,186 @@ export default function PatternScreenerPage() {
           (a.data?.advancedIndicators?.indicatorMatrix?.totalScore ?? 0)
         );
       })
-      .slice(0, 10)
-      .map((s) => ({
+      .slice(0, 10);
+
+    // Helper to format item for Sheet (Strict Logic)
+    const formatItem = (s: StockScan) => {
+      const price = s.data?.currentPrice || 0;
+      const apiSupport = s.data?.metrics?.supportLevel || 0;
+      const apiResistance = s.data?.metrics?.resistanceLevel || 0;
+      const pivots = s.data?.metrics?.pivotLevels;
+      const fibs = s.data?.metrics?.fibLevels;
+      const atr = s.data?.advancedIndicators?.atr || 0;
+      let signal = s.data?.overallSignal || "HOLD";
+      const rsi = s.data?.metrics?.rsi || 50;
+      const divergences = s.data?.advancedIndicators?.divergences || [];
+
+      // === OVERSOLD SAFETY RULE ===
+      // "If divergence BULLISH + RSI < 35 -> downgrade SELL or HOLD/BUY"
+      if (signal === "SELL" && rsi < 35) {
+        const hasBullishDivergence = divergences.some(
+          (d) => d.type === "bullish",
+        );
+        if (hasBullishDivergence) {
+          // Strong Rebound Setup: Deep Oversold + Divergence
+          if (rsi < 30) {
+            signal = "BUY"; // Upgrade to BUY (High Risk/Reward Rebound)
+          } else {
+            signal = "HOLD"; // Downgrade to HOLD
+          }
+        } else if (rsi < 30) {
+          signal = "HOLD"; // Too oversold to short
+        }
+      }
+
+      // === REBOUND CONFIDENCE BOOST (User Request) ===
+      // If RSI < 35 + Bullish Divergence + Near Support (< 2%) -> Upgrade HOLD to BUY
+      if (signal === "HOLD" && rsi < 35) {
+        const hasBullishDivergence = divergences.some(
+          (d) => d.type === "bullish",
+        );
+        const nearSupport =
+          apiSupport > 0 && (price - apiSupport) / apiSupport < 0.02;
+
+        if (hasBullishDivergence && nearSupport) {
+          signal = "BUY"; // Upgrade HOLD -> BUY
+        }
+      }
+
+      let cut = 0;
+      let target = 0;
+
+      // === LOGIC: BUY vs SELL ===
+      if (signal === "SELL") {
+        // [SELL] Stop Loss = Resistance, Target = Support
+        // CUT (Stop Loss)
+        if (apiResistance > price) {
+          cut = apiResistance;
+        } else {
+          cut = price * 1.05; // Fallback +5%
+        }
+
+        // TARGET
+        if (apiSupport < price && apiSupport > 0) {
+          target = apiSupport;
+        } else {
+          target = price * 0.95; // Fallback -5%
+        }
+      } else {
+        // [BUY/HOLD] Stop Loss = Support, Target = Resistance
+        // ------------------------------------------------------------------
+        // CUT (Stop Loss) - STRICT RULE: min(Entry - ATR, Pivot S1)
+        // Must be LOWER than entry.
+        // ------------------------------------------------------------------
+        const possibleCuts: number[] = [];
+
+        // 1. ATR-based Cut
+        if (atr > 0) {
+          possibleCuts.push(price - atr * 1.5);
+        }
+
+        // 2. Pivot S1 (Only if valid support below price)
+        if (pivots?.s1 && pivots.s1 < price) {
+          possibleCuts.push(pivots.s1);
+        }
+
+        // 3. Absolute Floor (Entry - 5%) - FALLBACK
+        possibleCuts.push(price * 0.95);
+
+        // Decide Cut: Use the LOWEST valid support (conservative)
+        cut = Math.min(...possibleCuts);
+
+        // Final Safety: Force Cut < Entry
+        if (cut >= price * 0.995) cut = price * 0.95;
+
+        // ------------------------------------------------------------------
+        // TARGET - FINAL REALISTIC CAP (STRICTEST)
+        // Formula: min(Pivot R2/R3, Fib 0.382/0.618, ATR Cap, R:R 3R, Max 15%)
+        // ------------------------------------------------------------------
+        let risk = price - cut;
+        if (risk <= 0) risk = price * 0.05;
+
+        const possibleTargets: number[] = [];
+
+        // 1. Risk:Reward 1:3 Cap
+        possibleTargets.push(price + risk * 3);
+
+        // 2. Pivot R2 & R3
+        if (pivots?.r2 && pivots.r2 > price) possibleTargets.push(pivots.r2);
+        if (pivots?.r3 && pivots.r3 > price) possibleTargets.push(pivots.r3);
+
+        // 3. Fib Levels (0.382 & 0.618 as Rebound Targets)
+        if (fibs?.fib382 && fibs.fib382 > price)
+          possibleTargets.push(fibs.fib382);
+        if (fibs?.fib618 && fibs.fib618 > price)
+          possibleTargets.push(fibs.fib618);
+
+        // 4. ATR Cap (Entry + 3*ATR) OR Fallback 15%
+        // TIGHTENED based on user feedback (ARM, NET issues)
+        if (atr > 0) {
+          possibleTargets.push(price + atr * 3);
+        } else {
+          possibleTargets.push(price * 1.15); // Fallback Max +15%
+        }
+
+        // Use the MINIMUM of all valid targets to be realistic
+        target = Math.min(...possibleTargets);
+      }
+
+      // === SMART ENTRY LOGIC (Ideal Entry vs Current Price) ===
+      let idealEntry = price;
+      const entryStatus = s.data?.entryStatus; // "ready" | "wait" | "late"
+
+      // Helper to find best support
+      const getBestSupport = () => {
+        const supports = [];
+        // 1. API Support
+        if (apiSupport > 0 && apiSupport < price) supports.push(apiSupport);
+        // 2. Pivot S1
+        if (pivots?.s1 && pivots.s1 < price) supports.push(pivots.s1);
+        // 3. Fib 0.618 (Golden Pocket)
+        if (fibs?.fib618 && fibs.fib618 < price) supports.push(fibs.fib618);
+        // 4. EMA50 (Trend Support)
+        const sma50 = s.data?.trend?.sma50 || 0;
+        if (sma50 > 0 && sma50 < price) supports.push(sma50);
+
+        if (supports.length > 0) {
+          return Math.max(...supports); // Nearest support
+        }
+        return price * 0.98; // Fallback
+      };
+
+      // LOGIC: Default to Current Price, override if not ready
+      if (signal === "BUY") {
+        if (entryStatus === "ready") {
+          idealEntry = price; // Buy Now
+        } else {
+          // "wait" (too expensive) or "late" -> Wait for pullback
+          idealEntry = getBestSupport();
+        }
+      } else if (signal === "HOLD") {
+        // Waiting for dip -> Use nearest safe support
+        idealEntry = getBestSupport();
+      } else if (signal === "SELL") {
+        // Shorting -> Use Current Price (or Bounce entry if upgraded)
+        idealEntry = price;
+      }
+
+      return {
         ticker: s.symbol,
-        entry: Number((s.data?.metrics?.supportLevel || 0).toFixed(2)),
-        cut: Number(
-          (
-            s.data?.advancedIndicators?.suggestedStopLoss ||
-            (s.data?.currentPrice || 0) * 0.95
-          ).toFixed(2),
-        ),
-        target: Number(
-          (
-            s.data?.advancedIndicators?.suggestedTakeProfit ||
-            (s.data?.currentPrice || 0) * 1.1
-          ).toFixed(2),
-        ),
-      }));
+        entry: Number(idealEntry.toFixed(2)),
+        currentPrice: Number(price.toFixed(2)),
+        cut: Number(cut.toFixed(2)),
+        target: Number(target.toFixed(2)),
+        status: "", // Initial status for Sheet
+      };
+    };
+
+    const candidatesFormatted = candidates.map(formatItem);
 
     // 🔄 รวบรวมตัวอื่นที่สแกนแล้ว → อัปเดตราคาใน Sheet ให้ทุกตัวที่มีอยู่แล้ว
-    const candidateTickers = new Set(candidates.map((c) => c.ticker));
-    const priceUpdates = scans
+    const candidateTickers = new Set(candidates.map((c) => c.symbol));
+    const priceUpdatesFormatted = scans
       .filter(
         (s) =>
           s.status === "done" &&
@@ -493,29 +538,10 @@ export default function PatternScreenerPage() {
           s.data.currentPrice > 0 &&
           !candidateTickers.has(s.symbol),
       )
-      .map((s) => ({
-        ticker: s.symbol,
-        entry: Number(
-          (s.data?.metrics?.supportLevel || s.data?.currentPrice || 0).toFixed(
-            2,
-          ),
-        ),
-        cut: Number(
-          (
-            s.data?.advancedIndicators?.suggestedStopLoss ||
-            (s.data?.currentPrice || 0) * 0.95
-          ).toFixed(2),
-        ),
-        target: Number(
-          (
-            s.data?.advancedIndicators?.suggestedTakeProfit ||
-            (s.data?.currentPrice || 0) * 1.1
-          ).toFixed(2),
-        ),
-      }));
+      .map(formatItem);
 
     // รวม: ตัวแนะนำ (ใหม่) + ตัวอัปเดตราคา (เดิม)
-    const allItems = [...candidates, ...priceUpdates];
+    const allItems = [...candidatesFormatted, ...priceUpdatesFormatted];
 
     if (allItems.length === 0) {
       setSheetMessage(`❌ ไม่มีข้อมูลจากการสแกนรอบนี้`);
@@ -537,7 +563,7 @@ export default function PatternScreenerPage() {
 
       if (res.ok) {
         setSheetMessage(
-          `✅ ส่ง ${candidates.length} ตัวแนะนำ + อัปเดต ${priceUpdates.length} ตัวเดิม`,
+          `✅ ส่ง ${candidates.length} ตัวแนะนำ + อัปเดต ${priceUpdatesFormatted.length} ตัวเดิม`,
         );
       } else {
         setSheetMessage(`❌ ${result.error || "เกิดข้อผิดพลาด"}`);
@@ -579,6 +605,13 @@ export default function PatternScreenerPage() {
       maximumFractionDigits: 2,
     })}`;
   };
+
+  // NEW: Search Term for Selector
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filteredSymbols = UNIQUE_SYMBOLS.filter((s) =>
+    s.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-800">
@@ -687,14 +720,106 @@ export default function PatternScreenerPage() {
           </div>
         )}
 
+        {/* Stock Selector (New Search-Based) */}
+        <div className="mb-6 bg-gray-800/50 rounded-2xl border border-gray-700/50 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-white font-bold text-lg flex items-center gap-2">
+              🎯 Select Stocks{" "}
+              <span className="text-sm text-gray-500 font-normal">
+                ({selectedTickers.length}/{UNIQUE_SYMBOLS.length})
+              </span>
+            </h2>
+            <button
+              onClick={() => setIsSelectorOpen(!isSelectorOpen)}
+              className="text-sm text-purple-400 hover:text-purple-300 transition-colors"
+            >
+              {isSelectorOpen ? "Collapse 🔼" : "Expand 🔽"}
+            </button>
+          </div>
+
+          {isSelectorOpen && (
+            <>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    🔍
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Type to filter stocks (e.g. TSLA, NVDA)..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg py-2 pl-10 pr-4 text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    // Select all filtered
+                    const newSelection = Array.from(
+                      new Set([...selectedTickers, ...filteredSymbols]),
+                    );
+                    setSelectedTickers(newSelection);
+                  }}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 text-white transition-all whitespace-nowrap"
+                >
+                  Select Visible ✅
+                </button>
+                <button
+                  onClick={() => {
+                    // Deselect all filtered
+                    const newSelection = selectedTickers.filter(
+                      (t) => !filteredSymbols.includes(t),
+                    );
+                    setSelectedTickers(newSelection);
+                  }}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 text-white transition-all whitespace-nowrap"
+                >
+                  Unselect Visible ⬜
+                </button>
+                <button
+                  onClick={() => setSelectedTickers([])}
+                  className="px-4 py-2 rounded-lg text-sm font-medium border border-red-900/50 text-red-400 hover:bg-red-900/20 transition-all whitespace-nowrap"
+                >
+                  Clear All ❌
+                </button>
+              </div>
+
+              <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 mt-4 p-4 bg-gray-900/50 rounded-xl border border-gray-800 animate-in fade-in zoom-in duration-300 max-h-60 overflow-y-auto custom-scrollbar">
+                {filteredSymbols.map((ticker) => (
+                  <label
+                    key={ticker}
+                    className={`flex items-center space-x-2 text-xs p-2 rounded cursor-pointer transition-all ${
+                      selectedTickers.includes(ticker)
+                        ? "bg-purple-900/30 text-purple-200 border border-purple-500/30"
+                        : "text-gray-500 hover:bg-gray-800"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedTickers.includes(ticker)}
+                      onChange={() => toggleTicker(ticker)}
+                      className="rounded border-gray-600 text-purple-500 focus:ring-purple-500 bg-gray-800"
+                    />
+                    <span>{ticker}</span>
+                  </label>
+                ))}
+                {filteredSymbols.length === 0 && (
+                  <div className="col-span-full text-center text-gray-500 py-4">
+                    No stocks found matching "{searchTerm}"
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
         {/* Scan Controls */}
         <div className="bg-gray-800/50 rounded-2xl border border-gray-700/50 p-6">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <h2 className="text-white font-bold text-lg">🔍 Mass Scan</h2>
               <p className="text-gray-500 text-sm">
-                สแกน {UNIQUE_SYMBOLS.length} หุ้น (Tech, AI, Energy, Consumer,
-                Healthcare, Utilities)
+                สแกน {selectedTickers.length} หุ้นที่เลือก
                 {scanMode === "value"
                   ? " - หาของดีราคาถูก (Value Hunting)"
                   : scanMode === "sniper"
@@ -703,17 +828,19 @@ export default function PatternScreenerPage() {
               </p>
             </div>
             <button
-              onClick={startScan}
-              disabled={scanning}
+              onClick={handleScan}
+              disabled={scanning || selectedTickers.length === 0}
               className={`px-6 py-3 rounded-xl font-bold transition-all ${
-                scanning
+                scanning || selectedTickers.length === 0
                   ? "bg-gray-700 text-gray-400 cursor-not-allowed"
-                  : "bg-purple-600 hover:bg-purple-500 text-white"
+                  : "bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-500/20"
               }`}
             >
               {scanning
                 ? `กำลังสแกน... ${scanProgress.toFixed(0)}%`
-                : "🚀 เริ่มสแกน"}
+                : selectedTickers.length === 0
+                  ? "เลือกหุ้นก่อนสแกน"
+                  : "🚀 เริ่มสแกน"}
             </button>
           </div>
 
@@ -1103,853 +1230,7 @@ export default function PatternScreenerPage() {
             </h2>
 
             {filteredScans.map((scan) => (
-              <div
-                key={scan.symbol}
-                className={`bg-gray-800/50 rounded-2xl border p-5 ${
-                  scan.data?.overallSignal === "BUY"
-                    ? "border-green-500/40"
-                    : scan.data?.overallSignal === "SELL"
-                      ? "border-red-500/40"
-                      : "border-gray-700/50"
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  {/* Left: Stock Info */}
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl ${
-                        scan.data?.overallSignal === "BUY"
-                          ? "bg-green-900/50"
-                          : scan.data?.overallSignal === "SELL"
-                            ? "bg-red-900/50"
-                            : "bg-yellow-900/50"
-                      }`}
-                    >
-                      {scan.data?.overallSignal === "BUY"
-                        ? "🟢"
-                        : scan.data?.overallSignal === "SELL"
-                          ? "🔴"
-                          : "🟡"}
-                    </div>
-                    <div>
-                      <Link
-                        href={`/search?symbol=${scan.symbol}`}
-                        className="text-white font-bold text-xl hover:text-purple-400 transition-colors"
-                      >
-                        {scan.symbol}
-                      </Link>
-                      {/* Value Hunter Badge for Oversold Stocks */}
-                      {scanMode === "value" &&
-                        scan.data?.metrics?.rsi !== undefined &&
-                        scan.data.metrics.rsi < 35 && (
-                          <span className="ml-2 px-2 py-0.5 bg-green-600/50 text-green-300 text-xs rounded-full animate-pulse">
-                            💎 Oversold!
-                          </span>
-                        )}
-                      {/* Value Mode: Invert interpretation hint */}
-                      {scanMode === "value" &&
-                        scan.data?.overallSignal === "SELL" &&
-                        scan.data?.metrics?.rsi !== undefined &&
-                        scan.data.metrics.rsi < 40 && (
-                          <span className="ml-2 px-2 py-0.5 bg-emerald-600/40 text-emerald-300 text-xs rounded-full">
-                            🏷️ Sale!
-                          </span>
-                        )}
-                      {/* Tier Badge - Show risk level */}
-                      {isTier1(scan.symbol) && (
-                        <span className="ml-2 px-2 py-0.5 bg-blue-600/40 text-blue-300 text-xs rounded-full">
-                          🏆 T1
-                        </span>
-                      )}
-                      {isTier2(scan.symbol) && (
-                        <span className="ml-2 px-2 py-0.5 bg-orange-600/40 text-orange-300 text-xs rounded-full">
-                          🎢 T2
-                        </span>
-                      )}
-
-                      {/* Earnings Warning Badge */}
-                      {scan.data?.advancedIndicators?.daysToEarnings !==
-                        undefined &&
-                        scan.data.advancedIndicators.daysToEarnings <= 3 &&
-                        scan.data.advancedIndicators.daysToEarnings >= 0 && (
-                          <span className="ml-2 px-2 py-0.5 bg-yellow-600/50 text-yellow-200 text-xs rounded-full border border-yellow-500/50">
-                            ⚠️ Earnings in{" "}
-                            {scan.data.advancedIndicators.daysToEarnings}d
-                          </span>
-                        )}
-                      {/* Sniper Zone Badge */}
-                      {scan.data?.metrics?.supportLevel &&
-                        Math.abs(
-                          scan.data.currentPrice -
-                            scan.data.metrics.supportLevel,
-                        ) /
-                          scan.data.metrics.supportLevel <
-                          0.02 && (
-                          <span className="ml-2 px-2 py-0.5 bg-red-600/50 text-red-300 text-xs rounded-full animate-pulse border border-red-500/50">
-                            🎯 Sniper Zone
-                          </span>
-                        )}
-                      <p className="text-gray-400 text-sm">
-                        {formatUSD(scan.data?.currentPrice || 0)}
-                        <span
-                          className={`ml-2 ${
-                            (scan.data?.priceChangePercent || 0) >= 0
-                              ? "text-green-400"
-                              : "text-red-400"
-                          }`}
-                        >
-                          {(scan.data?.priceChangePercent || 0) >= 0 ? "+" : ""}
-                          {(scan.data?.priceChangePercent || 0).toFixed(2)}%
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Right: Signal & Strength + Entry Status */}
-                  <div className="text-right">
-                    <p
-                      className={`text-2xl font-bold ${
-                        scan.data?.overallSignal === "BUY"
-                          ? "text-green-400"
-                          : scan.data?.overallSignal === "SELL"
-                            ? "text-red-400"
-                            : "text-yellow-400"
-                      }`}
-                    >
-                      {scan.data?.overallSignal}
-                    </p>
-                    <p className="text-gray-500 text-sm">
-                      {scan.data?.signalStrength.toFixed(0)}% confidence
-                    </p>
-                    {/* Decision Reason (Fusion Layer) */}
-                    {scan.data?.decisionReason && (
-                      <p className="text-[10px] text-gray-400 mt-1 max-w-[150px] ml-auto leading-tight italic">
-                        {scan.data.decisionReason}
-                      </p>
-                    )}
-                    {/* Entry Status Badge */}
-                    {scan.data?.entryStatus && (
-                      <span
-                        className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-medium ${
-                          scan.data.entryStatus === "ready"
-                            ? "bg-green-600/50 text-green-300"
-                            : scan.data.entryStatus === "late"
-                              ? "bg-red-600/50 text-red-300"
-                              : "bg-gray-600/50 text-gray-300"
-                        }`}
-                      >
-                        {scan.data.entryStatus === "ready"
-                          ? "✅ เข้าได้เลย!"
-                          : scan.data.entryStatus === "late"
-                            ? "⚠️ สายไปแล้ว"
-                            : "⏳ รอจังหวะ"}
-                      </span>
-                    )}
-                    {/* Candle Pattern Badge */}
-                    {scan.data?.advancedIndicators?.candlePattern &&
-                      scan.data.advancedIndicators.candlePattern.name !==
-                        "None" && (
-                        <span
-                          className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-bold border ${
-                            scan.data.advancedIndicators.candlePattern
-                              .signal === "bullish"
-                              ? "bg-emerald-900/40 text-emerald-300 border-emerald-500/30"
-                              : "bg-gray-700/50 text-gray-300 border-gray-600/30"
-                          }`}
-                        >
-                          🕯️ {scan.data.advancedIndicators.candlePattern.name}
-                        </span>
-                      )}
-                    {/* Anti-Knife-Catching Safety Badge */}
-                    {scan.data?.advancedIndicators && (
-                      <span
-                        className={`inline-block mt-1 px-2 py-0.5 rounded text-xs font-bold border ${
-                          scan.data.advancedIndicators.isPriceStabilized
-                            ? "bg-green-900/40 text-green-300 border-green-500/30"
-                            : "bg-red-900/40 text-red-300 border-red-500/30"
-                        }`}
-                      >
-                        {scan.data.advancedIndicators.isPriceStabilized
-                          ? "🛡️ ยืนเหนือ EMA5"
-                          : "🔪 ใต้ EMA5 (ห้ามรับมีด!)"}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Pattern & Trend Info */}
-                <div className="mt-4 pt-4 border-t border-gray-700/50">
-                  <div className="flex flex-wrap items-center gap-3">
-                    {/* Trend */}
-                    <div
-                      className={`px-3 py-1 rounded-full text-xs ${
-                        scan.data?.trend.shortTerm === "up"
-                          ? "bg-green-900/50 text-green-400"
-                          : scan.data?.trend.shortTerm === "down"
-                            ? "bg-red-900/50 text-red-400"
-                            : "bg-yellow-900/50 text-yellow-400"
-                      }`}
-                    >
-                      {scan.data?.trend.shortTerm === "up"
-                        ? "⬆️ Uptrend"
-                        : scan.data?.trend.shortTerm === "down"
-                          ? "⬇️ Downtrend"
-                          : "➡️ Sideway"}
-                    </div>
-
-                    {/* Patterns with status badges */}
-                    {scan.data?.patterns.map((pattern, i) => (
-                      <div
-                        key={i}
-                        className={`px-3 py-1 rounded-full text-xs ${
-                          pattern.status === "ready"
-                            ? "bg-green-600/50 text-green-300 border border-green-500/50"
-                            : pattern.status === "confirmed"
-                              ? "bg-gray-600/50 text-gray-400"
-                              : pattern.signal === "bullish"
-                                ? "bg-green-900/50 text-green-400"
-                                : "bg-red-900/50 text-red-400"
-                        }`}
-                      >
-                        {pattern.status === "ready"
-                          ? "✅ "
-                          : pattern.status === "confirmed"
-                            ? "⚠️ "
-                            : ""}
-                        {pattern.name}
-                        {pattern.distanceToBreakout !== undefined &&
-                          pattern.distanceToBreakout > 0 && (
-                            <span className="ml-1 opacity-70">
-                              ({pattern.distanceToBreakout.toFixed(1)}% to
-                              breakout)
-                            </span>
-                          )}
-                      </div>
-                    ))}
-
-                    {scan.data?.patterns.length === 0 && (
-                      <span className="text-gray-500 text-xs">
-                        ไม่พบ Pattern ชัดเจน
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Entry Zone & Levels for best pattern */}
-                  {scan.data?.patterns[0] && (
-                    <div className="grid grid-cols-3 gap-3 mt-3">
-                      {/* Entry Zone */}
-                      {scan.data.patterns[0].entryZone && (
-                        <div className="bg-blue-900/20 rounded-lg p-2 text-center">
-                          <p className="text-gray-500 text-xs">📍 Entry Zone</p>
-                          <p className="text-blue-400 font-bold text-sm">
-                            {formatUSD(scan.data.patterns[0].entryZone.low)} -{" "}
-                            {formatUSD(scan.data.patterns[0].entryZone.high)}
-                          </p>
-                        </div>
-                      )}
-                      {/* Target */}
-                      {scan.data.patterns[0].targetPrice && (
-                        <div className="bg-green-900/20 rounded-lg p-2 text-center">
-                          <p className="text-gray-500 text-xs">🎯 Target</p>
-                          <p className="text-green-400 font-bold">
-                            {formatUSD(scan.data.patterns[0].targetPrice)}
-                          </p>
-                        </div>
-                      )}
-                      {/* Stop Loss */}
-                      {scan.data.patterns[0].stopLoss && (
-                        <div className="bg-red-900/20 rounded-lg p-2 text-center">
-                          <p className="text-gray-500 text-xs">🛑 Stop Loss</p>
-                          <p className="text-red-400 font-bold">
-                            {formatUSD(scan.data.patterns[0].stopLoss)}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* ATR-based Cut Loss (Sniper Tip #2) */}
-                  {scan.data?.advancedIndicators?.atr &&
-                    scan.data.advancedIndicators.atr > 0 && (
-                      <div className="mt-3 p-3 bg-purple-900/10 border border-purple-500/20 rounded-xl flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-purple-300 text-sm">
-                          <span className="text-lg">🌊</span>
-                          <div>
-                            <p className="font-bold">ATR-Based Cut Loss</p>
-                            <p className="text-xs opacity-70 italic text-white">
-                              Entry - (1.5 * ATR)
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-red-400 font-mono font-bold">
-                            {formatUSD(
-                              scan.data.currentPrice -
-                                1.5 * scan.data.advancedIndicators.atr,
-                            )}
-                          </p>
-                          <p className="text-[10px] text-gray-500">
-                            Trailing Protection
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                  {/* ========== PIVOT POINTS & FIBONACCI ========== */}
-                  {scan.data?.metrics?.pivotLevels &&
-                    scan.data?.metrics?.fibLevels && (
-                      <div className="mt-3 pt-3 border-t border-gray-700/30">
-                        <div className="grid grid-cols-2 gap-4">
-                          {/* Pivot Points */}
-                          <div className="bg-amber-900/10 border border-amber-500/20 rounded-xl p-3">
-                            <p className="text-amber-400 text-xs font-bold mb-2">
-                              📐 Pivot Points (Daily)
-                            </p>
-                            <div className="space-y-1 text-xs">
-                              <div className="flex justify-between">
-                                <span className="text-green-400">R3</span>
-                                <span className="text-gray-300 font-mono">
-                                  {formatUSD(scan.data.metrics.pivotLevels.r3)}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-green-400">R2</span>
-                                <span className="text-gray-300 font-mono">
-                                  {formatUSD(scan.data.metrics.pivotLevels.r2)}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-green-400">R1</span>
-                                <span className="text-gray-300 font-mono font-bold">
-                                  {formatUSD(scan.data.metrics.pivotLevels.r1)}
-                                </span>
-                              </div>
-                              <div className="flex justify-between border-y border-amber-500/20 py-1">
-                                <span className="text-yellow-400 font-bold">
-                                  P
-                                </span>
-                                <span className="text-yellow-300 font-mono font-bold">
-                                  {formatUSD(
-                                    scan.data.metrics.pivotLevels.pivot,
-                                  )}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-red-400">S1</span>
-                                <span className="text-gray-300 font-mono font-bold">
-                                  {formatUSD(scan.data.metrics.pivotLevels.s1)}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-red-400">S2</span>
-                                <span className="text-gray-300 font-mono">
-                                  {formatUSD(scan.data.metrics.pivotLevels.s2)}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-red-400">S3</span>
-                                <span className="text-gray-300 font-mono">
-                                  {formatUSD(scan.data.metrics.pivotLevels.s3)}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Fibonacci Retracements */}
-                          <div className="bg-purple-900/10 border border-purple-500/20 rounded-xl p-3">
-                            <p className="text-purple-400 text-xs font-bold mb-2">
-                              🌀 Fibonacci (1Y Swing)
-                            </p>
-                            <div className="space-y-1 text-xs">
-                              <div className="flex justify-between text-gray-500">
-                                <span>Swing High</span>
-                                <span className="font-mono">
-                                  {formatUSD(
-                                    scan.data.metrics.fibLevels.swingHigh,
-                                  )}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-purple-300">23.6%</span>
-                                <span className="text-gray-300 font-mono">
-                                  {formatUSD(
-                                    scan.data.metrics.fibLevels.fib236,
-                                  )}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-purple-300">38.2%</span>
-                                <span className="text-gray-300 font-mono">
-                                  {formatUSD(
-                                    scan.data.metrics.fibLevels.fib382,
-                                  )}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-purple-300">50.0%</span>
-                                <span className="text-gray-300 font-mono">
-                                  {formatUSD(
-                                    scan.data.metrics.fibLevels.fib500,
-                                  )}
-                                </span>
-                              </div>
-                              <div className="flex justify-between border-y border-purple-500/20 py-1">
-                                <span className="text-amber-400 font-bold">
-                                  61.8% ✨
-                                </span>
-                                <span className="text-amber-300 font-mono font-bold">
-                                  {formatUSD(
-                                    scan.data.metrics.fibLevels.fib618,
-                                  )}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-purple-300">78.6%</span>
-                                <span className="text-gray-300 font-mono">
-                                  {formatUSD(
-                                    scan.data.metrics.fibLevels.fib786,
-                                  )}
-                                </span>
-                              </div>
-                              <div className="flex justify-between text-gray-500">
-                                <span>Swing Low</span>
-                                <span className="font-mono">
-                                  {formatUSD(
-                                    scan.data.metrics.fibLevels.swingLow,
-                                  )}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Confluence Zones */}
-                        {scan.data.metrics.confluenceZones.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            <span className="text-[10px] text-amber-400/70 font-bold">
-                              🔥 Confluence:
-                            </span>
-                            {scan.data.metrics.confluenceZones.map(
-                              (zone, i) => (
-                                <span
-                                  key={i}
-                                  className="text-[10px] px-2 py-0.5 bg-amber-600/20 text-amber-200 rounded-full border border-amber-500/30"
-                                >
-                                  {zone}
-                                </span>
-                              ),
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                  {/* Key Metrics for Comparison */}
-                  {scan.data?.metrics && (
-                    <div className="mt-3 pt-3 border-t border-gray-700/30">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {/* 3 Pillars Score */}
-                        <div
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium ${
-                            scan.data.metrics.score3Pillars >= 3
-                              ? "bg-green-600/30 text-green-300"
-                              : scan.data.metrics.score3Pillars >= 2
-                                ? "bg-yellow-600/30 text-yellow-300"
-                                : "bg-red-600/30 text-red-300"
-                          }`}
-                        >
-                          🎯 {scan.data.metrics.score3Pillars}/3 Pillars
-                          <span className="ml-1 opacity-70">
-                            ({scan.data.metrics.pillarTrend ? "✓T" : "✗T"}
-                            {scan.data.metrics.pillarValue ? "✓V" : "✗V"}
-                            {scan.data.metrics.pillarMomentum ? "✓M" : "✗M"})
-                          </span>
-                        </div>
-
-                        {/* RSI */}
-                        <div
-                          className={`px-3 py-1.5 rounded-lg text-xs ${
-                            scan.data.metrics.rsiStatus === "oversold"
-                              ? "bg-green-600/30 text-green-300"
-                              : scan.data.metrics.rsiStatus === "overbought"
-                                ? "bg-red-600/30 text-red-300"
-                                : "bg-gray-600/30 text-gray-300"
-                          }`}
-                        >
-                          📊 RSI {scan.data.metrics.rsi.toFixed(0)}
-                          {scan.data.metrics.rsiStatus === "oversold" &&
-                            " (Oversold ✓)"}
-                          {scan.data.metrics.rsiStatus === "overbought" &&
-                            " (Overbought ⚠️)"}
-                        </div>
-
-                        {/* Volume */}
-                        <div
-                          className={`px-3 py-1.5 rounded-lg text-xs ${
-                            scan.data.metrics.volumeStatus === "strong"
-                              ? "bg-green-600/30 text-green-300"
-                              : scan.data.metrics.volumeStatus === "weak"
-                                ? "bg-red-600/30 text-red-300"
-                                : "bg-gray-600/30 text-gray-300"
-                          }`}
-                        >
-                          📈 Vol{" "}
-                          {scan.data.metrics.volumeChange >= 0 ? "+" : ""}
-                          {scan.data.metrics.volumeChange.toFixed(0)}%
-                          {scan.data.metrics.volumeStatus === "weak" && " ⚠️"}
-                        </div>
-
-                        {/* Above SMA200 */}
-                        <div
-                          className={`px-3 py-1.5 rounded-lg text-xs ${
-                            scan.data.metrics.aboveSma200
-                              ? "bg-green-600/30 text-green-300"
-                              : "bg-red-600/30 text-red-300"
-                          }`}
-                        >
-                          {scan.data.metrics.aboveSma200
-                            ? "🐂 เหนือ SMA"
-                            : "🐻 ใต้ SMA"}
-                        </div>
-
-                        {/* Distance from 52w High */}
-                        <div
-                          className={`px-3 py-1.5 rounded-lg text-xs ${
-                            scan.data.metrics.distanceFrom52High < 5
-                              ? "bg-yellow-600/30 text-yellow-300"
-                              : scan.data.metrics.distanceFrom52High > 20
-                                ? "bg-green-600/30 text-green-300"
-                                : "bg-gray-600/30 text-gray-300"
-                          }`}
-                        >
-                          📉 {scan.data.metrics.distanceFrom52High.toFixed(0)}%
-                          จาก High
-                        </div>
-
-                        {/* R/R Ratio - IMPORTANT! */}
-                        {scan.data.metrics.rrRatio !== undefined && (
-                          <div
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
-                              scan.data.metrics.rrStatus === "excellent"
-                                ? "bg-green-600/50 text-green-200 border border-green-500"
-                                : scan.data.metrics.rrStatus === "good"
-                                  ? "bg-green-600/30 text-green-300"
-                                  : scan.data.metrics.rrStatus === "risky"
-                                    ? "bg-yellow-600/30 text-yellow-300"
-                                    : "bg-red-600/50 text-red-200 border border-red-500"
-                            }`}
-                          >
-                            ⚖️ R/R 1:{scan.data.metrics.rrRatio.toFixed(1)}
-                            {scan.data.metrics.rrStatus === "excellent" &&
-                              " ✅ สุดคุ้ม!"}
-                            {scan.data.metrics.rrStatus === "good" &&
-                              " ✅ คุ้มค่า"}
-                            {scan.data.metrics.rrStatus === "risky" &&
-                              " ⚠️ เสี่ยง"}
-                            {scan.data.metrics.rrStatus === "bad" &&
-                              " ❌ ไม่คุ้ม!"}
-                          </div>
-                        )}
-
-                        {/* SMA50 Role - Support or Resistance */}
-                        <div
-                          className={`px-3 py-1.5 rounded-lg text-xs ${
-                            scan.data.metrics.sma50Role === "support"
-                              ? "bg-green-600/30 text-green-300"
-                              : "bg-orange-600/30 text-orange-300"
-                          }`}
-                        >
-                          {scan.data.metrics.sma50Role === "support"
-                            ? `📈 SMA50 = แนวรับ (${formatUSD(scan.data.trend.sma50)})`
-                            : `📉 SMA50 = แนวต้าน! (${formatUSD(scan.data.trend.sma50)})`}
-                        </div>
-                      </div>
-
-                      {/* Support/Resistance Levels Row */}
-                      <div className="flex gap-3 mt-2">
-                        <div className="bg-green-900/20 rounded-lg px-3 py-1 text-xs">
-                          <span className="text-gray-500">แนวรับ: </span>
-                          <span className="text-green-400 font-medium">
-                            {formatUSD(scan.data.metrics.supportLevel)}
-                          </span>
-                        </div>
-                        <div className="bg-red-900/20 rounded-lg px-3 py-1 text-xs">
-                          <span className="text-gray-500">แนวต้าน: </span>
-                          <span className="text-red-400 font-medium">
-                            {formatUSD(scan.data.metrics.resistanceLevel)}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* ========== ADVANCED INDICATORS SECTION ========== */}
-                      {scan.data.advancedIndicators && (
-                        <div className="mt-3 pt-3 border-t border-gray-700/50">
-                          <p className="text-gray-400 text-xs font-medium mb-2">
-                            📊 Indicator Matrix (Institutional Grade)
-                          </p>
-
-                          {/* Indicator Matrix Summary */}
-                          <div className="grid grid-cols-2 gap-2 mb-2">
-                            {/* Dow Theory */}
-                            <div
-                              className={`px-2 py-1 rounded text-xs ${
-                                scan.data.advancedIndicators.indicatorMatrix
-                                  .dowTheory.signal === "bullish"
-                                  ? "bg-green-900/30 text-green-300"
-                                  : scan.data.advancedIndicators.indicatorMatrix
-                                        .dowTheory.signal === "bearish"
-                                    ? "bg-red-900/30 text-red-300"
-                                    : "bg-gray-700/30 text-gray-400"
-                              }`}
-                            >
-                              <span className="opacity-70">Dow (40%): </span>
-                              <span className="font-medium">
-                                {scan.data.advancedIndicators.indicatorMatrix
-                                  .dowTheory.signal === "bullish"
-                                  ? "↑"
-                                  : scan.data.advancedIndicators.indicatorMatrix
-                                        .dowTheory.signal === "bearish"
-                                    ? "↓"
-                                    : "→"}{" "}
-                                {scan.data.advancedIndicators.indicatorMatrix
-                                  .dowTheory.score > 0
-                                  ? "+"
-                                  : ""}
-                                {
-                                  scan.data.advancedIndicators.indicatorMatrix
-                                    .dowTheory.score
-                                }
-                              </span>
-                            </div>
-
-                            {/* RSI */}
-                            <div
-                              className={`px-2 py-1 rounded text-xs ${
-                                scan.data.advancedIndicators.indicatorMatrix.rsi
-                                  .signal === "bullish"
-                                  ? "bg-green-900/30 text-green-300"
-                                  : scan.data.advancedIndicators.indicatorMatrix
-                                        .rsi.signal === "bearish"
-                                    ? "bg-red-900/30 text-red-300"
-                                    : "bg-gray-700/30 text-gray-400"
-                              }`}
-                            >
-                              <span className="opacity-70">RSI (20%): </span>
-                              <span className="font-medium">
-                                {scan.data.advancedIndicators.indicatorMatrix
-                                  .rsi.signal === "bullish"
-                                  ? "↑"
-                                  : scan.data.advancedIndicators.indicatorMatrix
-                                        .rsi.signal === "bearish"
-                                    ? "↓"
-                                    : "→"}{" "}
-                                {scan.data.advancedIndicators.indicatorMatrix
-                                  .rsi.score > 0
-                                  ? "+"
-                                  : ""}
-                                {
-                                  scan.data.advancedIndicators.indicatorMatrix
-                                    .rsi.score
-                                }
-                              </span>
-                            </div>
-
-                            {/* MACD */}
-                            <div
-                              className={`px-2 py-1 rounded text-xs ${
-                                scan.data.advancedIndicators.indicatorMatrix
-                                  .macd.signal === "bullish"
-                                  ? "bg-green-900/30 text-green-300"
-                                  : scan.data.advancedIndicators.indicatorMatrix
-                                        .macd.signal === "bearish"
-                                    ? "bg-red-900/30 text-red-300"
-                                    : "bg-gray-700/30 text-gray-400"
-                              }`}
-                            >
-                              <span className="opacity-70">MACD (20%): </span>
-                              <span className="font-medium">
-                                {scan.data.advancedIndicators.indicatorMatrix
-                                  .macd.signal === "bullish"
-                                  ? "↑"
-                                  : scan.data.advancedIndicators.indicatorMatrix
-                                        .macd.signal === "bearish"
-                                    ? "↓"
-                                    : "→"}{" "}
-                                {scan.data.advancedIndicators.indicatorMatrix
-                                  .macd.score > 0
-                                  ? "+"
-                                  : ""}
-                                {
-                                  scan.data.advancedIndicators.indicatorMatrix
-                                    .macd.score
-                                }
-                                {scan.data.advancedIndicators.macd
-                                  .lossOfMomentum && " ⚠️"}
-                              </span>
-                            </div>
-
-                            {/* Volume */}
-                            <div
-                              className={`px-2 py-1 rounded text-xs ${
-                                scan.data.advancedIndicators.indicatorMatrix
-                                  .volume.signal === "bullish"
-                                  ? "bg-green-900/30 text-green-300"
-                                  : scan.data.advancedIndicators.indicatorMatrix
-                                        .volume.signal === "bearish"
-                                    ? "bg-red-900/30 text-red-300"
-                                    : "bg-gray-700/30 text-gray-400"
-                              }`}
-                            >
-                              <span className="opacity-70">Vol (20%): </span>
-                              <span className="font-medium">
-                                {scan.data.advancedIndicators.indicatorMatrix
-                                  .volume.signal === "bullish"
-                                  ? "↑"
-                                  : scan.data.advancedIndicators.indicatorMatrix
-                                        .volume.signal === "bearish"
-                                    ? "↓"
-                                    : "→"}{" "}
-                                {scan.data.advancedIndicators.indicatorMatrix
-                                  .volume.score > 0
-                                  ? "+"
-                                  : ""}
-                                {
-                                  scan.data.advancedIndicators.indicatorMatrix
-                                    .volume.score
-                                }
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Total Score & Recommendation */}
-                          <div
-                            className={`px-3 py-2 rounded-lg text-sm font-bold text-center ${
-                              scan.data.advancedIndicators.indicatorMatrix
-                                .recommendation === "STRONG_BUY"
-                                ? "bg-green-600/40 text-green-200"
-                                : scan.data.advancedIndicators.indicatorMatrix
-                                      .recommendation === "BUY"
-                                  ? "bg-green-600/30 text-green-300"
-                                  : scan.data.advancedIndicators.indicatorMatrix
-                                        .recommendation === "STRONG_SELL"
-                                    ? "bg-red-600/40 text-red-200"
-                                    : scan.data.advancedIndicators
-                                          .indicatorMatrix.recommendation ===
-                                        "SELL"
-                                      ? "bg-red-600/30 text-red-300"
-                                      : "bg-gray-700/30 text-gray-300"
-                            }`}
-                          >
-                            {scan.data.advancedIndicators.indicatorMatrix
-                              .recommendation === "STRONG_BUY" &&
-                              "🚀 STRONG BUY"}
-                            {scan.data.advancedIndicators.indicatorMatrix
-                              .recommendation === "BUY" && "✅ BUY"}
-                            {scan.data.advancedIndicators.indicatorMatrix
-                              .recommendation === "HOLD" && "⏸️ HOLD"}
-                            {scan.data.advancedIndicators.indicatorMatrix
-                              .recommendation === "SELL" && "⚠️ SELL"}
-                            {scan.data.advancedIndicators.indicatorMatrix
-                              .recommendation === "STRONG_SELL" &&
-                              "🔻 STRONG SELL"}
-                            <span className="ml-2 opacity-70">
-                              (Score:{" "}
-                              {scan.data.advancedIndicators.indicatorMatrix
-                                .totalScore > 0
-                                ? "+"
-                                : ""}
-                              {
-                                scan.data.advancedIndicators.indicatorMatrix
-                                  .totalScore
-                              }
-                              )
-                            </span>
-                          </div>
-
-                          {/* Trend Phase Badge */}
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            <div
-                              className={`px-2 py-1 rounded text-xs ${
-                                scan.data.advancedIndicators.trendPhase ===
-                                "accumulation"
-                                  ? "bg-blue-900/30 text-blue-300"
-                                  : scan.data.advancedIndicators.trendPhase ===
-                                      "participation"
-                                    ? "bg-green-900/30 text-green-300"
-                                    : scan.data.advancedIndicators
-                                          .trendPhase === "distribution"
-                                      ? "bg-orange-900/30 text-orange-300"
-                                      : scan.data.advancedIndicators
-                                            .trendPhase === "markdown"
-                                        ? "bg-red-900/30 text-red-300"
-                                        : "bg-gray-700/30 text-gray-400"
-                              }`}
-                            >
-                              {scan.data.advancedIndicators.trendPhase ===
-                                "accumulation" &&
-                                "🔵 Accumulation (Smart Money กำลังซื้อ)"}
-                              {scan.data.advancedIndicators.trendPhase ===
-                                "participation" &&
-                                "🟢 Participation (ขาขึ้นรุนแรง)"}
-                              {scan.data.advancedIndicators.trendPhase ===
-                                "distribution" &&
-                                "🟠 Distribution (Smart Money กำลังขาย)"}
-                              {scan.data.advancedIndicators.trendPhase ===
-                                "markdown" && "🔴 Markdown (ขาลงรุนแรง)"}
-                              {scan.data.advancedIndicators.trendPhase ===
-                                "unknown" && "⚪ Unknown Phase"}
-                            </div>
-
-                            {/* Volume Confirmation */}
-                            <div
-                              className={`px-2 py-1 rounded text-xs ${
-                                scan.data.advancedIndicators.volumeConfirmation
-                                  ? "bg-green-900/30 text-green-300"
-                                  : "bg-yellow-900/30 text-yellow-300"
-                              }`}
-                            >
-                              {scan.data.advancedIndicators.volumeConfirmation
-                                ? "✅ Volume ยืนยัน"
-                                : "⚠️ Volume ไม่ยืนยัน"}
-                            </div>
-                          </div>
-
-                          {/* RSI Interpretation */}
-                          <div className="mt-2 px-2 py-1 bg-gray-700/20 rounded text-xs text-gray-400">
-                            💡 {scan.data.advancedIndicators.rsiInterpretation}
-                          </div>
-
-                          {/* Divergence Warnings */}
-                          {scan.data.advancedIndicators.divergences.length >
-                            0 && (
-                            <div className="mt-2 space-y-1">
-                              {scan.data.advancedIndicators.divergences.map(
-                                (div, idx) => (
-                                  <div
-                                    key={idx}
-                                    className={`px-2 py-1 rounded text-xs ${
-                                      div.type === "bearish"
-                                        ? "bg-red-900/40 text-red-200 border border-red-500/50"
-                                        : "bg-green-900/40 text-green-200 border border-green-500/50"
-                                    }`}
-                                  >
-                                    <span className="font-medium">
-                                      [{div.indicator}]
-                                    </span>{" "}
-                                    {div.description}
-                                    {div.severity === "strong" && " ⚠️⚠️"}
-                                    {div.severity === "moderate" && " ⚠️"}
-                                  </div>
-                                ),
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <PatternCard key={scan.symbol} scan={scan} scanMode={scanMode} />
             ))}
           </div>
         )}

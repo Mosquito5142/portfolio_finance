@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 interface WatchlistItem {
   ticker: string;
   entry: number;
+  currentPrice: number;
   cut: number;
   target: number;
+  status: string;
 }
 
 export async function POST(request: Request) {

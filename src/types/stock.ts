@@ -101,3 +101,171 @@ export interface InsiderData {
   shortInterest?: number; // % Short Interest
   shortRatio?: number; // Days to cover
 }
+
+// Pattern Scanner Types
+export interface PatternResult {
+  name: string;
+  type: "reversal" | "continuation";
+  signal: "bullish" | "bearish" | "neutral";
+  status?: "forming" | "ready" | "confirmed";
+  confidence: number;
+  description: string;
+  entryZone?: { low: number; high: number };
+  breakoutLevel?: number;
+  distanceToBreakout?: number;
+  targetPrice?: number;
+  stopLoss?: number;
+}
+
+export interface TrendAnalysis {
+  shortTerm: "up" | "down" | "sideways";
+  longTerm: "up" | "down" | "sideways";
+  sma20: number;
+  sma50: number;
+  currentPrice: number;
+  strength: number;
+}
+
+export interface PivotLevels {
+  pivot: number;
+  r1: number;
+  r2: number;
+  r3: number;
+  s1: number;
+  s2: number;
+  s3: number;
+}
+
+export interface FibonacciLevels {
+  swingHigh: number;
+  swingLow: number;
+  fib236: number;
+  fib382: number;
+  fib500: number;
+  fib618: number;
+  fib786: number;
+}
+
+export interface KeyMetrics {
+  rsi: number;
+  rsiStatus: "oversold" | "normal" | "overbought";
+  volumeChange: number;
+  volumeStatus: "weak" | "normal" | "strong";
+  sma200: number;
+  aboveSma200: boolean;
+  week52High: number;
+  week52Low: number;
+  distanceFrom52High: number;
+  distanceFrom52Low: number;
+  score3Pillars: number;
+  pillarTrend: boolean;
+  pillarValue: boolean;
+  pillarMomentum: boolean;
+  supportLevel: number;
+  resistanceLevel: number;
+  sma50Role: "support" | "resistance";
+  sma20Role: "support" | "resistance";
+  rrRatio?: number;
+  rrStatus?: "excellent" | "good" | "risky" | "bad";
+  pivotLevels: PivotLevels;
+  fibLevels: FibonacciLevels;
+  confluenceZones: string[];
+}
+
+// Advanced Indicator Types
+export interface MACDResult {
+  macdLine: number;
+  signalLine: number;
+  histogram: number;
+  trend: "bullish" | "bearish" | "neutral";
+  histogramTrend: "expanding" | "contracting" | "flat";
+  lossOfMomentum: boolean;
+}
+
+export interface OBVResult {
+  obv: number;
+  obvTrend: "up" | "down" | "flat";
+  obvDivergence: "bullish" | "bearish" | "none";
+}
+
+export interface DivergenceResult {
+  type: "bullish" | "bearish" | "none";
+  indicator: string;
+  description: string;
+  severity: "strong" | "moderate" | "weak";
+}
+
+export interface IndicatorMatrixItem {
+  signal: "bullish" | "bearish" | "neutral";
+  weight: number;
+  score: number;
+}
+
+export interface IndicatorMatrix {
+  dowTheory: IndicatorMatrixItem;
+  rsi: IndicatorMatrixItem;
+  macd: IndicatorMatrixItem;
+  volume: IndicatorMatrixItem;
+  candle?: IndicatorMatrixItem;
+  totalScore: number;
+  recommendation: "STRONG_BUY" | "BUY" | "HOLD" | "SELL" | "STRONG_SELL";
+}
+
+export interface CandlePattern {
+  name: string;
+  signal: "bullish" | "neutral";
+  confidence: number;
+}
+
+export interface AdvancedIndicators {
+  macd: MACDResult;
+  obv: OBVResult;
+  divergences: DivergenceResult[];
+  trendPhase:
+    | "accumulation"
+    | "participation"
+    | "distribution"
+    | "markdown"
+    | "unknown";
+  indicatorMatrix: IndicatorMatrix;
+  volumeConfirmation: boolean;
+  rsiInterpretation: string;
+  // NEW: Sniper Bot v3 Features
+  candlePattern: CandlePattern;
+  atr: number;
+  marketContext: {
+    vixValue: number;
+    qqqTrend: "bullish" | "bearish" | "neutral";
+    marketTemperature: "hot" | "normal" | "cold";
+  };
+  daysToEarnings?: number;
+  // Anti-Knife-Catching v3.2
+  ema5: number;
+  isPriceStabilized: boolean;
+  isMomentumReturning: boolean;
+  suggestedStopLoss: number;
+  suggestedTakeProfit: number;
+  atrMultiplier: number;
+}
+
+export interface PatternResponse {
+  symbol: string;
+  currentPrice: number;
+  priceChange: number;
+  priceChangePercent: number;
+  patterns: PatternResult[];
+  trend: TrendAnalysis;
+  overallSignal: "BUY" | "SELL" | "HOLD";
+  signalStrength: number;
+  entryStatus?: "ready" | "wait" | "late";
+  decisionReason?: string; // NEW: Fusion logic explanation
+  metrics?: KeyMetrics;
+  advancedIndicators?: AdvancedIndicators;
+  error?: string;
+}
+
+export interface StockScan {
+  symbol: string;
+  data: PatternResponse | null;
+  status: "pending" | "loading" | "done" | "error";
+}
