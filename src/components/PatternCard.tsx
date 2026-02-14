@@ -238,34 +238,33 @@ export default function PatternCard({
           )}
         </div>
 
-        {/* Entry Zone & Levels for best pattern */}
-        {scan.data.patterns[0] && (
+        {/* Smart Entry & Trade Setup */}
+        {scan.data.metrics?.supportLevel && (
           <div className="grid grid-cols-3 gap-3 mt-3">
-            {/* Entry Zone */}
-            {scan.data.patterns[0].entryZone && (
-              <div className="bg-blue-900/20 rounded-lg p-2 text-center">
-                <p className="text-gray-500 text-xs">📍 Entry Zone</p>
-                <p className="text-blue-400 font-bold text-sm">
-                  {formatUSD(scan.data.patterns[0].entryZone.low)} -{" "}
-                  {formatUSD(scan.data.patterns[0].entryZone.high)}
+            {/* Smart Entry */}
+            <div className="bg-blue-900/20 rounded-lg p-2 text-center border border-blue-500/20">
+              <p className="text-gray-400 text-xs">🎯 Smart Entry</p>
+              <p className="text-blue-400 font-bold text-sm">
+                {formatUSD(scan.data.metrics.supportLevel)}
+              </p>
+            </div>
+
+            {/* Smart Target */}
+            {scan.data.metrics.resistanceLevel && (
+              <div className="bg-green-900/20 rounded-lg p-2 text-center border border-green-500/20">
+                <p className="text-gray-400 text-xs">🚀 Target</p>
+                <p className="text-green-400 font-bold text-sm">
+                  {formatUSD(scan.data.metrics.resistanceLevel)}
                 </p>
               </div>
             )}
-            {/* Target */}
-            {scan.data.patterns[0].targetPrice && (
-              <div className="bg-green-900/20 rounded-lg p-2 text-center">
-                <p className="text-gray-500 text-xs">🎯 Target</p>
-                <p className="text-green-400 font-bold">
-                  {formatUSD(scan.data.patterns[0].targetPrice)}
-                </p>
-              </div>
-            )}
-            {/* Stop Loss */}
-            {scan.data.patterns[0].stopLoss && (
-              <div className="bg-red-900/20 rounded-lg p-2 text-center">
-                <p className="text-gray-500 text-xs">🛑 Stop Loss</p>
-                <p className="text-red-400 font-bold">
-                  {formatUSD(scan.data.patterns[0].stopLoss)}
+
+            {/* Smart Cut Loss */}
+            {scan.data.advancedIndicators?.suggestedStopLoss && (
+              <div className="bg-red-900/20 rounded-lg p-2 text-center border border-red-500/20">
+                <p className="text-gray-400 text-xs">🛑 Cut Loss</p>
+                <p className="text-red-400 font-bold text-sm">
+                  {formatUSD(scan.data.advancedIndicators.suggestedStopLoss)}
                 </p>
               </div>
             )}
@@ -281,15 +280,20 @@ export default function PatternCard({
                 <div>
                   <p className="font-bold">ATR-Based Cut Loss</p>
                   <p className="text-xs opacity-70 italic text-white">
-                    Entry - (1.5 * ATR)
+                    {scan.data.overallSignal === "SELL"
+                      ? "Entry + (1.5 * ATR) [SHORT]"
+                      : "Entry - (1.5 * ATR)"}
                   </p>
                 </div>
               </div>
               <div className="text-right">
                 <p className="text-red-400 font-mono font-bold">
                   {formatUSD(
-                    scan.data.currentPrice -
-                      1.5 * scan.data.advancedIndicators.atr,
+                    scan.data.overallSignal === "SELL"
+                      ? scan.data.currentPrice +
+                          1.5 * scan.data.advancedIndicators.atr
+                      : scan.data.currentPrice -
+                          1.5 * scan.data.advancedIndicators.atr,
                   )}
                 </p>
                 <p className="text-[10px] text-gray-500">Trailing Protection</p>
