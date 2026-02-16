@@ -5,11 +5,47 @@ import Link from "next/link";
 import {
   UNIQUE_SYMBOLS,
   MAGNIFICENT_SEVEN,
+  TIER_1_MEGA_TECH,
+  TIER_1_AI_CLOUD,
+  TIER_1_GROWTH_TECH,
+  TIER_1_ENERGY_RESOURCES,
+  TIER_1_HEALTH_BIO,
+  TIER_2_SPECULATIVE,
+  STOCK_DETAILS,
   isTier1,
   isTier2,
 } from "@/lib/stocks";
 import PatternCard from "@/components/PatternCard";
 import { StockScan } from "@/types/stock";
+
+// Helper Component for Checkbox
+const TickerCheckbox = ({
+  ticker,
+  checked,
+  onToggle,
+}: {
+  ticker: string;
+  checked: boolean;
+  onToggle: () => void;
+}) => (
+  <label
+    title={STOCK_DETAILS[ticker] || ticker}
+    className={`flex items-center space-x-2 text-xs p-2 rounded cursor-pointer transition-all group relative ${
+      checked
+        ? "bg-purple-900/30 text-purple-200 border border-purple-500/30"
+        : "text-gray-500 hover:bg-gray-800"
+    }`}
+  >
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={onToggle}
+      className="rounded border-gray-600 text-purple-500 focus:ring-purple-500 bg-gray-800"
+    />
+    <span>{ticker}</span>
+    {/* Tooltip on Hover (Optional: if native title isn't enough, but title is requested) */}
+  </label>
+);
 
 // Grouping Logic
 const AJARN_C_LIST = UNIQUE_SYMBOLS.filter(
@@ -702,79 +738,203 @@ export default function PatternScreenerPage() {
 
           {isSelectorOpen && (
             <>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="relative flex-1">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                    🔍
+              <div className="flex flex-col gap-4 mb-6">
+                {/* 1. Group Quick Select */}
+                <div className="flex flex-wrap gap-2 animate-in slide-in-from-top-2 duration-300">
+                  <span className="text-gray-400 text-xs self-center mr-2">
+                    Quick Select:
                   </span>
-                  <input
-                    type="text"
-                    placeholder="Type to filter stocks (e.g. TSLA, NVDA)..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg py-2 pl-10 pr-4 text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
-                  />
+                  {[
+                    {
+                      label: "ALL",
+                      list: UNIQUE_SYMBOLS,
+                      color: "bg-gray-600",
+                    },
+                    {
+                      label: "Magnificent 7",
+                      list: MAGNIFICENT_SEVEN,
+                      color: "bg-blue-600",
+                    },
+                    {
+                      label: "AI & Cloud",
+                      list: TIER_1_AI_CLOUD,
+                      color: "bg-purple-600",
+                    },
+                    {
+                      label: "Growth Tech",
+                      list: TIER_1_GROWTH_TECH,
+                      color: "bg-indigo-600",
+                    },
+                    {
+                      label: "Energy & Nuclear",
+                      list: TIER_1_ENERGY_RESOURCES,
+                      color: "bg-amber-600",
+                    },
+                    {
+                      label: "Healthcare",
+                      list: TIER_1_HEALTH_BIO,
+                      color: "bg-pink-600",
+                    },
+                    {
+                      label: "Speculative",
+                      list: TIER_2_SPECULATIVE,
+                      color: "bg-red-600",
+                    },
+                  ].map((group) => {
+                    // Check if all in group are selected
+                    const isFullySelected = group.list.every((t) =>
+                      selectedTickers.includes(t),
+                    );
+
+                    return (
+                      <button
+                        key={group.label}
+                        onClick={() => {
+                          if (isFullySelected) {
+                            // Deselect Group
+                            setSelectedTickers(
+                              selectedTickers.filter(
+                                (t) => !group.list.includes(t),
+                              ),
+                            );
+                          } else {
+                            // Select Group (Union)
+                            setSelectedTickers(
+                              Array.from(
+                                new Set([...selectedTickers, ...group.list]),
+                              ),
+                            );
+                          }
+                        }}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-all border border-white/10 ${
+                          isFullySelected
+                            ? `${group.color} text-white shadow-lg shadow-${group.color}/20 scale-105`
+                            : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                        }`}
+                      >
+                        {isFullySelected ? "✓" : "+"} {group.label}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => setSelectedTickers([])}
+                    className="px-3 py-1 rounded-full text-xs font-medium bg-gray-800 text-red-400 border border-red-900/30 hover:bg-red-900/20 transition-all ml-auto"
+                  >
+                    Clear All ❌
+                  </button>
                 </div>
-                <button
-                  onClick={() => {
-                    // Select all filtered
-                    const newSelection = Array.from(
-                      new Set([...selectedTickers, ...filteredSymbols]),
-                    );
-                    setSelectedTickers(newSelection);
-                  }}
-                  className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 text-white transition-all whitespace-nowrap"
-                >
-                  Select Visible ✅
-                </button>
-                <button
-                  onClick={() => {
-                    // Deselect all filtered
-                    const newSelection = selectedTickers.filter(
-                      (t) => !filteredSymbols.includes(t),
-                    );
-                    setSelectedTickers(newSelection);
-                  }}
-                  className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-700 hover:bg-gray-600 text-white transition-all whitespace-nowrap"
-                >
-                  Unselect Visible ⬜
-                </button>
-                <button
-                  onClick={() => setSelectedTickers([])}
-                  className="px-4 py-2 rounded-lg text-sm font-medium border border-red-900/50 text-red-400 hover:bg-red-900/20 transition-all whitespace-nowrap"
-                >
-                  Clear All ❌
-                </button>
+
+                {/* 2. Search & Filter Actions */}
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      🔍
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Type to filter stocks (e.g. TSLA, NVDA)..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full bg-gray-900/50 border border-gray-700 rounded-lg py-2 pl-10 pr-4 text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 mt-4 p-4 bg-gray-900/50 rounded-xl border border-gray-800 animate-in fade-in zoom-in duration-300 max-h-60 overflow-y-auto custom-scrollbar">
-                {filteredSymbols.map((ticker) => (
-                  <label
-                    key={ticker}
-                    className={`flex items-center space-x-2 text-xs p-2 rounded cursor-pointer transition-all ${
-                      selectedTickers.includes(ticker)
-                        ? "bg-purple-900/30 text-purple-200 border border-purple-500/30"
-                        : "text-gray-500 hover:bg-gray-800"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedTickers.includes(ticker)}
-                      onChange={() => toggleTicker(ticker)}
-                      className="rounded border-gray-600 text-purple-500 focus:ring-purple-500 bg-gray-800"
-                    />
-                    <span>{ticker}</span>
-                  </label>
-                ))}
-                {filteredSymbols.length === 0 && (
-                  <div className="col-span-full text-center text-gray-500 py-4">
-                    No stocks found matching "{searchTerm}"
+              {/* 3. Stock Grid (Grouped or Filtered) */}
+              <div className="bg-gray-900/50 rounded-xl border border-gray-800 p-4 max-h-[400px] overflow-y-auto custom-scrollbar">
+                {searchTerm ? (
+                  // Search Mode: Flat List
+                  <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+                    {filteredSymbols.map((ticker) => (
+                      <TickerCheckbox
+                        key={ticker}
+                        ticker={ticker}
+                        checked={selectedTickers.includes(ticker)}
+                        onToggle={() => {
+                          if (selectedTickers.includes(ticker)) {
+                            setSelectedTickers(
+                              selectedTickers.filter((t) => t !== ticker),
+                            );
+                          } else {
+                            setSelectedTickers([...selectedTickers, ticker]);
+                          }
+                        }}
+                      />
+                    ))}
+                    {filteredSymbols.length === 0 && (
+                      <div className="col-span-full text-center text-gray-500 py-8">
+                        No stocks found matching "{searchTerm}"
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  // Default Mode: Grouped List
+                  <div className="space-y-6">
+                    {[
+                      { title: "Magnificent 7 👑", list: MAGNIFICENT_SEVEN },
+                      {
+                        title: "Mega Tech & Leaders 🏢",
+                        list: TIER_1_MEGA_TECH,
+                      },
+                      {
+                        title: "AI, Cloud & Cyber Security 🤖",
+                        list: TIER_1_AI_CLOUD,
+                      },
+                      {
+                        title: "Growth Tech (Chips/Space/EV) 🚀",
+                        list: TIER_1_GROWTH_TECH,
+                      },
+                      {
+                        title: "Energy & Resources (Nuclear/Minerals) ⚡",
+                        list: TIER_1_ENERGY_RESOURCES,
+                      },
+                      {
+                        title: "Healthcare & Biotech 🧬",
+                        list: TIER_1_HEALTH_BIO,
+                      },
+                      {
+                        title: "Speculative & High Risk 🎢",
+                        list: TIER_2_SPECULATIVE,
+                      },
+                    ].map((group) => (
+                      <div key={group.title}>
+                        <h3 className="text-gray-400 text-xs font-bold uppercase mb-2 ml-1 tracking-wider">
+                          {group.title}
+                        </h3>
+                        <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+                          {group.list.map((ticker) => (
+                            <TickerCheckbox
+                              key={ticker}
+                              ticker={ticker}
+                              checked={selectedTickers.includes(ticker)}
+                              onToggle={() => {
+                                if (selectedTickers.includes(ticker)) {
+                                  setSelectedTickers(
+                                    selectedTickers.filter((t) => t !== ticker),
+                                  );
+                                } else {
+                                  setSelectedTickers([
+                                    ...selectedTickers,
+                                    ticker,
+                                  ]);
+                                }
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
             </>
           )}
         </div>
+
+        {/* Helper Component for Checkbox */}
+        {/* Note: In a real app, this should be outside, but inline is fine for now */}
+        {/* We need to define TickerCheckbox outside or use inline rendering if component definition is not allowed inside render */}
 
         {/* Scan Controls */}
         <div className="bg-gray-800/50 rounded-2xl border border-gray-700/50 p-6">
