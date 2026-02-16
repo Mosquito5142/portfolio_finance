@@ -138,32 +138,43 @@ const calculateSmartTrade = (s: StockScan) => {
   };
 
   // --- ENTRY LOGIC ---
-  // User Feedback: "Action Now" shouldn't mean "Market Price" (Peak).
-  // "Don't Chase": Always wait for a slight pullback (0.5% - 1%) or EMA5.
-  // EMA5 is often a dynamic support in strong trends.
-  // DEFAULT: Limit Order at 0.5% Discount from Current Price.
-
   const ema5 = s.data?.advancedIndicators?.ema5 || 0;
 
   if (signal === "BUY") {
-    // Active BUY: Wait for 0.5% dip OR EMA5 (whichever is closer to price)
-    // But strictly BELOW current price to avoid chasing.
-    let smartEntry = price * 0.995; // Default 0.5% discount
+    // Active BUY: Wait for 0.5% dip OR EMA5
+    let smartEntry = price * 0.995;
     if (ema5 > 0 && ema5 < price && ema5 > price * 0.98) {
-      // If EMA5 is valid and within 2% range, respect it as support
       smartEntry = Math.max(smartEntry, ema5);
     }
     idealEntry = smartEntry;
   } else if (signal === "SELL") {
     if (isOversoldRebound) {
-      // Rebound Setup (Dip Buy) -> Wait for Support
-      idealEntry = getConfluenceLevel("support");
+      // 🎯 USER STRATEGY: "Sniper Rebound" (Liquidity Pocket)
+      // Entry: Midpoint of S1 & S2 (Trap Zone)
+      if (pivots) {
+        idealEntry = (pivots.s1 + pivots.s2) / 2;
+      } else {
+        idealEntry = price * 0.95; // Fallback
+      }
+
+      // Target: Fib 0.382 (Mean Reversion)
+      if (fibs) {
+        target = fibs.fib382;
+      } else {
+        target = getConfluenceLevel("resistance");
+      }
+
+      // Cut Loss: Below S3 (Deep Safety)
+      if (pivots) {
+        const atrBuffer = atr > 0 ? atr : price * 0.02;
+        cut = pivots.s3 - atrBuffer;
+      } else {
+        cut = price * 0.9;
+      }
     } else {
-      // Standard SELL -> Short at Bounce (0.5% Premium) or EMA5
-      // Strictly ABOVE current price.
-      let smartEntry = price * 1.005; // Default 0.5% premium
+      // Standard SELL (Short)
+      let smartEntry = price * 1.005;
       if (ema5 > 0 && ema5 > price && ema5 < price * 1.02) {
-        // If EMA5 is valid resistance (above price), use it
         smartEntry = Math.min(smartEntry, ema5);
       }
       idealEntry = smartEntry;
@@ -173,51 +184,38 @@ const calculateSmartTrade = (s: StockScan) => {
     idealEntry = getConfluenceLevel("support");
   }
 
-  // --- CUT LOSS & TARGET LOGIC ---
+  // --- CUT LOSS & TARGET LOGIC (Standard) ---
   if (signal === "SELL" && !isOversoldRebound) {
-    // SHORT POSITION
-    // Cut = Resistance (Above Entry)
-    // Target = Support (Below Entry)
-
-    // Cut: Nearest Resistance above Entry
+    // SHORT POSITION logic...
     const res = getConfluenceLevel("resistance");
-    // Safety: If Resistance is > 8% away (too far), cap it at +5% or +3*ATR
     const maxCut = price * 1.05;
     const atrCut = atr > 0 ? price + atr * 3 : maxCut;
-
-    // Use the TIGHTER stop (min of Resistance or Max Cap) but must be > Entry
     cut = Math.min(res, maxCut);
     if (atr > 0) cut = Math.min(cut, atrCut);
-
-    // Ensure Cut > Entry * 1.005 (0.5% min room)
     if (cut <= idealEntry * 1.005) cut = idealEntry * 1.05;
 
-    // Target: Nearest Support below Entry
     const sup = getConfluenceLevel("support");
-    target = Math.min(sup, idealEntry * 0.95); // Aim for at least 5% gain
-    // If target is invalid (>= entry), force it down
+    target = Math.min(sup, idealEntry * 0.95);
     if (target >= idealEntry) target = idealEntry * 0.9;
-  } else {
-    // LONG POSITION (BUY/HOLD/REBOUND)
-    // Cut = Support (Below Entry)
-    // Target = Resistance (Above Entry)
-
+  } else if (!isOversoldRebound) {
+    // LONG POSITION (Normal Buy) logic...
+    // (Only run this if NOT Rebound, because Rebound already set Target/Cut above)
     const sup = getConfluenceLevel("support");
-    // Safety: If Support is > 8% away (too deep), cap it at -5%
     const maxCut = price * 0.95;
     const atrCut = atr > 0 ? price - atr * 2 : maxCut;
-
-    // Use the TIGHTER stop (max of Support or Max Cap) but must be < Entry
     cut = Math.max(sup, maxCut);
     if (atr > 0) cut = Math.max(cut, atrCut);
-
-    // Ensure Cut < Entry * 0.995 (0.5% min room)
     if (cut >= idealEntry * 0.995) cut = idealEntry * 0.95;
 
     const res = getConfluenceLevel("resistance");
-    target = Math.max(res, idealEntry * 1.05); // Aim for at least 5% gain
-    // If target is invalid (<= entry), force it up
+    target = Math.max(res, idealEntry * 1.05);
     if (target <= idealEntry) target = idealEntry * 1.1;
+  }
+
+  // Double check Rebound Validity (Ensure Target > Entry)
+  if (isOversoldRebound) {
+    if (target <= idealEntry) target = idealEntry * 1.15; // Force 15% upside if Fib failed
+    if (cut >= idealEntry) cut = idealEntry * 0.9; // Force 10% downside risk
   }
 
   // Update the Scan Data with these "Smart" values
@@ -550,14 +548,29 @@ export default function PatternScreenerPage() {
       const smartScan = calculateSmartTrade(s);
       const data = smartScan.data!;
 
+      let entry = data.metrics?.supportLevel || 0;
+      let target = data.metrics?.resistanceLevel || 0;
+      let cut = data.advancedIndicators?.suggestedStopLoss || 0;
+
+      // 🛠️ USER REQUEST: Always send "Support" as Entry and "Resistance" as Target
+      // Ensure Entry < Target (Long Logic) for the Sheet, regardless of Signal.
+      if (entry > target) {
+        // Swap Entry & Target
+        const temp = entry;
+        entry = target;
+        target = temp;
+
+        // Recalculate Cut Price for Long (Below Entry)
+        // Default to 5% risk or specific calculation
+        cut = entry * 0.95;
+      }
+
       return {
         ticker: s.symbol,
-        entry: Number((data.metrics?.supportLevel || 0).toFixed(2)),
+        entry: Number(entry.toFixed(2)),
         currentPrice: Number(data.currentPrice.toFixed(2)),
-        cut: Number(
-          (data.advancedIndicators?.suggestedStopLoss || 0).toFixed(2),
-        ),
-        target: Number((data.metrics?.resistanceLevel || 0).toFixed(2)),
+        cut: Number(cut.toFixed(2)),
+        target: Number(target.toFixed(2)),
         status: "",
       };
     });
