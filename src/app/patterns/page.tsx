@@ -258,6 +258,32 @@ export default function PatternScreenerPage() {
     useState<string[]>(UNIQUE_SYMBOLS);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
 
+  // NEW: Custom Tickers State
+  const [customTickers, setCustomTickers] = useState<string[]>([]);
+
+  const addCustomTicker = (ticker: string) => {
+    const upper = ticker.toUpperCase();
+    if (!customTickers.includes(upper) && !UNIQUE_SYMBOLS.includes(upper)) {
+      setCustomTickers((prev) => [...prev, upper]);
+      setSelectedTickers((prev) => [...prev, upper]); // Auto-select
+
+      // Add to scans list so it can be processed
+      setScans((prev) => [
+        ...prev,
+        { symbol: upper, data: null, status: "pending" },
+      ]);
+
+      setSearchTerm(""); // Clear search
+    } else if (
+      UNIQUE_SYMBOLS.includes(upper) &&
+      !selectedTickers.includes(upper)
+    ) {
+      // If it exists but not selected, just select it
+      setSelectedTickers((prev) => [...prev, upper]);
+      setSearchTerm("");
+    }
+  };
+
   useEffect(() => {
     setMounted(true);
     // Initialize scans with imported symbols
@@ -608,7 +634,7 @@ export default function PatternScreenerPage() {
   // NEW: Search Term for Selector
   const [searchTerm, setSearchTerm] = useState("");
 
-  const filteredSymbols = UNIQUE_SYMBOLS.filter((s) =>
+  const filteredSymbols = [...UNIQUE_SYMBOLS, ...customTickers].filter((s) =>
     s.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
@@ -863,8 +889,23 @@ export default function PatternScreenerPage() {
                       />
                     ))}
                     {filteredSymbols.length === 0 && (
-                      <div className="col-span-full text-center text-gray-500 py-8">
-                        No stocks found matching "{searchTerm}"
+                      <div className="col-span-full text-center py-8">
+                        <p className="text-gray-500 mb-4">
+                          No stocks found matching "{searchTerm}"
+                        </p>
+                        {searchTerm.length >= 1 &&
+                          /^[A-Za-z]+$/.test(searchTerm) && (
+                            <button
+                              onClick={() => addCustomTicker(searchTerm)}
+                              className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 mx-auto"
+                            >
+                              <span>➕</span>
+                              Add Custom Ticker:{" "}
+                              <span className="font-bold">
+                                {searchTerm.toUpperCase()}
+                              </span>
+                            </button>
+                          )}
                       </div>
                     )}
                   </div>
