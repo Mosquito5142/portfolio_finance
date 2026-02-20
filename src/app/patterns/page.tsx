@@ -670,6 +670,12 @@ export default function PatternScreenerPage() {
             </div>
             <div className="flex items-center gap-3">
               <Link
+                href="/patterns/charts"
+                className="text-gray-400 hover:text-blue-400 text-sm font-bold bg-blue-900/20 px-3 py-1 rounded border border-blue-500/30 transition-all"
+              >
+                📐 Triangles
+              </Link>
+              <Link
                 href="/search"
                 className="text-gray-400 hover:text-purple-400 text-sm"
               >

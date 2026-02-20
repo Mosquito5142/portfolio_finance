@@ -1089,6 +1089,133 @@ function detectConsolidation(
   return null;
 }
 
+// Detect Triangle Patterns (Ascending, Descending, Symmetrical)
+function detectTrianglePatterns(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+  volumes: number[],
+  currentPrice: number,
+): PatternResult | null {
+  // Need at least 20 days of data
+  if (highs.length < 20 || volumes.length < 20) return null;
+
+  const lookback = Math.min(30, highs.length);
+  const recentHighs = highs.slice(-lookback);
+  const recentLows = lows.slice(-lookback);
+
+  // Find local peaks and valleys
+  const peaks: { index: number; price: number }[] = [];
+  const valleys: { index: number; price: number }[] = [];
+
+  for (let i = 2; i < recentHighs.length - 2; i++) {
+    if (
+      recentHighs[i] >= recentHighs[i - 1] &&
+      recentHighs[i] >= recentHighs[i - 2] &&
+      recentHighs[i] > recentHighs[i + 1] &&
+      recentHighs[i] > recentHighs[i + 2]
+    ) {
+      peaks.push({ index: i, price: recentHighs[i] });
+    }
+
+    if (
+      recentLows[i] <= recentLows[i - 1] &&
+      recentLows[i] <= recentLows[i - 2] &&
+      recentLows[i] < recentLows[i + 1] &&
+      recentLows[i] < recentLows[i + 2]
+    ) {
+      valleys.push({ index: i, price: recentLows[i] });
+    }
+  }
+
+  // Need at least 2 peaks and 2 valleys to draw trendlines
+  if (peaks.length < 2 || valleys.length < 2) return null;
+
+  const p1 = peaks[peaks.length - 2];
+  const p2 = peaks[peaks.length - 1];
+  const v1 = valleys[valleys.length - 2];
+  const v2 = valleys[valleys.length - 1];
+
+  // Slopes (price change per day)
+  const peakSlope = (p2.price - p1.price) / (p2.index - p1.index || 1);
+  const valleySlope = (v2.price - v1.price) / (v2.index - v1.index || 1);
+
+  // Normalize slopes (% change per day)
+  const normPeakSlope = peakSlope / p1.price;
+  const normValleySlope = valleySlope / v1.price;
+
+  const flatThreshold = 0.003;
+  const trendThreshold = 0.002;
+
+  const isResistanceFlat = Math.abs(normPeakSlope) < flatThreshold;
+  const isResistanceFalling = normPeakSlope < -trendThreshold;
+  const isSupportFlat = Math.abs(normValleySlope) < flatThreshold;
+  const isSupportRising = normValleySlope > trendThreshold;
+
+  // Must be compressing
+  const isCompressing = p2.price - v2.price < (p1.price - v1.price) * 1.1; // allow slight tolerance
+
+  // Check if volume is drying up (compression)
+  const recentVolumes = volumes.slice(-lookback);
+  const firstHalfVol =
+    recentVolumes
+      .slice(0, Math.floor(lookback / 2))
+      .reduce((a, b) => a + b, 0) / Math.floor(lookback / 2);
+  const secondHalfVol =
+    recentVolumes.slice(Math.floor(lookback / 2)).reduce((a, b) => a + b, 0) /
+    Math.ceil(lookback / 2);
+
+  // Volume in second half should be less than or roughly equal to first half
+  const isVolumeDryingUp = secondHalfVol < firstHalfVol * 1.05; // 5% tolerance
+
+  if (!isCompressing || !isVolumeDryingUp) return null;
+
+  if (isResistanceFlat && isSupportRising) {
+    return {
+      name: "Ascending Triangle",
+      type: "continuation",
+      signal: "bullish",
+      status: "ready",
+      confidence: 75,
+      description: `แนวต้านแข็ง (${p2.price.toFixed(2)}) แต่ฐานยกขึ้น = เตรียม Breakout! 📐🚀`,
+      entryZone: { low: p2.price * 0.99, high: p2.price * 1.01 },
+      breakoutLevel: p2.price,
+      distanceToBreakout: ((p2.price - currentPrice) / currentPrice) * 100,
+      targetPrice: p2.price + (p2.price - v1.price),
+      stopLoss: v2.price * 0.98,
+    };
+  } else if (isSupportFlat && isResistanceFalling) {
+    return {
+      name: "Descending Triangle",
+      type: "continuation",
+      signal: "bearish",
+      status: "ready",
+      confidence: 75,
+      description: `แนวรับแน่น (${v2.price.toFixed(2)}) แต่ยอดกดลง = ระวังหลุดแนวรับร่วงแรง! 📉`,
+      entryZone: { low: v2.price * 0.99, high: v2.price * 1.01 },
+      breakoutLevel: v2.price,
+      distanceToBreakout: ((currentPrice - v2.price) / currentPrice) * 100,
+      targetPrice: Math.max(v2.price - (p1.price - v2.price), v2.price * 0.8),
+      stopLoss: p2.price * 1.02,
+    };
+  } else if (isResistanceFalling && isSupportRising) {
+    return {
+      name: "Symmetrical Triangle",
+      type: "continuation",
+      signal: "neutral",
+      status: "forming",
+      confidence: 65,
+      description: `บีบอัดสปริง (ยอดต่ำลง ฐานยกขึ้น) = รอระเบิดเลือกทาง ⚖️`,
+      entryZone: { low: v2.price, high: p2.price },
+      breakoutLevel: p2.price, // Upside resistance
+      targetPrice: p2.price + (p1.price - v1.price) * 0.5,
+      stopLoss: v2.price * 0.98,
+    };
+  }
+
+  return null;
+}
+
 // Analyze trend
 function analyzeTrend(closes: number[]): TrendAnalysis {
   const currentPrice = closes[closes.length - 1];
@@ -1266,6 +1393,18 @@ export async function GET(request: Request) {
     );
     if (consolidation) patterns.push(consolidation);
 
+    // 6. NEW: Triangle Patterns
+    const getVolumes: number[] =
+      quotes.volume?.filter((v: number | null) => v !== null) || [];
+    const tri = detectTrianglePatterns(
+      highs,
+      lows,
+      closes,
+      getVolumes,
+      currentPrice,
+    );
+    if (tri) patterns.push(tri);
+
     // ========== DETERMINE ENTRY STATUS ==========
     let entryStatus: "ready" | "wait" | "late" = "wait";
 
@@ -1307,12 +1446,12 @@ export async function GET(request: Request) {
     signalStrength = Math.min(90, signalStrength);
 
     // ========== CALCULATE KEY METRICS ==========
-    const volumes: number[] =
-      quotes.volume?.filter((v: number | null) => v !== null) || [];
     const rsi = calculateRSI(closes);
     const sma200 = calculateSMA(closes, Math.min(closes.length, 60)); // Use available data for trend
 
     // Volume analysis
+    const volumes: number[] =
+      quotes.volume?.filter((v: number | null) => v !== null) || [];
     const todayVolume = volumes[volumes.length - 1] || 0;
     const avgVolume10 = volumes.slice(-10).reduce((a, b) => a + b, 0) / 10;
     const volumeChange =
