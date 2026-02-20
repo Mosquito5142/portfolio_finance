@@ -26,6 +26,18 @@ const MENU_ITEMS = [
     glowColor: "shadow-cyan-500/20",
   },
   {
+    href: "/patterns/charts",
+    icon: "📐",
+    title: "Triangle Scanner",
+    subtitle: "หาหุ้นทรงกระทิงบีบอัด",
+    description:
+      "สแกนหาเฉพาะหุ้นทรง Ascending Triangle (ฐานยก ยอดแน่น) ที่กำลังเตรียม Breakout",
+    gradient: "from-blue-600 to-indigo-600",
+    hoverGradient: "hover:from-blue-500 hover:to-indigo-500",
+    borderColor: "border-blue-500/30",
+    glowColor: "shadow-blue-500/20",
+  },
+  {
     href: "/compare",
     icon: "⚖️",
     title: "เปรียบเทียบหุ้น",

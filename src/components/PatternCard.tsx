@@ -238,6 +238,58 @@ export default function PatternCard({
           )}
         </div>
 
+        {/* ========== SPECIFIC PATTERN SETUPS (e.g. Triangle) ========== */}
+        {scan.data.patterns.some((p) => p.breakoutLevel !== undefined) && (
+          <div className="mt-3">
+            {scan.data.patterns
+              .filter((p) => p.breakoutLevel !== undefined)
+              .map((tri, i) => (
+                <div
+                  key={i}
+                  className="p-3 bg-blue-900/20 border border-blue-500/30 rounded-xl mb-2"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xl">📐</span>
+                    <div>
+                      <h4 className="text-blue-300 font-bold text-sm">
+                        {tri.name} Setup
+                      </h4>
+                      <p className="text-gray-400 text-xs italic">
+                        {tri.description}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-center bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
+                    <div>
+                      <p className="text-gray-500 text-[10px]">
+                        Breakout Level (ต้าน)
+                      </p>
+                      <p className="text-white font-bold text-sm">
+                        ${tri.breakoutLevel?.toFixed(2) || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-[10px] text-green-400/80">
+                        Profit Target
+                      </p>
+                      <p className="text-green-400 font-bold text-sm">
+                        ${tri.targetPrice?.toFixed(2) || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-[10px] text-red-400/80">
+                        Cut Loss
+                      </p>
+                      <p className="text-red-400 font-bold text-sm">
+                        ${tri.stopLoss?.toFixed(2) || "-"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+
         {/* Smart Entry & Trade Setup */}
         {scan.data.metrics?.supportLevel && (
           <div className="grid grid-cols-3 gap-3 mt-3">

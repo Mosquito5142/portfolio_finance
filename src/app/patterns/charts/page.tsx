@@ -525,7 +525,7 @@ export default function TrianglePatternsPage() {
 
                     {/* Footer Stats */}
                     {tri && (
-                      <div className="p-4 bg-slate-900/80 grid grid-cols-3 gap-4 text-center border-t border-slate-700/50">
+                      <div className="p-4 bg-slate-900/80 grid grid-cols-3 gap-4 text-center border-t border-slate-700/50 mt-auto">
                         <div>
                           <p className="text-gray-500 text-xs">
                             Breakout Level (ต้าน)
