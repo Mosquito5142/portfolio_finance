@@ -57,6 +57,15 @@ export default function TrianglePatternsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [customTickers, setCustomTickers] = useState<string[]>([]);
 
+  // Debug Data State
+  const [debugVisible, setDebugVisible] = useState<Record<string, boolean>>({});
+  const toggleDebug = (symbol: string) => {
+    setDebugVisible((prev) => ({
+      ...prev,
+      [symbol]: !prev[symbol],
+    }));
+  };
+
   useEffect(() => {
     setMounted(true);
     const initialScans: StockScan[] = UNIQUE_SYMBOLS.map((symbol) => ({
@@ -464,9 +473,11 @@ export default function TrianglePatternsPage() {
             {/* TradingView Chart Grid */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
               {triangleScans.map((s) => {
+                // Determine if there is a detected triangle or just take the first pattern/none
                 const tri = s.data?.patterns.find((p) =>
                   p.name.includes("Triangle"),
                 );
+
                 return (
                   <div
                     key={s.symbol}
@@ -490,12 +501,40 @@ export default function TrianglePatternsPage() {
                               {tri.name}
                             </span>
                           )}
+                          {!tri &&
+                            s.data?.patterns &&
+                            s.data.patterns.length > 0 && (
+                              <span className="text-xs px-2 py-1 rounded border bg-blue-900/40 text-blue-400 border-blue-500/50">
+                                {s.data.patterns[0].name}
+                              </span>
+                            )}
+                          {tri?.debugData && (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                toggleDebug(s.symbol);
+                              }}
+                              className="text-xs bg-slate-800 hover:bg-slate-700 text-gray-400 px-3 py-1.5 rounded border border-slate-600 transition-colors ml-auto flex items-center gap-1"
+                            >
+                              🧮{" "}
+                              {debugVisible[s.symbol]
+                                ? "ซ่อนสูตร"
+                                : "ดูสูตรคำนวณ"}
+                            </button>
+                          )}
                         </h3>
                         {tri && (
                           <p className="text-sm text-gray-400 mt-1">
                             {tri.description}
                           </p>
                         )}
+                        {!tri &&
+                          s.data?.patterns &&
+                          s.data.patterns.length > 0 && (
+                            <p className="text-sm text-gray-400 mt-1">
+                              {s.data.patterns[0].description}
+                            </p>
+                          )}
                       </div>
                       <div className="text-right">
                         <p className="text-2xl font-bold text-white">
@@ -512,6 +551,126 @@ export default function TrianglePatternsPage() {
                       </div>
                     </div>
 
+                    {/* Debug Data Panel */}
+                    {debugVisible[s.symbol] && tri?.debugData && (
+                      <div className="p-4 bg-slate-950 border-b border-slate-700/50 text-left">
+                        <p className="text-sm font-bold text-blue-400 mb-2">
+                          🧮 ค่าที่ใช้ประมวลผล (Internal Logic)
+                        </p>
+                        <ul className="text-xs text-gray-300 font-mono space-y-1 grid grid-cols-2 gap-x-4">
+                          <li>
+                            <span className="text-gray-500">ยอดอดีต (p1):</span>{" "}
+                            ${tri.debugData.p1?.price}
+                          </li>
+                          <li>
+                            <span className="text-gray-500">
+                              ยอดล่าสุด (p2):
+                            </span>{" "}
+                            ${tri.debugData.p2?.price}
+                          </li>
+                          <li>
+                            <span className="text-gray-500">ฐานอดีต (v1):</span>{" "}
+                            ${tri.debugData.v1?.price}
+                          </li>
+                          <li>
+                            <span className="text-gray-500">
+                              ฐานล่าสุด (v2):
+                            </span>{" "}
+                            ${tri.debugData.v2?.price}
+                          </li>
+                          <li className="col-span-2 my-2 border-t border-slate-800 pt-2">
+                            <span className="text-gray-500 block">
+                              สมการความชันแนวต้าน (Peak Slope):
+                            </span>
+                            <span className="text-slate-400 ml-2">
+                              {tri.debugData.mathPeakSlope || "-"}
+                            </span>
+                          </li>
+                          <li className="col-span-2">
+                            <span className="text-gray-500 block">
+                              % ความชันแนวต้านต่อวัน:
+                            </span>
+                            <span
+                              className={`ml-2 ${
+                                tri.debugData.isResistanceFlat
+                                  ? "text-green-400"
+                                  : "text-red-400"
+                              }`}
+                            >
+                              {tri.debugData.mathNormPeakSlope || "-"}
+                              <span className="text-gray-500 ml-1">
+                                (เกณฑ์ความแบน: &lt;{" "}
+                                {tri.debugData.thresholdFlat})
+                              </span>
+                            </span>
+                            <span className="ml-2">
+                              {tri.debugData.isResistanceFlat
+                                ? "✅ ต้านแข็ง"
+                                : "❌ ต้านไม่แข็ง"}
+                            </span>
+                          </li>
+                          <li className="col-span-2 my-2 border-t border-slate-800 pt-2">
+                            <span className="text-gray-500 block">
+                              สมการความชันแนวรับ (Valley Slope):
+                            </span>
+                            <span className="text-slate-400 ml-2">
+                              {tri.debugData.mathValleySlope || "-"}
+                            </span>
+                          </li>
+                          <li className="col-span-2">
+                            <span className="text-gray-500 block">
+                              % ความชันแนวรับต่อวัน:
+                            </span>
+                            <span
+                              className={`ml-2 ${
+                                tri.debugData.isSupportRising
+                                  ? "text-green-400"
+                                  : "text-yellow-400"
+                              }`}
+                            >
+                              {tri.debugData.mathNormValleySlope || "-"}
+                              <span className="text-gray-500 ml-1">
+                                (เกณฑ์ความชัน: &gt;{" "}
+                                {tri.debugData.thresholdTrending})
+                              </span>
+                            </span>
+                            <span className="ml-2">
+                              {tri.debugData.isSupportRising
+                                ? "✅ ฐานยก (แรงซื้อหนุน)"
+                                : "❌ ฐานไม่ยก"}
+                            </span>
+                          </li>
+                          <li className="col-span-2 my-2 border-t border-slate-800 pt-2">
+                            <span className="text-gray-500 block">
+                              สมการการบีบอัดแคบลง (Compression):
+                            </span>
+                            <span className="text-slate-400 ml-2">
+                              {tri.debugData.mathCompression || "-"}
+                            </span>
+                            <span className="ml-2">
+                              {tri.debugData.isCompressing
+                                ? "✅ บีบอัดแคบลง"
+                                : "❌ กรอบกว้างขึ้น"}{" "}
+                              (Ratio: {tri.debugData.compressionRatio})
+                            </span>
+                          </li>
+                          <li className="col-span-2 border-t border-slate-800 pt-2 mt-2">
+                            <span className="text-gray-500 block">
+                              สมการวอลุ่มหดตัว (Volume Drying Up):
+                            </span>
+                            <span className="text-slate-400 ml-2">
+                              {tri.debugData.mathVolume || "-"}
+                            </span>
+                            <span className="ml-2">
+                              {tri.debugData.isVolumeDryingUp
+                                ? "✅ วอลุ่มหดตัว"
+                                : "❌ วอลุ่มไม่ลดลง"}
+                            </span>
+                          </li>
+                        </ul>
+                      </div>
+                    )}
+
                     {/* TradingView Chart Frame */}
                     <div className="h-[450px] w-full bg-slate-900 relative">
                       <iframe
@@ -523,15 +682,22 @@ export default function TrianglePatternsPage() {
                       ></iframe>
                     </div>
 
-                    {/* Footer Stats */}
-                    {tri && (
+                    {/* Footer Stats - Only show if Breakout / Target data exists for the detected pattern */}
+                    {(tri ||
+                      (s.data?.patterns &&
+                        s.data.patterns.length > 0 &&
+                        s.data.patterns[0].breakoutLevel)) && (
                       <div className="p-4 bg-slate-900/80 grid grid-cols-3 gap-4 text-center border-t border-slate-700/50 mt-auto">
                         <div>
                           <p className="text-gray-500 text-xs">
                             Breakout Level (ต้าน)
                           </p>
                           <p className="text-white font-bold text-lg">
-                            ${tri.breakoutLevel?.toFixed(2) || "-"}
+                            $
+                            {(
+                              tri?.breakoutLevel ||
+                              s.data?.patterns[0].breakoutLevel
+                            )?.toFixed(2) || "-"}
                           </p>
                         </div>
                         <div>
@@ -539,7 +705,11 @@ export default function TrianglePatternsPage() {
                             Profit Target
                           </p>
                           <p className="text-green-400 font-bold text-lg">
-                            ${tri.targetPrice?.toFixed(2) || "-"}
+                            $
+                            {(
+                              tri?.targetPrice ||
+                              s.data?.patterns[0].targetPrice
+                            )?.toFixed(2) || "-"}
                           </p>
                         </div>
                         <div>
@@ -547,7 +717,10 @@ export default function TrianglePatternsPage() {
                             Cut Loss
                           </p>
                           <p className="text-red-400 font-bold text-lg">
-                            ${tri.stopLoss?.toFixed(2) || "-"}
+                            $
+                            {(
+                              tri?.stopLoss || s.data?.patterns[0].stopLoss
+                            )?.toFixed(2) || "-"}
                           </p>
                         </div>
                       </div>

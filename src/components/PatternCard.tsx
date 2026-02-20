@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useState } from "react";
 import { formatUSD } from "@/lib/utils";
 import { isTier1, isTier2 } from "@/lib/stocks";
 import { StockScan } from "@/types/stock";
@@ -12,6 +13,8 @@ export default function PatternCard({
   scan,
   scanMode = "value",
 }: PatternCardProps) {
+  const [showDebug, setShowDebug] = useState(false);
+
   if (!scan.data) return null;
 
   return (
@@ -248,17 +251,150 @@ export default function PatternCard({
                   key={i}
                   className="p-3 bg-blue-900/20 border border-blue-500/30 rounded-xl mb-2"
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xl">📐</span>
-                    <div>
-                      <h4 className="text-blue-300 font-bold text-sm">
-                        {tri.name} Setup
-                      </h4>
-                      <p className="text-gray-400 text-xs italic">
-                        {tri.description}
-                      </p>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">📐</span>
+                      <div>
+                        <h4 className="text-blue-300 font-bold text-sm flex items-center gap-2">
+                          {tri.name} Setup
+                          {tri.debugData && (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setShowDebug(!showDebug);
+                              }}
+                              className="text-[10px] bg-slate-800 hover:bg-slate-700 text-gray-400 px-2 py-0.5 rounded border border-slate-600 transition-colors"
+                            >
+                              {showDebug ? "ซ่อนสูตร" : "ดูสูตรคำนวณ"}
+                            </button>
+                          )}
+                        </h4>
+                        <p className="text-gray-400 text-xs italic">
+                          {tri.description}
+                        </p>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Debug Data Panel */}
+                  {showDebug && tri.debugData && (
+                    <div className="mb-3 p-3 bg-slate-950/80 rounded border border-slate-700/50 text-left">
+                      <p className="text-xs font-bold text-blue-400 mb-2">
+                        🧮 ค่าที่ใช้ประมวลผล (Internal Logic)
+                      </p>
+                      <ul className="text-[10px] text-gray-300 font-mono space-y-1">
+                        <li>
+                          <span className="text-gray-500">ยอดอดีต (p1):</span> $
+                          {tri.debugData.p1?.price}
+                        </li>
+                        <li>
+                          <span className="text-gray-500">ยอดล่าสุด (p2):</span>{" "}
+                          ${tri.debugData.p2?.price}
+                        </li>
+                        <li>
+                          <span className="text-gray-500">ฐานอดีต (v1):</span> $
+                          {tri.debugData.v1?.price}
+                        </li>
+                        <li>
+                          <span className="text-gray-500">ฐานล่าสุด (v2):</span>{" "}
+                          ${tri.debugData.v2?.price}
+                        </li>
+                        <hr className="border-slate-800 my-1" />
+                        <li>
+                          <span className="text-gray-500 block">
+                            สมการความชันแนวต้าน (Peak Slope):
+                          </span>
+                          <span className="text-slate-400 ml-2">
+                            {tri.debugData.mathPeakSlope || "-"}
+                          </span>
+                        </li>
+                        <li>
+                          <span className="text-gray-500 block">
+                            % ความชันแนวต้านต่อวัน:
+                          </span>
+                          <span
+                            className={`ml-2 ${
+                              tri.debugData.isResistanceFlat
+                                ? "text-green-400"
+                                : "text-red-400"
+                            }`}
+                          >
+                            {tri.debugData.mathNormPeakSlope || "-"}
+                            <span className="text-gray-500 ml-1">
+                              (เกณฑ์ความแบน: &lt; {tri.debugData.thresholdFlat})
+                            </span>
+                          </span>
+                          <span className="ml-2">
+                            {tri.debugData.isResistanceFlat
+                              ? "✅ ต้านแข็ง"
+                              : "❌ ต้านไม่แข็ง"}
+                          </span>
+                        </li>
+                        <hr className="border-slate-800 my-1" />
+                        <li>
+                          <span className="text-gray-500 block">
+                            สมการความชันแนวรับ (Valley Slope):
+                          </span>
+                          <span className="text-slate-400 ml-2">
+                            {tri.debugData.mathValleySlope || "-"}
+                          </span>
+                        </li>
+                        <li>
+                          <span className="text-gray-500 block">
+                            % ความชันแนวรับต่อวัน:
+                          </span>
+                          <span
+                            className={`ml-2 ${
+                              tri.debugData.isSupportRising
+                                ? "text-green-400"
+                                : "text-yellow-400"
+                            }`}
+                          >
+                            {tri.debugData.mathNormValleySlope || "-"}
+                            <span className="text-gray-500 ml-1">
+                              (เกณฑ์ความชัน: &gt;{" "}
+                              {tri.debugData.thresholdTrending})
+                            </span>
+                          </span>
+                          <span className="ml-2">
+                            {tri.debugData.isSupportRising
+                              ? "✅ ฐานยก (แรงซื้อหนุน)"
+                              : "❌ ฐานไม่ยก"}
+                          </span>
+                        </li>
+                        <hr className="border-slate-800 my-1" />
+                        <li>
+                          <span className="text-gray-500 block">
+                            สมการการบีบอัดแคบลง (Compression):
+                          </span>
+                          <span className="text-slate-400 ml-2">
+                            {tri.debugData.mathCompression || "-"}
+                          </span>
+                          <span className="ml-2">
+                            {tri.debugData.isCompressing
+                              ? "✅ บีบอัดแคบลง"
+                              : "❌ กรอบกว้างขึ้น"}{" "}
+                            (Ratio: {tri.debugData.compressionRatio})
+                          </span>
+                        </li>
+                        <hr className="border-slate-800 my-1" />
+                        <li>
+                          <span className="text-gray-500 block">
+                            สมการวอลุ่มหดตัว (Volume Drying Up):
+                          </span>
+                          <span className="text-slate-400 ml-2">
+                            {tri.debugData.mathVolume || "-"}
+                          </span>
+                          <span className="ml-2">
+                            {tri.debugData.isVolumeDryingUp
+                              ? "✅ วอลุ่มหดตัว"
+                              : "❌ วอลุ่มไม่ลดลง"}
+                          </span>
+                        </li>
+                      </ul>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-3 gap-3 text-center bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
                     <div>
                       <p className="text-gray-500 text-[10px]">

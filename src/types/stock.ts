@@ -115,6 +115,7 @@ export interface PatternResult {
   distanceToBreakout?: number;
   targetPrice?: number;
   stopLoss?: number;
+  debugData?: any; // For raw math/calculation display
 }
 
 export interface TrendAnalysis {

@@ -14,6 +14,7 @@ interface PatternResult {
   distanceToBreakout?: number; // NEW: % away from breakout
   targetPrice?: number;
   stopLoss?: number;
+  debugData?: any; // For raw math/calculation display
 }
 
 interface TrendAnalysis {
@@ -1170,6 +1171,45 @@ function detectTrianglePatterns(
 
   if (!isCompressing || !isVolumeDryingUp) return null;
 
+  const debugData = {
+    // Raw points
+    p1: { index: p1.index, price: p1.price.toFixed(2) },
+    p2: { index: p2.index, price: p2.price.toFixed(2) },
+    v1: { index: v1.index, price: v1.price.toFixed(2) },
+    v2: { index: v2.index, price: v2.price.toFixed(2) },
+
+    // Slopes Math
+    mathPeakSlope: `(${p2.price.toFixed(2)} - ${p1.price.toFixed(2)}) / (${p2.index} - ${p1.index}) = ${peakSlope.toFixed(4)}`,
+    mathValleySlope: `(${v2.price.toFixed(2)} - ${v1.price.toFixed(2)}) / (${v2.index} - ${v1.index}) = ${valleySlope.toFixed(4)}`,
+
+    // Normalized Slopes Math
+    mathNormPeakSlope: `(${peakSlope.toFixed(4)} / ${p1.price.toFixed(2)}) * 100 = ${(normPeakSlope * 100).toFixed(4)}%`,
+    mathNormValleySlope: `(${valleySlope.toFixed(4)} / ${v1.price.toFixed(2)}) * 100 = ${(normValleySlope * 100).toFixed(4)}%`,
+
+    // Thresholds
+    thresholdFlat: `${(flatThreshold * 100).toFixed(2)}%`,
+    thresholdTrending: `${(trendThreshold * 100).toFixed(2)}%`,
+
+    // Validations
+    isResistanceFlat,
+    isSupportRising,
+    isResistanceFalling,
+    isSupportFlat,
+
+    // Compression Math
+    mathCompression: `(${p2.price.toFixed(2)} - ${v2.price.toFixed(2)}) < (${p1.price.toFixed(2)} - ${v1.price.toFixed(2)}) * 1.1`,
+    compressionRatio: ((p2.price - v2.price) / (p1.price - v1.price)).toFixed(
+      2,
+    ),
+    isCompressing,
+
+    // Volume Math
+    isVolumeDryingUp,
+    firstHalfVol: firstHalfVol.toFixed(0),
+    secondHalfVol: secondHalfVol.toFixed(0),
+    mathVolume: `${secondHalfVol.toFixed(0)} < ${firstHalfVol.toFixed(0)} * 1.05`,
+  };
+
   if (isResistanceFlat && isSupportRising) {
     return {
       name: "Ascending Triangle",
@@ -1183,6 +1223,7 @@ function detectTrianglePatterns(
       distanceToBreakout: ((p2.price - currentPrice) / currentPrice) * 100,
       targetPrice: p2.price + (p2.price - v1.price),
       stopLoss: v2.price * 0.98,
+      debugData,
     };
   } else if (isSupportFlat && isResistanceFalling) {
     return {
@@ -1197,6 +1238,7 @@ function detectTrianglePatterns(
       distanceToBreakout: ((currentPrice - v2.price) / currentPrice) * 100,
       targetPrice: Math.max(v2.price - (p1.price - v2.price), v2.price * 0.8),
       stopLoss: p2.price * 1.02,
+      debugData,
     };
   } else if (isResistanceFalling && isSupportRising) {
     return {
@@ -1210,6 +1252,7 @@ function detectTrianglePatterns(
       breakoutLevel: p2.price, // Upside resistance
       targetPrice: p2.price + (p1.price - v1.price) * 0.5,
       stopLoss: v2.price * 0.98,
+      debugData,
     };
   }
 
