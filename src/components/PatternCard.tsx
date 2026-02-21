@@ -365,16 +365,16 @@ export default function PatternCard({
                         <hr className="border-slate-800 my-1" />
                         <li>
                           <span className="text-gray-500 block">
-                            สมการการบีบอัดแคบลง (Compression):
+                            สมการการบีบแคบลง (Convergence Ratio):
                           </span>
                           <span className="text-slate-400 ml-2">
-                            {tri.debugData.mathCompression || "-"}
+                            {tri.debugData.mathConvergence || "-"}
                           </span>
                           <span className="ml-2">
-                            {tri.debugData.isCompressing
-                              ? "✅ บีบอัดแคบลง"
-                              : "❌ กรอบกว้างขึ้น"}{" "}
-                            (Ratio: {tri.debugData.compressionRatio})
+                            {tri.debugData.isConverging
+                              ? "✅ บีบแคบลง (< 0.85)"
+                              : "❌ ยังไม่บีบ"}{" "}
+                            (Ratio: {tri.debugData.convergenceRatio})
                           </span>
                         </li>
                         <hr className="border-slate-800 my-1" />

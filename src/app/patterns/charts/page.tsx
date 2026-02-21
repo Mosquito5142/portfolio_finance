@@ -447,7 +447,7 @@ export default function TrianglePatternsPage() {
               ) : (
                 <>
                   <span>🔍</span>
-                  Scan Ascending Triangles
+                  Scan Triangle Patterns
                 </>
               )}
             </button>
@@ -466,8 +466,8 @@ export default function TrianglePatternsPage() {
         {!scanning && triangleScans.length > 0 && (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-white mb-6 border-b border-slate-700 pb-2 flex items-center gap-2">
-              🚨 พบ {triangleScans.length} หุ้น ทรงกระทิงกำลังบีบตัว (Ascending
-              Triangle)!
+              🚨 พบ {triangleScans.length} หุ้น ทรงสามเหลี่ยมกำลังบีบตัว
+              (Triangle Patterns)!
             </h2>
 
             {/* TradingView Chart Grid */}
@@ -642,16 +642,16 @@ export default function TrianglePatternsPage() {
                           </li>
                           <li className="col-span-2 my-2 border-t border-slate-800 pt-2">
                             <span className="text-gray-500 block">
-                              สมการการบีบอัดแคบลง (Compression):
+                              สมการการบีบแคบลง (Convergence Ratio):
                             </span>
                             <span className="text-slate-400 ml-2">
-                              {tri.debugData.mathCompression || "-"}
+                              {tri.debugData.mathConvergence || "-"}
                             </span>
                             <span className="ml-2">
-                              {tri.debugData.isCompressing
-                                ? "✅ บีบอัดแคบลง"
-                                : "❌ กรอบกว้างขึ้น"}{" "}
-                              (Ratio: {tri.debugData.compressionRatio})
+                              {tri.debugData.isConverging
+                                ? "✅ บีบแคบลง (< 0.85)"
+                                : "❌ ยังไม่บีบ"}{" "}
+                              (Ratio: {tri.debugData.convergenceRatio})
                             </span>
                           </li>
                           <li className="col-span-2 border-t border-slate-800 pt-2 mt-2">
@@ -738,7 +738,7 @@ export default function TrianglePatternsPage() {
             <div className="text-center py-20 bg-slate-800/50 rounded-xl border border-slate-700/50">
               <div className="text-5xl mb-4">🏜️</div>
               <h3 className="text-xl font-bold text-white mb-2">
-                ไม่พบทรง Ascending Triangle
+                ไม่พบทรงสามเหลี่ยมบีบตัว
               </h3>
               <p className="text-gray-400">
                 สแกนไป {scans.filter((s) => s.status === "done").length} ตัว

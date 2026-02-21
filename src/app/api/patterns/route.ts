@@ -1101,7 +1101,7 @@ function detectTrianglePatterns(
   // Need at least 20 days of data
   if (highs.length < 20 || volumes.length < 20) return null;
 
-  const lookback = Math.min(30, highs.length);
+  const lookback = Math.min(90, highs.length); // Expanded to 90 days (approx 4 months) to catch larger structure
   const recentHighs = highs.slice(-lookback);
   const recentLows = lows.slice(-lookback);
 
@@ -1109,33 +1109,56 @@ function detectTrianglePatterns(
   const peaks: { index: number; price: number }[] = [];
   const valleys: { index: number; price: number }[] = [];
 
-  for (let i = 2; i < recentHighs.length - 2; i++) {
-    if (
-      recentHighs[i] >= recentHighs[i - 1] &&
-      recentHighs[i] >= recentHighs[i - 2] &&
-      recentHighs[i] > recentHighs[i + 1] &&
-      recentHighs[i] > recentHighs[i + 2]
-    ) {
-      peaks.push({ index: i, price: recentHighs[i] });
+  const windowSize = 5; // Lookback/forward of 5 bars (total 11 bars) to find true structural pivots, filtering out noise
+  for (let i = windowSize; i < recentHighs.length - windowSize; i++) {
+    // Check if i is a peak
+    let isPeak = true;
+    for (let j = 1; j <= windowSize; j++) {
+      if (
+        recentHighs[i] < recentHighs[i - j] ||
+        recentHighs[i] <= recentHighs[i + j]
+      ) {
+        isPeak = false;
+        break;
+      }
     }
+    if (isPeak) peaks.push({ index: i, price: recentHighs[i] });
 
-    if (
-      recentLows[i] <= recentLows[i - 1] &&
-      recentLows[i] <= recentLows[i - 2] &&
-      recentLows[i] < recentLows[i + 1] &&
-      recentLows[i] < recentLows[i + 2]
-    ) {
-      valleys.push({ index: i, price: recentLows[i] });
+    let isValley = true;
+    for (let j = 1; j <= windowSize; j++) {
+      if (
+        recentLows[i] > recentLows[i - j] ||
+        recentLows[i] >= recentLows[i + j]
+      ) {
+        isValley = false;
+        break;
+      }
     }
+    if (isValley) valleys.push({ index: i, price: recentLows[i] });
   }
 
   // Need at least 2 peaks and 2 valleys to draw trendlines
   if (peaks.length < 2 || valleys.length < 2) return null;
 
-  const p1 = peaks[peaks.length - 2];
+  // Use the LAST peak/valley, but pick the HIGHEST peak and LOWEST valley BEFORE it to form the major structural trendlines
   const p2 = peaks[peaks.length - 1];
-  const v1 = valleys[valleys.length - 2];
+  let p1 = peaks[0];
+  for (let i = 1; i < peaks.length - 1; i++) {
+    if (peaks[i].price > p1.price) {
+      p1 = peaks[i];
+    }
+  }
+
   const v2 = valleys[valleys.length - 1];
+  let v1 = valleys[0];
+  for (let i = 1; i < valleys.length - 1; i++) {
+    if (valleys[i].price < v1.price) {
+      v1 = valleys[i];
+    }
+  }
+
+  // Ensure reasonable separation
+  if (p2.index - p1.index < 5 || v2.index - v1.index < 5) return null;
 
   // Slopes (price change per day)
   const peakSlope = (p2.price - p1.price) / (p2.index - p1.index || 1);
@@ -1145,31 +1168,80 @@ function detectTrianglePatterns(
   const normPeakSlope = peakSlope / p1.price;
   const normValleySlope = valleySlope / v1.price;
 
-  const flatThreshold = 0.003;
-  const trendThreshold = 0.002;
+  // --- Thresholds per user spec ---
+  const flatThreshold = 0.006; // < 0.60% per day = "flat" (for Ascending/Descending)
+  const trendThreshold = 0.0015; // > 0.15% per day = clear directional trend
 
-  const isResistanceFlat = Math.abs(normPeakSlope) < flatThreshold;
+  const peakSlopePct = Math.abs(normPeakSlope);
+  const valleySlopePct = Math.abs(normValleySlope);
+
+  // --- Convergence (สำคัญมาก!) ---
+  const rangeOld = p1.price - v1.price; // กรอบเดิม
+  const rangeNew = p2.price - v2.price; // กรอบใหม่
+  const convergenceRatio = rangeNew / rangeOld;
+  const isConverging = convergenceRatio < 0.85; // บีบแคบลง > 15%
+
+  // --- Volume (ผ่อนให้ 30%) ---
+  const patternStartIdx = Math.min(p1.index, v1.index);
+  const patternLength = lookback - patternStartIdx;
+
+  let firstHalfVol = 0;
+  let secondHalfVol = 0;
+  let isVolumeDryingUp = false;
+
+  if (patternLength >= 10) {
+    const recentVolumes = volumes.slice(-lookback);
+    const patternVolumes = recentVolumes.slice(patternStartIdx);
+    const halfPattern = Math.floor(patternVolumes.length / 2);
+
+    firstHalfVol =
+      patternVolumes.slice(0, halfPattern).reduce((a, b) => a + b, 0) /
+      halfPattern;
+    secondHalfVol =
+      patternVolumes.slice(halfPattern).reduce((a, b) => a + b, 0) /
+      (patternVolumes.length - halfPattern);
+
+    // Volume tolerance ×1.30 (ยอมให้สูงกว่าเดิมได้ 30%)
+    isVolumeDryingUp = secondHalfVol < firstHalfVol * 1.3;
+  }
+
+  // --- Type Detection per user pseudocode ---
+  let triangleType: "Ascending" | "Descending" | "Symmetrical" | null = null;
+
+  if (peakSlopePct < flatThreshold && normValleySlope > trendThreshold) {
+    // ยอดแบน + ฐานยก = Ascending
+    triangleType = "Ascending";
+  } else if (
+    valleySlopePct < flatThreshold &&
+    normPeakSlope < -trendThreshold
+  ) {
+    // ฐานแบน + ยอดลง = Descending
+    triangleType = "Descending";
+  } else if (p2.price < p1.price && v2.price > v1.price) {
+    // ยอดกดลง + ฐานยก = Symmetrical (จับ TMDX ตรงนี้!)
+    triangleType = "Symmetrical";
+  }
+
+  if (!triangleType) return null;
+
+  // --- Filter 1: ราคาปัจจุบันต้องอยู่ภายในสามเหลี่ยม ---
+  // ถ้าราคาหลุดต่ำกว่า v2 ไป > 5% = สามเหลี่ยมหัก / Breakdown แล้ว (จับ SOFI)
+  if (currentPrice < v2.price * 0.95) return null;
+
+  // --- Filter 2: ระยะห่างจาก Breakout ต้องไม่เกิน 20% ---
+  // ถ้า Breakout อยู่ไกลเกิน 20% = ไม่ Actionable (จับ IREN)
+  const distanceToBreakoutPct =
+    ((p2.price - currentPrice) / currentPrice) * 100;
+  if (distanceToBreakoutPct > 20) return null;
+
+  // --- Gate: ต้องบีบแคบลง (Convergence) หรือ Volume หดตัว ---
+  if (!isConverging && !isVolumeDryingUp) return null;
+
+  // Backward-compat booleans for debugData display
+  const isResistanceFlat = peakSlopePct < flatThreshold;
   const isResistanceFalling = normPeakSlope < -trendThreshold;
-  const isSupportFlat = Math.abs(normValleySlope) < flatThreshold;
+  const isSupportFlat = valleySlopePct < flatThreshold;
   const isSupportRising = normValleySlope > trendThreshold;
-
-  // Must be compressing
-  const isCompressing = p2.price - v2.price < (p1.price - v1.price) * 1.1; // allow slight tolerance
-
-  // Check if volume is drying up (compression)
-  const recentVolumes = volumes.slice(-lookback);
-  const firstHalfVol =
-    recentVolumes
-      .slice(0, Math.floor(lookback / 2))
-      .reduce((a, b) => a + b, 0) / Math.floor(lookback / 2);
-  const secondHalfVol =
-    recentVolumes.slice(Math.floor(lookback / 2)).reduce((a, b) => a + b, 0) /
-    Math.ceil(lookback / 2);
-
-  // Volume in second half should be less than or roughly equal to first half
-  const isVolumeDryingUp = secondHalfVol < firstHalfVol * 1.05; // 5% tolerance
-
-  if (!isCompressing || !isVolumeDryingUp) return null;
 
   const debugData = {
     // Raw points
@@ -1196,21 +1268,22 @@ function detectTrianglePatterns(
     isResistanceFalling,
     isSupportFlat,
 
-    // Compression Math
-    mathCompression: `(${p2.price.toFixed(2)} - ${v2.price.toFixed(2)}) < (${p1.price.toFixed(2)} - ${v1.price.toFixed(2)}) * 1.1`,
-    compressionRatio: ((p2.price - v2.price) / (p1.price - v1.price)).toFixed(
-      2,
-    ),
-    isCompressing,
+    // Convergence Math (NEW)
+    mathConvergence: `${rangeNew.toFixed(2)} / ${rangeOld.toFixed(2)} = ${convergenceRatio.toFixed(4)}`,
+    convergenceRatio: convergenceRatio.toFixed(2),
+    isConverging,
 
     // Volume Math
     isVolumeDryingUp,
     firstHalfVol: firstHalfVol.toFixed(0),
     secondHalfVol: secondHalfVol.toFixed(0),
-    mathVolume: `${secondHalfVol.toFixed(0)} < ${firstHalfVol.toFixed(0)} * 1.05`,
+    mathVolume: `${secondHalfVol.toFixed(0)} < ${firstHalfVol.toFixed(0)} * 1.30`,
+
+    // Detected type
+    triangleType,
   };
 
-  if (isResistanceFlat && isSupportRising) {
+  if (triangleType === "Ascending") {
     return {
       name: "Ascending Triangle",
       type: "continuation",
@@ -1225,7 +1298,7 @@ function detectTrianglePatterns(
       stopLoss: v2.price * 0.98,
       debugData,
     };
-  } else if (isSupportFlat && isResistanceFalling) {
+  } else if (triangleType === "Descending") {
     return {
       name: "Descending Triangle",
       type: "continuation",
@@ -1240,7 +1313,7 @@ function detectTrianglePatterns(
       stopLoss: p2.price * 1.02,
       debugData,
     };
-  } else if (isResistanceFalling && isSupportRising) {
+  } else if (triangleType === "Symmetrical") {
     return {
       name: "Symmetrical Triangle",
       type: "continuation",
@@ -1249,7 +1322,7 @@ function detectTrianglePatterns(
       confidence: 65,
       description: `บีบอัดสปริง (ยอดต่ำลง ฐานยกขึ้น) = รอระเบิดเลือกทาง ⚖️`,
       entryZone: { low: v2.price, high: p2.price },
-      breakoutLevel: p2.price, // Upside resistance
+      breakoutLevel: p2.price,
       targetPrice: p2.price + (p1.price - v1.price) * 0.5,
       stopLoss: v2.price * 0.98,
       debugData,
