@@ -66,6 +66,11 @@ export default function TrianglePatternsPage() {
     }));
   };
 
+  // Sort State
+  const [sortBy, setSortBy] = useState<
+    "distance" | "convergence" | "confidence"
+  >("distance");
+
   useEffect(() => {
     setMounted(true);
     const initialScans: StockScan[] = UNIQUE_SYMBOLS.map((symbol) => ({
@@ -463,274 +468,409 @@ export default function TrianglePatternsPage() {
         </div>
 
         {/* Results */}
-        {!scanning && triangleScans.length > 0 && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-white mb-6 border-b border-slate-700 pb-2 flex items-center gap-2">
-              🚨 พบ {triangleScans.length} หุ้น ทรงสามเหลี่ยมกำลังบีบตัว
-              (Triangle Patterns)!
-            </h2>
+        {!scanning &&
+          triangleScans.length > 0 &&
+          (() => {
+            // --- Helpers for grouping & sorting ---
+            const getTriPattern = (s: StockScan) =>
+              s.data?.patterns.find((p) => p.name.includes("Triangle"));
 
-            {/* TradingView Chart Grid */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-              {triangleScans.map((s) => {
-                // Determine if there is a detected triangle or just take the first pattern/none
-                const tri = s.data?.patterns.find((p) =>
-                  p.name.includes("Triangle"),
-                );
+            const getDistance = (s: StockScan) => {
+              const tri = getTriPattern(s);
+              if (!tri?.breakoutLevel || !s.data?.currentPrice) return 999;
+              return (
+                ((tri.breakoutLevel - s.data.currentPrice) /
+                  s.data.currentPrice) *
+                100
+              );
+            };
 
-                return (
-                  <div
-                    key={s.symbol}
-                    className="bg-slate-800/80 rounded-2xl border border-slate-700/50 overflow-hidden shadow-2xl flex flex-col"
-                  >
-                    {/* Header */}
-                    <div className="p-4 border-b border-slate-700/50 flex justify-between items-center bg-slate-900/50">
-                      <div>
-                        <h3 className="text-2xl font-bold text-white flex items-center gap-3">
-                          {s.symbol}
-                          {tri && (
-                            <span
-                              className={`text-xs px-2 py-1 rounded border ${
-                                tri.signal === "bullish"
-                                  ? "bg-green-900/40 text-green-400 border-green-500/50"
-                                  : tri.signal === "bearish"
-                                    ? "bg-red-900/40 text-red-400 border-red-500/50"
-                                    : "bg-gray-800 text-gray-400 border-gray-600"
-                              }`}
-                            >
-                              {tri.name}
-                            </span>
-                          )}
-                          {!tri &&
-                            s.data?.patterns &&
-                            s.data.patterns.length > 0 && (
-                              <span className="text-xs px-2 py-1 rounded border bg-blue-900/40 text-blue-400 border-blue-500/50">
-                                {s.data.patterns[0].name}
-                              </span>
+            const getConvergence = (s: StockScan) => {
+              const tri = getTriPattern(s);
+              return parseFloat(tri?.debugData?.convergenceRatio || "999");
+            };
+
+            const getConfidence = (s: StockScan) => {
+              const tri = getTriPattern(s);
+              return tri?.confidence || 0;
+            };
+
+            // Sort
+            const sorted = [...triangleScans].sort((a, b) => {
+              if (sortBy === "distance") return getDistance(a) - getDistance(b);
+              if (sortBy === "convergence")
+                return getConvergence(a) - getConvergence(b);
+              return getConfidence(b) - getConfidence(a);
+            });
+
+            // Group
+            const ascending = sorted.filter(
+              (s) => getTriPattern(s)?.name === "Ascending Triangle",
+            );
+            const symmetrical = sorted.filter(
+              (s) => getTriPattern(s)?.name === "Symmetrical Triangle",
+            );
+            const descending = sorted.filter(
+              (s) => getTriPattern(s)?.name === "Descending Triangle",
+            );
+
+            const groups = [
+              {
+                label: "📈 Ascending Triangle",
+                color: "green",
+                items: ascending,
+              },
+              {
+                label: "⚖️ Symmetrical Triangle",
+                color: "yellow",
+                items: symmetrical,
+              },
+              {
+                label: "📉 Descending Triangle",
+                color: "red",
+                items: descending,
+              },
+            ].filter((g) => g.items.length > 0);
+
+            return (
+              <div className="space-y-6">
+                {/* Summary Stats */}
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                    🚨 พบ {triangleScans.length} หุ้น
+                  </h2>
+                  {ascending.length > 0 && (
+                    <span className="bg-green-900/40 text-green-400 border border-green-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                      📈 Ascending {ascending.length}
+                    </span>
+                  )}
+                  {symmetrical.length > 0 && (
+                    <span className="bg-yellow-900/40 text-yellow-400 border border-yellow-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                      ⚖️ Symmetrical {symmetrical.length}
+                    </span>
+                  )}
+                  {descending.length > 0 && (
+                    <span className="bg-red-900/40 text-red-400 border border-red-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                      📉 Descending {descending.length}
+                    </span>
+                  )}
+                </div>
+
+                {/* Sort Toolbar */}
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-gray-500 font-bold">จัดเรียง:</span>
+                  {[
+                    { key: "distance" as const, label: "🎯 ใกล้ Breakout สุด" },
+                    { key: "convergence" as const, label: "📐 บีบแคบสุด" },
+                    { key: "confidence" as const, label: "⭐ มั่นใจสุด" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setSortBy(opt.key)}
+                      className={`px-3 py-1.5 rounded-lg border transition-all ${
+                        sortBy === opt.key
+                          ? "bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-500/25"
+                          : "bg-slate-800 text-gray-400 border-slate-700 hover:bg-slate-700"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Grouped Sections */}
+                {groups.map((group) => (
+                  <div key={group.label}>
+                    <h3
+                      className={`text-lg font-bold mb-4 pb-2 border-b border-slate-700/50 text-${group.color}-400`}
+                    >
+                      {group.label} ({group.items.length})
+                    </h3>
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
+                      {group.items.map((s) => {
+                        const tri = getTriPattern(s);
+                        const dist = getDistance(s);
+
+                        return (
+                          <div
+                            key={s.symbol}
+                            className="bg-slate-800/80 rounded-2xl border border-slate-700/50 overflow-hidden shadow-2xl flex flex-col"
+                          >
+                            {/* Header */}
+                            <div className="p-4 border-b border-slate-700/50 flex justify-between items-center bg-slate-900/50">
+                              <div>
+                                <h3 className="text-2xl font-bold text-white flex items-center gap-3">
+                                  {s.symbol}
+                                  {tri && (
+                                    <span
+                                      className={`text-xs px-2 py-1 rounded border ${
+                                        tri.signal === "bullish"
+                                          ? "bg-green-900/40 text-green-400 border-green-500/50"
+                                          : tri.signal === "bearish"
+                                            ? "bg-red-900/40 text-red-400 border-red-500/50"
+                                            : "bg-gray-800 text-gray-400 border-gray-600"
+                                      }`}
+                                    >
+                                      {tri.name}
+                                    </span>
+                                  )}
+                                  {!tri &&
+                                    s.data?.patterns &&
+                                    s.data.patterns.length > 0 && (
+                                      <span className="text-xs px-2 py-1 rounded border bg-blue-900/40 text-blue-400 border-blue-500/50">
+                                        {s.data.patterns[0].name}
+                                      </span>
+                                    )}
+                                  {tri?.debugData && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        toggleDebug(s.symbol);
+                                      }}
+                                      className="text-xs bg-slate-800 hover:bg-slate-700 text-gray-400 px-3 py-1.5 rounded border border-slate-600 transition-colors ml-auto flex items-center gap-1"
+                                    >
+                                      🧮{" "}
+                                      {debugVisible[s.symbol]
+                                        ? "ซ่อนสูตร"
+                                        : "ดูสูตรคำนวณ"}
+                                    </button>
+                                  )}
+                                </h3>
+                                {tri && (
+                                  <p className="text-sm text-gray-400 mt-1">
+                                    {tri.description}
+                                  </p>
+                                )}
+                                {!tri &&
+                                  s.data?.patterns &&
+                                  s.data.patterns.length > 0 && (
+                                    <p className="text-sm text-gray-400 mt-1">
+                                      {s.data.patterns[0].description}
+                                    </p>
+                                  )}
+                              </div>
+                              <div className="text-right">
+                                <p className="text-2xl font-bold text-white">
+                                  ${s.data?.currentPrice?.toFixed(2)}
+                                </p>
+                                <p
+                                  className={`text-sm font-bold ${s.data?.priceChange && s.data.priceChange > 0 ? "text-green-400" : "text-red-400"}`}
+                                >
+                                  {s.data?.priceChange && s.data.priceChange > 0
+                                    ? "+"
+                                    : ""}
+                                  {s.data?.priceChangePercent?.toFixed(2)}%
+                                </p>
+                                {/* Distance to Breakout Badge */}
+                                {dist < 999 && (
+                                  <span
+                                    className={`inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                      dist <= 5
+                                        ? "bg-orange-500/30 text-orange-300 border border-orange-500/50 animate-pulse"
+                                        : dist <= 10
+                                          ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/40"
+                                          : "bg-slate-700 text-gray-400 border border-slate-600"
+                                    }`}
+                                  >
+                                    {dist <= 5
+                                      ? "🔥"
+                                      : dist <= 10
+                                        ? "⏳"
+                                        : "📏"}{" "}
+                                    {dist.toFixed(1)}% to Breakout
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Debug Data Panel */}
+                            {debugVisible[s.symbol] && tri?.debugData && (
+                              <div className="p-4 bg-slate-950 border-b border-slate-700/50 text-left">
+                                <p className="text-sm font-bold text-blue-400 mb-2">
+                                  🧮 ค่าที่ใช้ประมวลผล (Internal Logic)
+                                </p>
+                                <ul className="text-xs text-gray-300 font-mono space-y-1 grid grid-cols-2 gap-x-4">
+                                  <li>
+                                    <span className="text-gray-500">
+                                      ยอดอดีต (p1):
+                                    </span>{" "}
+                                    ${tri.debugData.p1?.price}
+                                  </li>
+                                  <li>
+                                    <span className="text-gray-500">
+                                      ยอดล่าสุด (p2):
+                                    </span>{" "}
+                                    ${tri.debugData.p2?.price}
+                                  </li>
+                                  <li>
+                                    <span className="text-gray-500">
+                                      ฐานอดีต (v1):
+                                    </span>{" "}
+                                    ${tri.debugData.v1?.price}
+                                  </li>
+                                  <li>
+                                    <span className="text-gray-500">
+                                      ฐานล่าสุด (v2):
+                                    </span>{" "}
+                                    ${tri.debugData.v2?.price}
+                                  </li>
+                                  <li className="col-span-2 my-2 border-t border-slate-800 pt-2">
+                                    <span className="text-gray-500 block">
+                                      สมการความชันแนวต้าน (Peak Slope):
+                                    </span>
+                                    <span className="text-slate-400 ml-2">
+                                      {tri.debugData.mathPeakSlope || "-"}
+                                    </span>
+                                  </li>
+                                  <li className="col-span-2">
+                                    <span className="text-gray-500 block">
+                                      % ความชันแนวต้านต่อวัน:
+                                    </span>
+                                    <span
+                                      className={`ml-2 ${
+                                        tri.debugData.isResistanceFlat
+                                          ? "text-green-400"
+                                          : "text-red-400"
+                                      }`}
+                                    >
+                                      {tri.debugData.mathNormPeakSlope || "-"}
+                                      <span className="text-gray-500 ml-1">
+                                        (เกณฑ์ความแบน: &lt;{" "}
+                                        {tri.debugData.thresholdFlat})
+                                      </span>
+                                    </span>
+                                    <span className="ml-2">
+                                      {tri.debugData.isResistanceFlat
+                                        ? "✅ ต้านแข็ง"
+                                        : "❌ ต้านไม่แข็ง"}
+                                    </span>
+                                  </li>
+                                  <li className="col-span-2 my-2 border-t border-slate-800 pt-2">
+                                    <span className="text-gray-500 block">
+                                      สมการความชันแนวรับ (Valley Slope):
+                                    </span>
+                                    <span className="text-slate-400 ml-2">
+                                      {tri.debugData.mathValleySlope || "-"}
+                                    </span>
+                                  </li>
+                                  <li className="col-span-2">
+                                    <span className="text-gray-500 block">
+                                      % ความชันแนวรับต่อวัน:
+                                    </span>
+                                    <span
+                                      className={`ml-2 ${
+                                        tri.debugData.isSupportRising
+                                          ? "text-green-400"
+                                          : "text-yellow-400"
+                                      }`}
+                                    >
+                                      {tri.debugData.mathNormValleySlope || "-"}
+                                      <span className="text-gray-500 ml-1">
+                                        (เกณฑ์ความชัน: &gt;{" "}
+                                        {tri.debugData.thresholdTrending})
+                                      </span>
+                                    </span>
+                                    <span className="ml-2">
+                                      {tri.debugData.isSupportRising
+                                        ? "✅ ฐานยก (แรงซื้อหนุน)"
+                                        : "❌ ฐานไม่ยก"}
+                                    </span>
+                                  </li>
+                                  <li className="col-span-2 my-2 border-t border-slate-800 pt-2">
+                                    <span className="text-gray-500 block">
+                                      สมการการบีบแคบลง (Convergence Ratio):
+                                    </span>
+                                    <span className="text-slate-400 ml-2">
+                                      {tri.debugData.mathConvergence || "-"}
+                                    </span>
+                                    <span className="ml-2">
+                                      {tri.debugData.isConverging
+                                        ? "✅ บีบแคบลง (< 0.85)"
+                                        : "❌ ยังไม่บีบ"}{" "}
+                                      (Ratio: {tri.debugData.convergenceRatio})
+                                    </span>
+                                  </li>
+                                  <li className="col-span-2 border-t border-slate-800 pt-2 mt-2">
+                                    <span className="text-gray-500 block">
+                                      สมการวอลุ่มหดตัว (Volume Drying Up):
+                                    </span>
+                                    <span className="text-slate-400 ml-2">
+                                      {tri.debugData.mathVolume || "-"}
+                                    </span>
+                                    <span className="ml-2">
+                                      {tri.debugData.isVolumeDryingUp
+                                        ? "✅ วอลุ่มหดตัว"
+                                        : "❌ วอลุ่มไม่ลดลง"}
+                                    </span>
+                                  </li>
+                                </ul>
+                              </div>
                             )}
-                          {tri?.debugData && (
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                toggleDebug(s.symbol);
-                              }}
-                              className="text-xs bg-slate-800 hover:bg-slate-700 text-gray-400 px-3 py-1.5 rounded border border-slate-600 transition-colors ml-auto flex items-center gap-1"
-                            >
-                              🧮{" "}
-                              {debugVisible[s.symbol]
-                                ? "ซ่อนสูตร"
-                                : "ดูสูตรคำนวณ"}
-                            </button>
-                          )}
-                        </h3>
-                        {tri && (
-                          <p className="text-sm text-gray-400 mt-1">
-                            {tri.description}
-                          </p>
-                        )}
-                        {!tri &&
-                          s.data?.patterns &&
-                          s.data.patterns.length > 0 && (
-                            <p className="text-sm text-gray-400 mt-1">
-                              {s.data.patterns[0].description}
-                            </p>
-                          )}
-                      </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-white">
-                          ${s.data?.currentPrice?.toFixed(2)}
-                        </p>
-                        <p
-                          className={`text-sm font-bold ${s.data?.priceChange && s.data.priceChange > 0 ? "text-green-400" : "text-red-400"}`}
-                        >
-                          {s.data?.priceChange && s.data.priceChange > 0
-                            ? "+"
-                            : ""}
-                          {s.data?.priceChangePercent?.toFixed(2)}%
-                        </p>
-                      </div>
+
+                            {/* TradingView Chart Frame */}
+                            <div className="h-[450px] w-full bg-slate-900 relative">
+                              <iframe
+                                src={`https://s.tradingview.com/widgetembed/?symbol=${s.symbol}&interval=D&hidesidetoolbar=1&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=%5B%5D&theme=dark&style=1&timezone=Asia%2FBangkok&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en`}
+                                width="100%"
+                                height="100%"
+                                frameBorder="0"
+                                allowFullScreen
+                              ></iframe>
+                            </div>
+
+                            {/* Footer Stats - Only show if Breakout / Target data exists for the detected pattern */}
+                            {(tri ||
+                              (s.data?.patterns &&
+                                s.data.patterns.length > 0 &&
+                                s.data.patterns[0].breakoutLevel)) && (
+                              <div className="p-4 bg-slate-900/80 grid grid-cols-3 gap-4 text-center border-t border-slate-700/50 mt-auto">
+                                <div>
+                                  <p className="text-gray-500 text-xs">
+                                    Breakout Level (ต้าน)
+                                  </p>
+                                  <p className="text-white font-bold text-lg">
+                                    $
+                                    {(
+                                      tri?.breakoutLevel ||
+                                      s.data?.patterns[0].breakoutLevel
+                                    )?.toFixed(2) || "-"}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500 text-xs text-green-400/80">
+                                    Profit Target
+                                  </p>
+                                  <p className="text-green-400 font-bold text-lg">
+                                    $
+                                    {(
+                                      tri?.targetPrice ||
+                                      s.data?.patterns[0].targetPrice
+                                    )?.toFixed(2) || "-"}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-gray-500 text-xs text-red-400/80">
+                                    Cut Loss
+                                  </p>
+                                  <p className="text-red-400 font-bold text-lg">
+                                    $
+                                    {(
+                                      tri?.stopLoss ||
+                                      s.data?.patterns[0].stopLoss
+                                    )?.toFixed(2) || "-"}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-
-                    {/* Debug Data Panel */}
-                    {debugVisible[s.symbol] && tri?.debugData && (
-                      <div className="p-4 bg-slate-950 border-b border-slate-700/50 text-left">
-                        <p className="text-sm font-bold text-blue-400 mb-2">
-                          🧮 ค่าที่ใช้ประมวลผล (Internal Logic)
-                        </p>
-                        <ul className="text-xs text-gray-300 font-mono space-y-1 grid grid-cols-2 gap-x-4">
-                          <li>
-                            <span className="text-gray-500">ยอดอดีต (p1):</span>{" "}
-                            ${tri.debugData.p1?.price}
-                          </li>
-                          <li>
-                            <span className="text-gray-500">
-                              ยอดล่าสุด (p2):
-                            </span>{" "}
-                            ${tri.debugData.p2?.price}
-                          </li>
-                          <li>
-                            <span className="text-gray-500">ฐานอดีต (v1):</span>{" "}
-                            ${tri.debugData.v1?.price}
-                          </li>
-                          <li>
-                            <span className="text-gray-500">
-                              ฐานล่าสุด (v2):
-                            </span>{" "}
-                            ${tri.debugData.v2?.price}
-                          </li>
-                          <li className="col-span-2 my-2 border-t border-slate-800 pt-2">
-                            <span className="text-gray-500 block">
-                              สมการความชันแนวต้าน (Peak Slope):
-                            </span>
-                            <span className="text-slate-400 ml-2">
-                              {tri.debugData.mathPeakSlope || "-"}
-                            </span>
-                          </li>
-                          <li className="col-span-2">
-                            <span className="text-gray-500 block">
-                              % ความชันแนวต้านต่อวัน:
-                            </span>
-                            <span
-                              className={`ml-2 ${
-                                tri.debugData.isResistanceFlat
-                                  ? "text-green-400"
-                                  : "text-red-400"
-                              }`}
-                            >
-                              {tri.debugData.mathNormPeakSlope || "-"}
-                              <span className="text-gray-500 ml-1">
-                                (เกณฑ์ความแบน: &lt;{" "}
-                                {tri.debugData.thresholdFlat})
-                              </span>
-                            </span>
-                            <span className="ml-2">
-                              {tri.debugData.isResistanceFlat
-                                ? "✅ ต้านแข็ง"
-                                : "❌ ต้านไม่แข็ง"}
-                            </span>
-                          </li>
-                          <li className="col-span-2 my-2 border-t border-slate-800 pt-2">
-                            <span className="text-gray-500 block">
-                              สมการความชันแนวรับ (Valley Slope):
-                            </span>
-                            <span className="text-slate-400 ml-2">
-                              {tri.debugData.mathValleySlope || "-"}
-                            </span>
-                          </li>
-                          <li className="col-span-2">
-                            <span className="text-gray-500 block">
-                              % ความชันแนวรับต่อวัน:
-                            </span>
-                            <span
-                              className={`ml-2 ${
-                                tri.debugData.isSupportRising
-                                  ? "text-green-400"
-                                  : "text-yellow-400"
-                              }`}
-                            >
-                              {tri.debugData.mathNormValleySlope || "-"}
-                              <span className="text-gray-500 ml-1">
-                                (เกณฑ์ความชัน: &gt;{" "}
-                                {tri.debugData.thresholdTrending})
-                              </span>
-                            </span>
-                            <span className="ml-2">
-                              {tri.debugData.isSupportRising
-                                ? "✅ ฐานยก (แรงซื้อหนุน)"
-                                : "❌ ฐานไม่ยก"}
-                            </span>
-                          </li>
-                          <li className="col-span-2 my-2 border-t border-slate-800 pt-2">
-                            <span className="text-gray-500 block">
-                              สมการการบีบแคบลง (Convergence Ratio):
-                            </span>
-                            <span className="text-slate-400 ml-2">
-                              {tri.debugData.mathConvergence || "-"}
-                            </span>
-                            <span className="ml-2">
-                              {tri.debugData.isConverging
-                                ? "✅ บีบแคบลง (< 0.85)"
-                                : "❌ ยังไม่บีบ"}{" "}
-                              (Ratio: {tri.debugData.convergenceRatio})
-                            </span>
-                          </li>
-                          <li className="col-span-2 border-t border-slate-800 pt-2 mt-2">
-                            <span className="text-gray-500 block">
-                              สมการวอลุ่มหดตัว (Volume Drying Up):
-                            </span>
-                            <span className="text-slate-400 ml-2">
-                              {tri.debugData.mathVolume || "-"}
-                            </span>
-                            <span className="ml-2">
-                              {tri.debugData.isVolumeDryingUp
-                                ? "✅ วอลุ่มหดตัว"
-                                : "❌ วอลุ่มไม่ลดลง"}
-                            </span>
-                          </li>
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* TradingView Chart Frame */}
-                    <div className="h-[450px] w-full bg-slate-900 relative">
-                      <iframe
-                        src={`https://s.tradingview.com/widgetembed/?symbol=${s.symbol}&interval=D&hidesidetoolbar=1&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=%5B%5D&theme=dark&style=1&timezone=Asia%2FBangkok&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en`}
-                        width="100%"
-                        height="100%"
-                        frameBorder="0"
-                        allowFullScreen
-                      ></iframe>
-                    </div>
-
-                    {/* Footer Stats - Only show if Breakout / Target data exists for the detected pattern */}
-                    {(tri ||
-                      (s.data?.patterns &&
-                        s.data.patterns.length > 0 &&
-                        s.data.patterns[0].breakoutLevel)) && (
-                      <div className="p-4 bg-slate-900/80 grid grid-cols-3 gap-4 text-center border-t border-slate-700/50 mt-auto">
-                        <div>
-                          <p className="text-gray-500 text-xs">
-                            Breakout Level (ต้าน)
-                          </p>
-                          <p className="text-white font-bold text-lg">
-                            $
-                            {(
-                              tri?.breakoutLevel ||
-                              s.data?.patterns[0].breakoutLevel
-                            )?.toFixed(2) || "-"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500 text-xs text-green-400/80">
-                            Profit Target
-                          </p>
-                          <p className="text-green-400 font-bold text-lg">
-                            $
-                            {(
-                              tri?.targetPrice ||
-                              s.data?.patterns[0].targetPrice
-                            )?.toFixed(2) || "-"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500 text-xs text-red-400/80">
-                            Cut Loss
-                          </p>
-                          <p className="text-red-400 font-bold text-lg">
-                            $
-                            {(
-                              tri?.stopLoss || s.data?.patterns[0].stopLoss
-                            )?.toFixed(2) || "-"}
-                          </p>
-                        </div>
-                      </div>
-                    )}
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                ))}
+              </div>
+            );
+          })()}
 
         {!scanning &&
           scans.filter((s) => s.status === "done").length > 0 &&
