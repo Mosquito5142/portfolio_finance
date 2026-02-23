@@ -94,6 +94,18 @@ export const TIER_1_ENERGY_RESOURCES = [
   "APLD", // AI Data Center (Applied Digital)
 ];
 
+// 🌟 กลุ่ม Alpha Picks (คัดกรองจาก Quant Rating ระดับ Strong Buy) 🌟
+export const ALPHA_PICKS_WATCHLIST = [
+  "APP", // AppLovin (AI Software & AdTech)
+  "POWL", // Powell Industries (Electrical Equipment)
+  "CLS", // Celestica (Electronics Manufacturing for AI/Cloud)
+  "MOD", // Modine Manufacturing (Thermal Management / Data Center Cooling)
+  "SAIA", // Saia Inc. (Trucking & Logistics)
+  "STRL", // Sterling Infrastructure (E-Infrastructure & Data Center Building)
+  "FTNT", // Fortinet (Cybersecurity)
+  "UBER", // Uber Technologies (Mobility & Delivery)
+];
+
 // กลุ่มเก็งกำไรจัดจ้าน (Speculative / Drones / Small Cap - เหวี่ยงแรง ต้องคัทลอสไว)
 export const TIER_2_SPECULATIVE = [
   "JMIA", // E-commerce (Africa)
@@ -115,6 +127,7 @@ export const UNIQUE_SYMBOLS = Array.from(
     ...TIER_1_GROWTH_TECH,
     ...TIER_1_HEALTH_BIO,
     ...TIER_1_ENERGY_RESOURCES,
+    ...ALPHA_PICKS_WATCHLIST, // <-- เพิ่มเข้ามารวมในเรดาร์สแกน
     ...TIER_2_SPECULATIVE,
   ]),
 );
@@ -126,7 +139,8 @@ export const isTier1 = (symbol: string) =>
   TIER_1_AI_CLOUD.includes(symbol) ||
   TIER_1_GROWTH_TECH.includes(symbol) ||
   TIER_1_HEALTH_BIO.includes(symbol) ||
-  TIER_1_ENERGY_RESOURCES.includes(symbol);
+  TIER_1_ENERGY_RESOURCES.includes(symbol) ||
+  ALPHA_PICKS_WATCHLIST.includes(symbol); // <-- ให้สิทธิ์หุ้น Alpha Picks อยู่ใน Tier 1
 
 // ฟังก์ชันเช็คว่าเป็น Tier 2 (เก็งกำไรสูงมาก / เหวี่ยงแรง)
 export const isTier2 = (symbol: string) => TIER_2_SPECULATIVE.includes(symbol);
@@ -213,6 +227,16 @@ export const STOCK_DETAILS: Record<string, string> = {
   CIFR: "Cipher Mining - เหมือง Bitcoin ระดับอุตสาหกรรมในสหรัฐฯ",
   WULF: "TeraWulf - เหมือง Bitcoin พลังงานนิวเคลียร์ (Zero-Carbon)",
   APLD: "Applied Digital - ให้บริการศูนย์ข้อมูล (Data Center) สำหรับงาน AI โดยเฉพาะ",
+
+  // 🌟 ALPHA PICKS
+  APP: "AppLovin - ซอฟต์แวร์ AI โฆษณาและสร้างรายได้จากแอปพลิเคชัน (Alpha Picks ท็อปฟอร์ม)",
+  POWL: "Powell Industries - ผู้ผลิตอุปกรณ์ควบคุมไฟฟ้าและสวิตช์เกียร์สำหรับอุตสาหกรรม",
+  CLS: "Celestica - รับจ้างผลิตชิ้นส่วนอิเล็กทรอนิกส์คุณภาพสูง (โซลูชันด้าน AI และ Cloud)",
+  MOD: "Modine Manufacturing - ระบบจัดการความร้อน (Cooling) ที่สำคัญมากสำหรับ Data Center",
+  SAIA: "Saia Inc. - บริษัทขนส่งลอจิสติกส์รายใหญ่ (ผลงานชนะตลาดต่อเนื่อง)",
+  STRL: "Sterling Infrastructure - ก่อสร้างโครงสร้างพื้นฐาน (E-Infrastructure และ Data Center)",
+  FTNT: "Fortinet - ผู้นำระดับโลกด้านความปลอดภัยทางไซเบอร์ (Cybersecurity)",
+  UBER: "Uber - แพลตฟอร์มเรียกรถและส่งอาหารที่ทำกำไรและกระแสเงินสดได้อย่างแข็งแกร่ง",
 
   // SPECULATIVE
   JMIA: "Jumia - แพลตฟอร์มอีคอมเมิร์ซที่ใหญ่ที่สุดในทวีปแอฟริกา (Amazon of Africa)",

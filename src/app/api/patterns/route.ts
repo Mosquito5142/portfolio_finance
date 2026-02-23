@@ -1332,6 +1332,277 @@ function detectTrianglePatterns(
   return null;
 }
 
+// ==========================================
+// NEW ADVANCED PATTERNS (Bull Flag, Double Bottom, VCP, Cup & Handle)
+// ==========================================
+function detectAdvancedPatterns(
+  bars: any[],
+  currentPrice: number,
+  trend: any,
+): PatternResult[] {
+  const patterns: PatternResult[] = [];
+  if (!bars || bars.length < 90) return patterns;
+
+  // 1. Bull Flag (ธงกระทิง)
+  const bullFlag = detectBullFlag(bars, currentPrice, trend);
+  if (bullFlag) patterns.push(bullFlag);
+
+  // 2. Double Bottom (ทรง W)
+  const doubleBottom = detectDoubleBottom(bars, currentPrice);
+  if (doubleBottom) patterns.push(doubleBottom);
+
+  // 3. VCP (Volatility Contraction Pattern)
+  const vcp = detectVCP(bars, currentPrice, trend);
+  if (vcp) patterns.push(vcp);
+
+  // 4. Cup and Handle (ถ้วยและหูถ้วย)
+  const cupAndHandle = detectCupAndHandle(bars, currentPrice);
+  if (cupAndHandle) patterns.push(cupAndHandle);
+
+  return patterns;
+}
+
+function detectBullFlag(
+  bars: any[],
+  currentPrice: number,
+  trend: any,
+): PatternResult | null {
+  // Logic: Sharp run-up (pole) followed by a tight declining channel (flag).
+  // Need at least 30 days of context
+  const lookback = bars.slice(-30);
+  if (lookback.length < 30) return null;
+
+  // 1. Find the highest peak in the last 20 days (the top of the flagpole)
+  let peakPrice = 0;
+  let peakIndex = 0;
+  for (let i = 0; i < lookback.length - 3; i++) {
+    if (lookback[i].high > peakPrice) {
+      peakPrice = lookback[i].high;
+      peakIndex = i;
+    }
+  }
+
+  // 2. The pole must be a strong move up PRIOR to the peak
+  // e.g. from lookback[0] to the peak, must be >= 15% gain
+  const basePrice = lookback[0].low;
+  const poleHeight = (peakPrice - basePrice) / basePrice;
+  if (poleHeight < 0.15) return null; // Not a strong enough pole
+
+  // 3. The flag is the consolidation AFTER the peak
+  const flagBars = lookback.slice(peakIndex + 1);
+  if (flagBars.length < 4 || flagBars.length > 15) return null; // Flag too short or too long
+
+  // 4. Flag logic: Highs should be generally declining or flat, Lows declining or flat
+  let isConsolidating = true;
+  let flagLow = peakPrice;
+  for (const b of flagBars) {
+    if (b.high > peakPrice * 1.01) isConsolidating = false; // Broke above peak prematurely
+    if (b.low < flagLow) flagLow = b.low;
+  }
+
+  // 5. Retracement of the flag must not wipe out the pole
+  // Max retracement ~38.2% usually, or just visually not deeper than 15% from top
+  const retracementPct = (peakPrice - flagLow) / peakPrice;
+  if (!isConsolidating || retracementPct > 0.15) return null;
+
+  // 6. Current price must be near the top of the flag (preparing to breakout)
+  const distanceToBreakout = ((peakPrice - currentPrice) / currentPrice) * 100;
+  if (distanceToBreakout > 10) return null; // Too far from breakout
+
+  // 7. Trend confirmation: Should be above SMA50 overall
+  if (currentPrice < (trend?.sma50 || 0)) return null;
+
+  return {
+    name: "Bull Flag 🚩",
+    type: "continuation",
+    signal: "bullish",
+    status: currentPrice >= peakPrice * 0.98 ? "ready" : "forming",
+    confidence: 80,
+    description: `หุ้นซิ่งเบรคพักตัว (ธงกระทิง) สร้างเสาธง +${(poleHeight * 100).toFixed(1)}% แล้วย่อแน่นรอวิ่งต่อ`,
+    entryZone: { low: peakPrice * 0.98, high: peakPrice * 1.02 },
+    breakoutLevel: peakPrice,
+    distanceToBreakout,
+    targetPrice: peakPrice + (peakPrice - basePrice) * 0.8, // Measure move
+    stopLoss: flagLow * 0.98,
+    debugData: {
+      poleHeight: poleHeight.toFixed(2),
+      retracementPct: retracementPct.toFixed(2),
+    },
+  };
+}
+
+function detectDoubleBottom(
+  bars: any[],
+  currentPrice: number,
+): PatternResult | null {
+  // Logic: Two distinct lows at roughly same price level (W-shape).
+  const lookback = bars.slice(-60); // 3 months
+  if (lookback.length < 60) return null;
+
+  // Simplified logic using 3 segments (Left Leg, Middle Peak, Right Leg)
+  const segmentSize = Math.floor(lookback.length / 3);
+
+  // Find Low 1
+  const seg1 = lookback.slice(0, segmentSize);
+  const low1 = Math.min(...seg1.map((b) => b.low));
+
+  // Find Middle Peak
+  const seg2 = lookback.slice(segmentSize, segmentSize * 2);
+  const midPeak = Math.max(...seg2.map((b) => b.high));
+
+  // Find Low 2
+  const seg3 = lookback.slice(segmentSize * 2);
+  const low2 = Math.min(...seg3.map((b) => b.low));
+
+  // 1. Are the lows roughly equal? (Tolerance 3%)
+  const lowDiff = Math.abs(low1 - low2) / Math.max(low1, low2);
+  if (lowDiff > 0.03) return null;
+
+  // 2. Is there a defined middle peak? (Must be at least 8% higher than the lows)
+  const peakHeight = (midPeak - Math.min(low1, low2)) / Math.min(low1, low2);
+  if (peakHeight < 0.08) return null;
+
+  // 3. Where is current price?
+  // It should be rebounding from low2, moving towards midPeak.
+  if (currentPrice < Math.max(low1, low2) || currentPrice > midPeak * 1.05)
+    return null;
+
+  const distanceToBreakout = ((midPeak - currentPrice) / currentPrice) * 100;
+
+  return {
+    name: "Double Bottom (W-Shape) بلی",
+    type: "reversal",
+    signal: "bullish",
+    status: currentPrice >= midPeak * 0.95 ? "ready" : "forming",
+    confidence: 85,
+    description: `ทดสอบแนวรับ 2 ครั้งไม่หลุด (${Math.min(low1, low2).toFixed(2)}) กำลังทำทรง W เพื่อจบรอบขาลง`,
+    entryZone: { low: Math.min(low1, low2) * 1.02, high: midPeak },
+    breakoutLevel: midPeak,
+    distanceToBreakout,
+    targetPrice: midPeak + (midPeak - Math.min(low1, low2)), // Target = Neckline + Height
+    stopLoss: Math.min(low1, low2) * 0.97,
+    debugData: { low1, low2, midPeak, lowDiff: lowDiff.toFixed(3) },
+  };
+}
+
+function detectVCP(
+  bars: any[],
+  currentPrice: number,
+  trend: any,
+): PatternResult | null {
+  // Logic: Successively smaller pullbacks from a resistance level.
+  const lookback = bars.slice(-90);
+  if (lookback.length < 90) return null;
+
+  // Simplistic VCP: Look for a master high, then a big dip (~20%), a smaller dip (~10%), and current tight price.
+  let masterHigh = 0;
+  for (const b of lookback) if (b.high > masterHigh) masterHigh = b.high;
+
+  // Divide into 3 distinct pullback periods from the right side.
+  // We need to see Volatility contracting: e.g. V1 > V2 > V3
+  // (Note: Proper VCP detection requires complex swing analysis, this is a heuristic proxy)
+
+  const p1 = lookback.slice(-90, -45); // First deep contraction
+  const p2 = lookback.slice(-45, -15); // Second shallower contraction
+  const p3 = lookback.slice(-15); // Final tight contraction
+
+  const low1 = Math.min(...p1.map((b) => b.low));
+  const low2 = Math.min(...p2.map((b) => b.low));
+  const low3 = Math.min(...p3.map((b) => b.low));
+
+  const depth1 = (masterHigh - low1) / masterHigh;
+  const depth2 = (masterHigh - low2) / masterHigh;
+  const depth3 = (masterHigh - low3) / masterHigh;
+
+  // Are they contracting?
+  if (depth1 < 0.15 || depth1 > 0.4) return null; // Initial drop must be substantial but not a total crash
+  if (depth2 >= depth1 || depth2 < 0.05) return null; // Second must be smaller
+  if (depth3 >= depth2 || depth3 > 0.1) return null; // Third must be the tightest (max 10% from high)
+
+  // Is price near breakout?
+  const distanceToBreakout = ((masterHigh - currentPrice) / currentPrice) * 100;
+  if (distanceToBreakout > 10) return null;
+
+  return {
+    name: "VCP (Minervini) 📉",
+    type: "continuation",
+    signal: "bullish",
+    status: currentPrice >= masterHigh * 0.95 ? "ready" : "forming",
+    confidence: 90,
+    description: `การบีบอัดความผันผวนขั้นสุดยอด (หดตัวจาก ${(depth1 * 100).toFixed(0)}% -> ${(depth2 * 100).toFixed(0)}% -> ${(depth3 * 100).toFixed(0)}%) Supply แห้งสนิท`,
+    entryZone: { low: masterHigh * 0.95, high: masterHigh * 1.01 },
+    breakoutLevel: masterHigh,
+    distanceToBreakout,
+    targetPrice: masterHigh * 1.15, // Usually explosive, +15% minimum
+    stopLoss: low3 * 0.98,
+    debugData: { depth1, depth2, depth3 },
+  };
+}
+
+function detectCupAndHandle(
+  bars: any[],
+  currentPrice: number,
+): PatternResult | null {
+  // Logic: Long rounded bottom (U) followed by a short tight dip (handle).
+  const lookback = bars.slice(-120); // 6 months
+  if (lookback.length < 120) return null;
+
+  // 1. Identify Left Lip (Highest point in first half)
+  const leftHalf = lookback.slice(0, 60);
+  const leftLip = Math.max(...leftHalf.map((b) => b.high));
+
+  // 2. Identify the Cup Bottom (Lowest point in middle)
+  const middle = lookback.slice(30, 90);
+  const cupBottom = Math.min(...middle.map((b) => b.low));
+
+  // Check cup depth (should be between 12% and 35%)
+  const cupDepth = (leftLip - cupBottom) / leftLip;
+  if (cupDepth < 0.12 || cupDepth > 0.35) return null;
+
+  // 3. Identify Right Lip (Highest point in recent weeks)
+  const rightQuarter = lookback.slice(90, 105);
+  const rightLip = Math.max(...rightQuarter.map((b) => b.high));
+
+  // Right lip should be relatively close to Left Lip (within 5-8%)
+  const lipDiff = Math.abs(leftLip - rightLip) / leftLip;
+  if (lipDiff > 0.08) return null;
+
+  // 4. Identify the Handle (The dip in the last 15 days)
+  const handleBars = lookback.slice(105);
+  const handleLow = Math.min(...handleBars.map((b) => b.low));
+
+  // Handle should not drop more than 50% of the cup's depth, ideally just 10-12% from lip
+  const handleDepth = (rightLip - handleLow) / rightLip;
+  if (handleDepth > cupDepth * 0.5 || handleDepth > 0.15) return null;
+  if (handleDepth < 0.02) return null; // Must actually have a handle pullback
+
+  // 5. Current price must be recovering from the handle OR breaking out
+  const breakoutLevel = Math.max(leftLip, rightLip);
+  const distanceToBreakout =
+    ((breakoutLevel - currentPrice) / currentPrice) * 100;
+
+  if (distanceToBreakout > 12) return null;
+
+  return {
+    name: "Cup and Handle ☕",
+    type: "continuation",
+    signal: "bullish",
+    status: currentPrice >= breakoutLevel * 0.95 ? "ready" : "forming",
+    confidence: 85,
+    description: `พักตัวสร้างฐานโค้ง (Cup) ทรงพลัง และย่อทำหูถ้วย (Handle) พร้อมทะยาน`,
+    entryZone: { low: rightLip * 0.95, high: breakoutLevel * 1.02 },
+    breakoutLevel,
+    distanceToBreakout,
+    targetPrice: breakoutLevel + (breakoutLevel - cupBottom), // Standard target is cup depth added to breakout
+    stopLoss: handleLow * 0.98, // Strict stop below the handle
+    debugData: {
+      cupDepth: cupDepth.toFixed(2),
+      handleDepth: handleDepth.toFixed(2),
+      lipDiff: lipDiff.toFixed(2),
+    },
+  };
+}
+
 // Analyze trend
 function analyzeTrend(closes: number[]): TrendAnalysis {
   const currentPrice = closes[closes.length - 1];
@@ -1520,6 +1791,20 @@ export async function GET(request: Request) {
       currentPrice,
     );
     if (tri) patterns.push(tri);
+
+    // 7. NEW: Advanced Patterns (Bull Flag, Double Bottom, VCP, Cup & Handle)
+    const bars = [];
+    for (let i = 0; i < closes.length; i++) {
+      bars.push({
+        open: opens[i] || closes[i],
+        high: highs[i],
+        low: lows[i],
+        close: closes[i],
+        volume: getVolumes[i] || 0,
+      });
+    }
+    const advancedPatterns = detectAdvancedPatterns(bars, currentPrice, trend);
+    patterns.push(...advancedPatterns);
 
     // ========== DETERMINE ENTRY STATUS ==========
     let entryStatus: "ready" | "wait" | "late" = "wait";

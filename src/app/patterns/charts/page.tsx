@@ -11,6 +11,7 @@ import {
   TIER_1_ENERGY_RESOURCES,
   TIER_1_HEALTH_BIO,
   TIER_2_SPECULATIVE,
+  ALPHA_PICKS_WATCHLIST,
   STOCK_DETAILS,
 } from "@/lib/stocks";
 import PatternCard from "@/components/PatternCard";
@@ -70,6 +71,11 @@ export default function TrianglePatternsPage() {
   const [sortBy, setSortBy] = useState<
     "distance" | "convergence" | "confidence"
   >("distance");
+
+  // Confluence Filter State
+  const [filterSMA, setFilterSMA] = useState(false);
+  const [filterMACD, setFilterMACD] = useState(false);
+  const [filterRSI, setFilterRSI] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -157,21 +163,48 @@ export default function TrianglePatternsPage() {
     setScanning(false);
   };
 
-  // Filter only stocks that have an Ascending Triangle Pattern detected
-  const triangleScans = scans
+  // Filter only stocks that have valid patterns
+  const baseScans = scans
     .filter((s) => s.status === "done" && s.data)
     .filter((s) => {
-      const hasTriangle = s.data?.patterns.some(
-        (p) => p.name === "Ascending Triangle",
+      const hasPattern = s.data?.patterns.some((p) =>
+        ["Triangle", "Bull Flag", "VCP", "Cup", "Double Bottom"].some((name) =>
+          p.name.includes(name),
+        ),
       );
-      return hasTriangle;
+      return hasPattern;
+    });
+
+  // Apply Confluence Filters
+  const validScans = baseScans
+    .filter((s) => {
+      const data = s.data!;
+      let pass = true;
+      if (filterSMA) {
+        pass = pass && data.currentPrice > (data.trend?.sma50 || 0);
+      }
+      if (filterMACD) {
+        pass = pass && data.advancedIndicators?.macd?.trend === "bullish";
+      }
+      if (filterRSI) {
+        pass = pass && (data.metrics?.rsi || 50) < 70;
+      }
+      return pass;
     })
     .sort((a, b) => {
-      // Sort by distance to breakout (closest first)
-      const aTri = a.data?.patterns.find((p) => p.name.includes("Triangle"));
-      const bTri = b.data?.patterns.find((p) => p.name.includes("Triangle"));
-      const aDist = Math.abs(aTri?.distanceToBreakout || 100);
-      const bDist = Math.abs(bTri?.distanceToBreakout || 100);
+      // Base Sort by distance to breakout (closest first), actual custom sort is applied later in render
+      const aPat = a.data?.patterns.find((p) =>
+        ["Triangle", "Bull Flag", "VCP", "Cup", "Double Bottom"].some((name) =>
+          p.name.includes(name),
+        ),
+      );
+      const bPat = b.data?.patterns.find((p) =>
+        ["Triangle", "Bull Flag", "VCP", "Cup", "Double Bottom"].some((name) =>
+          p.name.includes(name),
+        ),
+      );
+      const aDist = Math.abs(aPat?.distanceToBreakout || 100);
+      const bDist = Math.abs(bPat?.distanceToBreakout || 100);
       return aDist - bDist;
     });
 
@@ -187,10 +220,11 @@ export default function TrianglePatternsPage() {
               <span className="text-3xl">📐</span>
               <div>
                 <h1 className="text-xl font-bold text-blue-400">
-                  ASCENDING TRIANGLES หุ้นกระทิงบีบอัด
+                  ADVANCED CHART PATTERNS
                 </h1>
                 <p className="text-gray-400 text-xs">
-                  สแกนหาเฉพาะทรง "ฐานยก ยอดแน่น" (เตรียม Breakout ขึ้น)
+                  สแกนหาทรงกราฟแม่นยำสูง (Triangles, Bull Flag, VCP, Cup &
+                  Handle, Double Bottom)
                 </p>
               </div>
             </div>
@@ -288,6 +322,11 @@ export default function TrianglePatternsPage() {
                       label: "Growth",
                       list: TIER_1_GROWTH_TECH,
                       color: "bg-pink-600",
+                    },
+                    {
+                      label: "Alpha Picks",
+                      list: ALPHA_PICKS_WATCHLIST,
+                      color: "bg-teal-600",
                     },
                   ].map((group) => {
                     const isFullySelected =
@@ -389,44 +428,109 @@ export default function TrianglePatternsPage() {
               </div>
 
               {/* 3. Stock Grid */}
-              <div className="bg-slate-900/50 rounded-xl border border-slate-800 p-4 max-h-[300px] overflow-y-auto">
-                <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
-                  {filteredSymbols.map((ticker) => (
-                    <TickerCheckbox
-                      key={ticker}
-                      ticker={ticker}
-                      checked={selectedTickers.includes(ticker)}
-                      onToggle={() => {
-                        if (selectedTickers.includes(ticker)) {
-                          setSelectedTickers(
-                            selectedTickers.filter((t) => t !== ticker),
-                          );
-                        } else {
-                          setSelectedTickers([...selectedTickers, ticker]);
-                        }
-                      }}
-                    />
-                  ))}
-                  {filteredSymbols.length === 0 && (
-                    <div className="col-span-full text-center py-8">
-                      <p className="text-gray-500 mb-4">
-                        No stocks found matching "{searchTerm}"
-                      </p>
-                      {searchTerm.length >= 1 &&
-                        /^[A-Za-z]+$/.test(searchTerm) && (
-                          <button
-                            onClick={() => addCustomTicker(searchTerm)}
-                            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 mx-auto"
-                          >
-                            <span>➕</span> Add Custom Ticker:{" "}
-                            <span className="font-bold">
-                              {searchTerm.toUpperCase()}
-                            </span>
-                          </button>
-                        )}
-                    </div>
-                  )}
-                </div>
+              <div className="bg-slate-900/50 rounded-xl border border-slate-800 p-4 max-h-[400px] overflow-y-auto custom-scrollbar">
+                {searchTerm ? (
+                  // Search Mode: Flat List
+                  <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+                    {filteredSymbols.map((ticker) => (
+                      <TickerCheckbox
+                        key={ticker}
+                        ticker={ticker}
+                        checked={selectedTickers.includes(ticker)}
+                        onToggle={() => {
+                          if (selectedTickers.includes(ticker)) {
+                            setSelectedTickers(
+                              selectedTickers.filter((t) => t !== ticker),
+                            );
+                          } else {
+                            setSelectedTickers([...selectedTickers, ticker]);
+                          }
+                        }}
+                      />
+                    ))}
+                    {filteredSymbols.length === 0 && (
+                      <div className="col-span-full text-center py-8">
+                        <p className="text-gray-500 mb-4">
+                          No stocks found matching "{searchTerm}"
+                        </p>
+                        {searchTerm.length >= 1 &&
+                          /^[A-Za-z]+$/.test(searchTerm) && (
+                            <button
+                              onClick={() => addCustomTicker(searchTerm)}
+                              className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 mx-auto"
+                            >
+                              <span>➕</span> Add Custom Ticker:{" "}
+                              <span className="font-bold">
+                                {searchTerm.toUpperCase()}
+                              </span>
+                            </button>
+                          )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  // Default Mode: Grouped List
+                  <div className="space-y-6">
+                    {[
+                      { title: "Magnificent 7 👑", list: MAGNIFICENT_SEVEN },
+                      {
+                        title: "Mega Tech & Leaders 🏢",
+                        list: TIER_1_MEGA_TECH,
+                      },
+                      {
+                        title: "AI, Cloud & Cyber Security 🤖",
+                        list: TIER_1_AI_CLOUD,
+                      },
+                      {
+                        title: "Growth Tech (Chips/Space/EV) 🚀",
+                        list: TIER_1_GROWTH_TECH,
+                      },
+                      {
+                        title: "Energy & Resources (Nuclear/Minerals) ⚡",
+                        list: TIER_1_ENERGY_RESOURCES,
+                      },
+                      {
+                        title: "Healthcare & Biotech 🧬",
+                        list: TIER_1_HEALTH_BIO,
+                      },
+                      {
+                        title: "Alpha Picks (Strong Buy) 🌟",
+                        list: ALPHA_PICKS_WATCHLIST,
+                      },
+                      {
+                        title: "Speculative & High Risk 🎢",
+                        list: TIER_2_SPECULATIVE,
+                      },
+                    ].map((group) => (
+                      <div key={group.title}>
+                        <h3 className="text-gray-400 text-xs font-bold uppercase mb-2 ml-1 tracking-wider">
+                          {group.title}
+                        </h3>
+                        <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+                          {group.list.map((ticker) => (
+                            <TickerCheckbox
+                              key={ticker}
+                              ticker={ticker}
+                              checked={selectedTickers.includes(ticker)}
+                              onToggle={() => {
+                                if (selectedTickers.includes(ticker)) {
+                                  setSelectedTickers(
+                                    selectedTickers.filter((t) => t !== ticker),
+                                  );
+                                } else {
+                                  setSelectedTickers([
+                                    ...selectedTickers,
+                                    ticker,
+                                  ]);
+                                }
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -452,7 +556,7 @@ export default function TrianglePatternsPage() {
               ) : (
                 <>
                   <span>🔍</span>
-                  Scan Triangle Patterns
+                  Scan Advanced Patterns
                 </>
               )}
             </button>
@@ -469,34 +573,43 @@ export default function TrianglePatternsPage() {
 
         {/* Results */}
         {!scanning &&
-          triangleScans.length > 0 &&
+          validScans.length > 0 &&
           (() => {
             // --- Helpers for grouping & sorting ---
-            const getTriPattern = (s: StockScan) =>
-              s.data?.patterns.find((p) => p.name.includes("Triangle"));
+            const getPattern = (s: StockScan) =>
+              s.data?.patterns.find((p) =>
+                ["Triangle", "Bull Flag", "VCP", "Cup", "Double Bottom"].some(
+                  (name) => p.name.includes(name),
+                ),
+              );
 
             const getDistance = (s: StockScan) => {
-              const tri = getTriPattern(s);
-              if (!tri?.breakoutLevel || !s.data?.currentPrice) return 999;
+              const pat = getPattern(s);
+              if (!pat?.breakoutLevel || !s.data?.currentPrice) return 999;
               return (
-                ((tri.breakoutLevel - s.data.currentPrice) /
+                ((pat.breakoutLevel - s.data.currentPrice) /
                   s.data.currentPrice) *
                 100
               );
             };
 
             const getConvergence = (s: StockScan) => {
-              const tri = getTriPattern(s);
-              return parseFloat(tri?.debugData?.convergenceRatio || "999");
+              const pat = getPattern(s);
+              return parseFloat(
+                pat?.debugData?.convergenceRatio ||
+                  pat?.debugData?.depth3 ||
+                  pat?.debugData?.lowDiff ||
+                  "999",
+              );
             };
 
             const getConfidence = (s: StockScan) => {
-              const tri = getTriPattern(s);
-              return tri?.confidence || 0;
+              const pat = getPattern(s);
+              return pat?.confidence || 0;
             };
 
             // Sort
-            const sorted = [...triangleScans].sort((a, b) => {
+            const sorted = [...validScans].sort((a, b) => {
               if (sortBy === "distance") return getDistance(a) - getDistance(b);
               if (sortBy === "convergence")
                 return getConvergence(a) - getConvergence(b);
@@ -505,16 +618,41 @@ export default function TrianglePatternsPage() {
 
             // Group
             const ascending = sorted.filter(
-              (s) => getTriPattern(s)?.name === "Ascending Triangle",
+              (s) => getPattern(s)?.name === "Ascending Triangle",
             );
             const symmetrical = sorted.filter(
-              (s) => getTriPattern(s)?.name === "Symmetrical Triangle",
+              (s) => getPattern(s)?.name === "Symmetrical Triangle",
             );
             const descending = sorted.filter(
-              (s) => getTriPattern(s)?.name === "Descending Triangle",
+              (s) => getPattern(s)?.name === "Descending Triangle",
+            );
+
+            const bullFlags = sorted.filter((s) =>
+              getPattern(s)?.name.includes("Bull Flag"),
+            );
+            const doubleBottoms = sorted.filter((s) =>
+              getPattern(s)?.name.includes("Double Bottom"),
+            );
+            const vcps = sorted.filter((s) =>
+              getPattern(s)?.name.includes("VCP"),
+            );
+            const cups = sorted.filter((s) =>
+              getPattern(s)?.name.includes("Cup"),
             );
 
             const groups = [
+              { label: "🚩 Bull Flag", color: "pink", items: bullFlags },
+              {
+                label: "📉 VCP (Volatility Contraction)",
+                color: "purple",
+                items: vcps,
+              },
+              { label: "☕ Cup and Handle", color: "orange", items: cups },
+              {
+                label: "بلی Double Bottom",
+                color: "teal",
+                items: doubleBottoms,
+              },
               {
                 label: "📈 Ascending Triangle",
                 color: "green",
@@ -537,7 +675,7 @@ export default function TrianglePatternsPage() {
                 {/* Summary Stats */}
                 <div className="flex flex-wrap items-center gap-3 text-sm">
                   <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                    🚨 พบ {triangleScans.length} หุ้น
+                    🚨 พบ {validScans.length} หุ้น
                   </h2>
                   {ascending.length > 0 && (
                     <span className="bg-green-900/40 text-green-400 border border-green-500/40 px-3 py-1 rounded-full text-xs font-bold">
@@ -554,6 +692,68 @@ export default function TrianglePatternsPage() {
                       📉 Descending {descending.length}
                     </span>
                   )}
+                  {bullFlags.length > 0 && (
+                    <span className="bg-pink-900/40 text-pink-400 border border-pink-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                      🚩 Bull Flag {bullFlags.length}
+                    </span>
+                  )}
+                  {vcps.length > 0 && (
+                    <span className="bg-purple-900/40 text-purple-400 border border-purple-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                      📉 VCP {vcps.length}
+                    </span>
+                  )}
+                  {cups.length > 0 && (
+                    <span className="bg-orange-900/40 text-orange-400 border border-orange-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                      ☕ Cup&Handle {cups.length}
+                    </span>
+                  )}
+                  {doubleBottoms.length > 0 && (
+                    <span className="bg-teal-900/40 text-teal-400 border border-teal-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                      بلی Double Bottom {doubleBottoms.length}
+                    </span>
+                  )}
+                </div>
+
+                {/* Confluence Filters */}
+                <div className="flex flex-col gap-2 bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                  <span className="text-sm font-bold text-white flex items-center gap-2">
+                    🎯 ความแม่นยำ (Confluence Filters)
+                    <span className="text-xs text-gray-400 font-normal">
+                      กรองเฉพาะตัวที่มีสัญญาณหนุน
+                    </span>
+                  </span>
+                  <div className="flex flex-wrap items-center gap-3 mt-1">
+                    <button
+                      onClick={() => setFilterSMA(!filterSMA)}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all border ${
+                        filterSMA
+                          ? "bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-500/20"
+                          : "bg-slate-800 text-gray-400 border-slate-700 hover:bg-slate-700"
+                      }`}
+                    >
+                      {filterSMA ? "🟢" : "⚪"} ยืนเหนือเส้น 50 วัน (Uptrend)
+                    </button>
+                    <button
+                      onClick={() => setFilterMACD(!filterMACD)}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all border ${
+                        filterMACD
+                          ? "bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-500/20"
+                          : "bg-slate-800 text-gray-400 border-slate-700 hover:bg-slate-700"
+                      }`}
+                    >
+                      {filterMACD ? "🟢" : "⚪"} MACD ตัดขึ้น (Momentum)
+                    </button>
+                    <button
+                      onClick={() => setFilterRSI(!filterRSI)}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all border ${
+                        filterRSI
+                          ? "bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-500/20"
+                          : "bg-slate-800 text-gray-400 border-slate-700 hover:bg-slate-700"
+                      }`}
+                    >
+                      {filterRSI ? "🟢" : "⚪"} RSI &lt; 70 (มีพื้นที่วิ่ง)
+                    </button>
+                  </div>
                 </div>
 
                 {/* Sort Toolbar */}
@@ -588,40 +788,48 @@ export default function TrianglePatternsPage() {
                     </h3>
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
                       {group.items.map((s) => {
-                        const tri = getTriPattern(s);
+                        const pat = getPattern(s);
                         const dist = getDistance(s);
+
+                        // Helper check for High Probability Badge
+                        const isHighProb =
+                          s.data &&
+                          s.data.currentPrice > (s.data.trend?.sma50 || 0) &&
+                          s.data.advancedIndicators?.macd?.trend ===
+                            "bullish" &&
+                          (s.data.metrics?.rsi || 50) < 70;
 
                         return (
                           <div
                             key={s.symbol}
-                            className="bg-slate-800/80 rounded-2xl border border-slate-700/50 overflow-hidden shadow-2xl flex flex-col"
+                            className="bg-slate-800/80 rounded-2xl border border-slate-700/50 overflow-hidden shadow-2xl flex flex-col relative"
                           >
+                            {/* Badge */}
+                            {isHighProb && (
+                              <div className="absolute top-0 right-0 bg-yellow-500 text-yellow-900 text-[10px] font-bold px-2 py-0.5 rounded-bl-lg shadow-md z-10 flex items-center gap-1">
+                                <span>⭐</span> High Probability
+                              </div>
+                            )}
+
                             {/* Header */}
                             <div className="p-4 border-b border-slate-700/50 flex justify-between items-center bg-slate-900/50">
                               <div>
                                 <h3 className="text-2xl font-bold text-white flex items-center gap-3">
                                   {s.symbol}
-                                  {tri && (
+                                  {pat && (
                                     <span
                                       className={`text-xs px-2 py-1 rounded border ${
-                                        tri.signal === "bullish"
+                                        pat.signal === "bullish"
                                           ? "bg-green-900/40 text-green-400 border-green-500/50"
-                                          : tri.signal === "bearish"
+                                          : pat.signal === "bearish"
                                             ? "bg-red-900/40 text-red-400 border-red-500/50"
                                             : "bg-gray-800 text-gray-400 border-gray-600"
                                       }`}
                                     >
-                                      {tri.name}
+                                      {pat?.name}
                                     </span>
                                   )}
-                                  {!tri &&
-                                    s.data?.patterns &&
-                                    s.data.patterns.length > 0 && (
-                                      <span className="text-xs px-2 py-1 rounded border bg-blue-900/40 text-blue-400 border-blue-500/50">
-                                        {s.data.patterns[0].name}
-                                      </span>
-                                    )}
-                                  {tri?.debugData && (
+                                  {pat?.debugData && (
                                     <button
                                       onClick={(e) => {
                                         e.preventDefault();
@@ -636,18 +844,11 @@ export default function TrianglePatternsPage() {
                                     </button>
                                   )}
                                 </h3>
-                                {tri && (
+                                {pat && (
                                   <p className="text-sm text-gray-400 mt-1">
-                                    {tri.description}
+                                    {pat.description}
                                   </p>
                                 )}
-                                {!tri &&
-                                  s.data?.patterns &&
-                                  s.data.patterns.length > 0 && (
-                                    <p className="text-sm text-gray-400 mt-1">
-                                      {s.data.patterns[0].description}
-                                    </p>
-                                  )}
                               </div>
                               <div className="text-right">
                                 <p className="text-2xl font-bold text-white">
@@ -684,42 +885,71 @@ export default function TrianglePatternsPage() {
                             </div>
 
                             {/* Debug Data Panel */}
-                            {debugVisible[s.symbol] && tri?.debugData && (
+                            {debugVisible[s.symbol] && pat?.debugData && (
                               <div className="p-4 bg-slate-950 border-b border-slate-700/50 text-left">
                                 <p className="text-sm font-bold text-blue-400 mb-2">
                                   🧮 ค่าที่ใช้ประมวลผล (Internal Logic)
                                 </p>
-                                <ul className="text-xs text-gray-300 font-mono space-y-1 grid grid-cols-2 gap-x-4">
+                                <div className="grid grid-cols-3 gap-2 text-center">
+                                  <div className="bg-slate-900 p-2 rounded border border-slate-700/50">
+                                    <div className="text-[10px] text-gray-500 uppercase tracking-wide">
+                                      Entry
+                                    </div>
+                                    <div className="font-bold text-white text-xs">
+                                      {pat?.entryZone?.low.toFixed(2)} -{" "}
+                                      {pat?.entryZone?.high.toFixed(2)}
+                                    </div>
+                                  </div>
+                                  <div className="bg-slate-900 p-2 rounded border border-slate-700/50">
+                                    <div className="text-[10px] text-gray-500 uppercase tracking-wide">
+                                      Target
+                                    </div>
+                                    <div className="font-bold text-green-400 text-xs">
+                                      $ {pat?.targetPrice?.toFixed(2)}{" "}
+                                      <span className="text-[10px] font-normal text-green-500/50">
+                                        (
+                                        {(
+                                          ((pat?.targetPrice || 0) /
+                                            s.data!.currentPrice -
+                                            1) *
+                                          100
+                                        ).toFixed(1)}
+                                        %)
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <ul className="text-xs text-gray-300 font-mono space-y-1 grid grid-cols-2 gap-x-4 mt-4">
                                   <li>
                                     <span className="text-gray-500">
                                       ยอดอดีต (p1):
                                     </span>{" "}
-                                    ${tri.debugData.p1?.price}
+                                    ${pat.debugData.p1?.price}
                                   </li>
                                   <li>
                                     <span className="text-gray-500">
                                       ยอดล่าสุด (p2):
                                     </span>{" "}
-                                    ${tri.debugData.p2?.price}
+                                    ${pat.debugData.p2?.price}
                                   </li>
                                   <li>
                                     <span className="text-gray-500">
                                       ฐานอดีต (v1):
                                     </span>{" "}
-                                    ${tri.debugData.v1?.price}
+                                    ${pat.debugData.v1?.price}
                                   </li>
                                   <li>
                                     <span className="text-gray-500">
                                       ฐานล่าสุด (v2):
                                     </span>{" "}
-                                    ${tri.debugData.v2?.price}
+                                    ${pat.debugData.v2?.price}
                                   </li>
                                   <li className="col-span-2 my-2 border-t border-slate-800 pt-2">
                                     <span className="text-gray-500 block">
                                       สมการความชันแนวต้าน (Peak Slope):
                                     </span>
                                     <span className="text-slate-400 ml-2">
-                                      {tri.debugData.mathPeakSlope || "-"}
+                                      {pat.debugData.mathPeakSlope || "-"}
                                     </span>
                                   </li>
                                   <li className="col-span-2">
@@ -728,19 +958,19 @@ export default function TrianglePatternsPage() {
                                     </span>
                                     <span
                                       className={`ml-2 ${
-                                        tri.debugData.isResistanceFlat
+                                        pat.debugData.isResistanceFlat
                                           ? "text-green-400"
                                           : "text-red-400"
                                       }`}
                                     >
-                                      {tri.debugData.mathNormPeakSlope || "-"}
+                                      {pat.debugData.mathNormPeakSlope || "-"}
                                       <span className="text-gray-500 ml-1">
                                         (เกณฑ์ความแบน: &lt;{" "}
-                                        {tri.debugData.thresholdFlat})
+                                        {pat.debugData.thresholdFlat})
                                       </span>
                                     </span>
                                     <span className="ml-2">
-                                      {tri.debugData.isResistanceFlat
+                                      {pat.debugData.isResistanceFlat
                                         ? "✅ ต้านแข็ง"
                                         : "❌ ต้านไม่แข็ง"}
                                     </span>
@@ -750,7 +980,7 @@ export default function TrianglePatternsPage() {
                                       สมการความชันแนวรับ (Valley Slope):
                                     </span>
                                     <span className="text-slate-400 ml-2">
-                                      {tri.debugData.mathValleySlope || "-"}
+                                      {pat.debugData.mathValleySlope || "-"}
                                     </span>
                                   </li>
                                   <li className="col-span-2">
@@ -759,35 +989,37 @@ export default function TrianglePatternsPage() {
                                     </span>
                                     <span
                                       className={`ml-2 ${
-                                        tri.debugData.isSupportRising
+                                        pat.debugData.isSupportRising
                                           ? "text-green-400"
                                           : "text-yellow-400"
                                       }`}
                                     >
-                                      {tri.debugData.mathNormValleySlope || "-"}
+                                      {pat?.debugData?.mathNormValleySlope ||
+                                        "-"}
                                       <span className="text-gray-500 ml-1">
                                         (เกณฑ์ความชัน: &gt;{" "}
-                                        {tri.debugData.thresholdTrending})
+                                        {pat?.debugData?.thresholdTrending})
                                       </span>
                                     </span>
                                     <span className="ml-2">
-                                      {tri.debugData.isSupportRising
+                                      {pat?.debugData?.isSupportRising
                                         ? "✅ ฐานยก (แรงซื้อหนุน)"
                                         : "❌ ฐานไม่ยก"}
                                     </span>
                                   </li>
-                                  <li className="col-span-2 my-2 border-t border-slate-800 pt-2">
+                                  <li className="col-span-2">
                                     <span className="text-gray-500 block">
                                       สมการการบีบแคบลง (Convergence Ratio):
                                     </span>
                                     <span className="text-slate-400 ml-2">
-                                      {tri.debugData.mathConvergence || "-"}
+                                      {pat?.debugData?.mathConvergence || "-"}
                                     </span>
                                     <span className="ml-2">
-                                      {tri.debugData.isConverging
+                                      {pat?.debugData?.isConverging
                                         ? "✅ บีบแคบลง (< 0.85)"
                                         : "❌ ยังไม่บีบ"}{" "}
-                                      (Ratio: {tri.debugData.convergenceRatio})
+                                      (Ratio: {pat?.debugData?.convergenceRatio}
+                                      )
                                     </span>
                                   </li>
                                   <li className="col-span-2 border-t border-slate-800 pt-2 mt-2">
@@ -795,15 +1027,19 @@ export default function TrianglePatternsPage() {
                                       สมการวอลุ่มหดตัว (Volume Drying Up):
                                     </span>
                                     <span className="text-slate-400 ml-2">
-                                      {tri.debugData.mathVolume || "-"}
+                                      {pat?.debugData?.mathVolume || "-"}
                                     </span>
                                     <span className="ml-2">
-                                      {tri.debugData.isVolumeDryingUp
+                                      {pat?.debugData?.isVolumeDryingUp
                                         ? "✅ วอลุ่มหดตัว"
                                         : "❌ วอลุ่มไม่ลดลง"}
                                     </span>
                                   </li>
                                 </ul>
+                                {/* Raw Data Dump for transparency */}
+                                <pre className="mt-4 p-3 bg-slate-900 rounded border border-slate-700 text-slate-400 overflow-x-auto text-xs font-mono">
+                                  {JSON.stringify(pat?.debugData, null, 2)}
+                                </pre>
                               </div>
                             )}
 
@@ -819,21 +1055,14 @@ export default function TrianglePatternsPage() {
                             </div>
 
                             {/* Footer Stats - Only show if Breakout / Target data exists for the detected pattern */}
-                            {(tri ||
-                              (s.data?.patterns &&
-                                s.data.patterns.length > 0 &&
-                                s.data.patterns[0].breakoutLevel)) && (
+                            {pat?.breakoutLevel && (
                               <div className="p-4 bg-slate-900/80 grid grid-cols-3 gap-4 text-center border-t border-slate-700/50 mt-auto">
                                 <div>
                                   <p className="text-gray-500 text-xs">
                                     Breakout Level (ต้าน)
                                   </p>
                                   <p className="text-white font-bold text-lg">
-                                    $
-                                    {(
-                                      tri?.breakoutLevel ||
-                                      s.data?.patterns[0].breakoutLevel
-                                    )?.toFixed(2) || "-"}
+                                    {pat?.breakoutLevel?.toFixed(2) || "-"}
                                   </p>
                                 </div>
                                 <div>
@@ -841,11 +1070,7 @@ export default function TrianglePatternsPage() {
                                     Profit Target
                                   </p>
                                   <p className="text-green-400 font-bold text-lg">
-                                    $
-                                    {(
-                                      tri?.targetPrice ||
-                                      s.data?.patterns[0].targetPrice
-                                    )?.toFixed(2) || "-"}
+                                    ${pat?.targetPrice?.toFixed(2) || "-"}
                                   </p>
                                 </div>
                                 <div>
@@ -853,11 +1078,7 @@ export default function TrianglePatternsPage() {
                                     Cut Loss
                                   </p>
                                   <p className="text-red-400 font-bold text-lg">
-                                    $
-                                    {(
-                                      tri?.stopLoss ||
-                                      s.data?.patterns[0].stopLoss
-                                    )?.toFixed(2) || "-"}
+                                    ${pat?.stopLoss?.toFixed(2) || "-"}
                                   </p>
                                 </div>
                               </div>
@@ -872,20 +1093,18 @@ export default function TrianglePatternsPage() {
             );
           })()}
 
-        {!scanning &&
-          scans.filter((s) => s.status === "done").length > 0 &&
-          triangleScans.length === 0 && (
-            <div className="text-center py-20 bg-slate-800/50 rounded-xl border border-slate-700/50">
-              <div className="text-5xl mb-4">🏜️</div>
-              <h3 className="text-xl font-bold text-white mb-2">
-                ไม่พบทรงสามเหลี่ยมบีบตัว
-              </h3>
-              <p className="text-gray-400">
-                สแกนไป {scans.filter((s) => s.status === "done").length} ตัว
-                แต่ไม่มีตัวไหนเข้าฟอร์มกระทิงบีบอัดเลย
-              </p>
-            </div>
-          )}
+        {/* Empty State */}
+        {!scanning && validScans.length === 0 && selectedTickers.length > 0 && (
+          <div className="text-center py-20 bg-slate-900/50 rounded-2xl border border-slate-800">
+            <div className="text-4xl mb-4 opacity-50">👀</div>
+            <h3 className="text-xl font-bold text-gray-400">
+              ไม่พบ Pattern ในช่วงนี้
+            </h3>
+            <p className="text-gray-500 mt-2 text-sm">
+              ลองเลือกกลุ่มหุ้นอื่น หรือรอตลาดเคลื่อนไหวชัดเจนกว่านี้
+            </p>
+          </div>
+        )}
       </main>
     </div>
   );

@@ -11,6 +11,7 @@ import {
   TIER_1_ENERGY_RESOURCES,
   TIER_1_HEALTH_BIO,
   TIER_2_SPECULATIVE,
+  ALPHA_PICKS_WATCHLIST,
   STOCK_DETAILS,
   isTier1,
   isTier2,
@@ -526,6 +527,9 @@ export default function PatternScreenerPage() {
   // ========== SEND TO GOOGLE SHEET ==========
   const [sendingToSheet, setSendingToSheet] = useState(false);
   const [sheetMessage, setSheetMessage] = useState("");
+  const [entryType, setEntryType] = useState<
+    "smart" | "fib382" | "fib500" | "fib618"
+  >("smart");
 
   const sendToGoogleSheet = async () => {
     // 🔥 ส่งเฉพาะตัวที่ผ่านเกณฑ์ของโหมดปัจจุบัน
@@ -551,6 +555,15 @@ export default function PatternScreenerPage() {
       let entry = data.metrics?.supportLevel || 0;
       let target = data.metrics?.resistanceLevel || 0;
       let cut = data.advancedIndicators?.suggestedStopLoss || 0;
+
+      // Override entry based on user selection
+      if (entryType === "fib382" && data.metrics?.fibLevels?.fib382) {
+        entry = data.metrics.fibLevels.fib382;
+      } else if (entryType === "fib500" && data.metrics?.fibLevels?.fib500) {
+        entry = data.metrics.fibLevels.fib500;
+      } else if (entryType === "fib618" && data.metrics?.fibLevels?.fib618) {
+        entry = data.metrics.fibLevels.fib618;
+      }
 
       // 🛠️ USER REQUEST: Always send "Support" as Entry and "Resistance" as Target
       // Ensure Entry < Target (Long Logic) for the Sheet, regardless of Signal.
@@ -821,6 +834,11 @@ export default function PatternScreenerPage() {
                       color: "bg-pink-600",
                     },
                     {
+                      label: "Alpha Picks",
+                      list: ALPHA_PICKS_WATCHLIST,
+                      color: "bg-teal-600",
+                    },
+                    {
                       label: "Speculative",
                       list: TIER_2_SPECULATIVE,
                       color: "bg-red-600",
@@ -952,6 +970,10 @@ export default function PatternScreenerPage() {
                       {
                         title: "Healthcare & Biotech 🧬",
                         list: TIER_1_HEALTH_BIO,
+                      },
+                      {
+                        title: "Alpha Picks (Strong Buy) 🌟",
+                        list: ALPHA_PICKS_WATCHLIST,
                       },
                       {
                         title: "Speculative & High Risk 🎢",
@@ -1171,17 +1193,32 @@ export default function PatternScreenerPage() {
               >
                 📋 Copy ทั้งหมด
               </button>
-              <button
-                onClick={sendToGoogleSheet}
-                disabled={sendingToSheet}
-                className={`px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95 shadow-lg ${
-                  sendingToSheet
-                    ? "bg-gray-500 text-gray-300 cursor-not-allowed"
-                    : "bg-green-500 hover:bg-green-400 text-white"
-                }`}
-              >
-                {sendingToSheet ? "⏳ กำลังส่ง..." : "📤 ส่งเข้า Sheet"}
-              </button>
+              <div className="flex items-center gap-2 bg-gray-900/50 p-1.5 rounded-xl border border-purple-500/30">
+                <select
+                  value={entryType}
+                  onChange={(e) => setEntryType(e.target.value as any)}
+                  className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none border border-gray-700 focus:border-purple-500 transition-colors cursor-pointer"
+                  title="เลือกจุดรอซื้อที่จะส่งไป Google Sheet"
+                >
+                  <option value="smart">🎯 Smart Entry (สายโมเมนตัม)</option>
+                  <option value="fib382">📉 Fib 0.382 (แนวรับสายแข็ง)</option>
+                  <option value="fib500">⚖️ Fib 0.500 (จุดสมดุล)</option>
+                  <option value="fib618">
+                    🌟 Fib 0.618 (The Golden Pocket)
+                  </option>
+                </select>
+                <button
+                  onClick={sendToGoogleSheet}
+                  disabled={sendingToSheet}
+                  className={`px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-all active:scale-95 shadow-lg ${
+                    sendingToSheet
+                      ? "bg-gray-500 text-gray-300 cursor-not-allowed"
+                      : "bg-green-500 hover:bg-green-400 text-white"
+                  }`}
+                >
+                  {sendingToSheet ? "⏳ กำลังส่ง..." : "📤 ส่งเข้า Sheet"}
+                </button>
+              </div>
             </div>
             {sheetMessage && (
               <div
