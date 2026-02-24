@@ -61,7 +61,7 @@ export const TIER_1_GROWTH_TECH = [
 ];
 
 // กลุ่ม Healthcare & Biotech
-export const TIER_1_HEALTH_BIO = ["TMDX", "VKTX", "CLPT", "PRME"];
+export const TIER_1_HEALTH_BIO = ["LLY", "TMDX", "VKTX", "CLPT", "PRME"];
 
 // กลุ่มพลังงานแห่งอนาคต & ทรัพยากร
 export const TIER_1_ENERGY_RESOURCES = [
@@ -86,6 +86,8 @@ export const TIER_2_SPECULATIVE = [
   "RR", // Growth
 ];
 
+export const FINVIZ_WATCHLIST = ["UUUU", "REGN", "IMVT", "PBW", "SNDX"];
+
 // ---------------------------------------
 // 2. SETTING: รวมลิสต์เพื่อส่งเข้าสแกน
 // ---------------------------------------
@@ -99,6 +101,7 @@ export const UNIQUE_SYMBOLS = Array.from(
     ...TIER_1_ENERGY_RESOURCES,
     ...ALPHA_PICKS_WATCHLIST,
     ...TIER_2_SPECULATIVE,
+    ...FINVIZ_WATCHLIST,
   ]),
 );
 
@@ -109,7 +112,9 @@ export const isTier1 = (symbol: string) =>
   TIER_1_GROWTH_TECH.includes(symbol) ||
   TIER_1_HEALTH_BIO.includes(symbol) ||
   TIER_1_ENERGY_RESOURCES.includes(symbol) ||
-  ALPHA_PICKS_WATCHLIST.includes(symbol);
+  ALPHA_PICKS_WATCHLIST.includes(symbol) ||
+  TIER_2_SPECULATIVE.includes(symbol) ||
+  FINVIZ_WATCHLIST.includes(symbol);
 
 export const isTier2 = (symbol: string) => TIER_2_SPECULATIVE.includes(symbol);
 
@@ -167,6 +172,7 @@ export const STOCK_DETAILS: Record<string, string> = {
   NOK: "Nokia - ผู้ผลิตอุปกรณ์เครือข่าย 5G และเทคโนโลยีโทรคมนาคม",
 
   // HEALTHCARE
+  LLY: "Lilly - ผู้ผลิตยาลดความอ้วน (GLP-1) คู่แข่งรายใหม่ที่น่าจับตา",
   TMDX: "TransMedics - เครื่องเก็บรักษาอวัยวะเพื่อการปลูกถ่าย (หัวใจ/ปอด/ตับ) ให้เหมือนอยู่ในร่างกาย",
   VKTX: "Viking Therapeutics - พัฒนายาลดความอ้วน (GLP-1) คู่แข่งรายใหม่ที่น่าจับตา",
   CLPT: "ClearPoint Neuro - ระบบนำทางสำหรับการผ่าตัดสมองที่มีความแม่นยำสูง",
@@ -188,4 +194,10 @@ export const STOCK_DETAILS: Record<string, string> = {
   ONDS: "Ondas Holdings - ระบบเครือข่ายไร้สายส่วนตัวและโดรนอัตโนมัติสำหรับอุตสาหกรรม",
   OSS: "One Stop Systems - ฮาร์ดแวร์ประมวลผลประสิทธิภาพสูง (Edge Computing) สำหรับ AI",
   RR: "Rich Road (Speculative Placeholder) - หุ้นเก็งกำไร",
+  // FINVIZ WATCHLIST
+  UUUU: "Energy Fuels Inc จิ๊กซอว์นิวเคลียร์",
+  REGN: "Regeneron - ผู้ผลิตยาลดความอ้วน (GLP-1) คู่แข่งรายใหม่ที่น่าจับตา",
+  IMVT: "IMVU - แพลตฟอร์มการสร้างตัวละคร 3D (VR) สำหรับการสื่อสารและเกม",
+  PBW: "Pebblebrook Holdings - ผู้เช่าพื้นที่สำหรับ AI Server และ AI Data Center",
+  SNDX: "Sanderson Farms - ผู้ผลิตเนื้อสัตว์สำหรับ AI Server และ AI Data Center",
 };

@@ -12,6 +12,7 @@ import {
   TIER_1_HEALTH_BIO,
   TIER_2_SPECULATIVE,
   ALPHA_PICKS_WATCHLIST,
+  FINVIZ_WATCHLIST,
   STOCK_DETAILS,
   isTier1,
   isTier2,
@@ -839,6 +840,11 @@ export default function PatternScreenerPage() {
                       color: "bg-teal-600",
                     },
                     {
+                      label: "Finviz Watchlist",
+                      list: FINVIZ_WATCHLIST,
+                      color: "bg-emerald-600",
+                    },
+                    {
                       label: "Speculative",
                       list: TIER_2_SPECULATIVE,
                       color: "bg-red-600",
@@ -974,6 +980,10 @@ export default function PatternScreenerPage() {
                       {
                         title: "Alpha Picks (Strong Buy) 🌟",
                         list: ALPHA_PICKS_WATCHLIST,
+                      },
+                      {
+                        title: "Finviz Watchlist 🟢",
+                        list: FINVIZ_WATCHLIST,
                       },
                       {
                         title: "Speculative & High Risk 🎢",

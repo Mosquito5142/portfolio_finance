@@ -12,6 +12,7 @@ import {
   TIER_1_HEALTH_BIO,
   TIER_2_SPECULATIVE,
   ALPHA_PICKS_WATCHLIST,
+  FINVIZ_WATCHLIST,
   STOCK_DETAILS,
 } from "@/lib/stocks";
 import PatternCard from "@/components/PatternCard";
@@ -328,6 +329,11 @@ export default function TrianglePatternsPage() {
                       list: ALPHA_PICKS_WATCHLIST,
                       color: "bg-teal-600",
                     },
+                    {
+                      label: "Finviz Watchlist",
+                      list: FINVIZ_WATCHLIST,
+                      color: "bg-emerald-600",
+                    },
                   ].map((group) => {
                     const isFullySelected =
                       group.list.length > 0 &&
@@ -496,6 +502,10 @@ export default function TrianglePatternsPage() {
                       {
                         title: "Alpha Picks (Strong Buy) 🌟",
                         list: ALPHA_PICKS_WATCHLIST,
+                      },
+                      {
+                        title: "Finviz Watchlist 🟢",
+                        list: FINVIZ_WATCHLIST,
                       },
                       {
                         title: "Speculative & High Risk 🎢",
