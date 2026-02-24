@@ -1171,14 +1171,28 @@ function detectTrianglePatterns(
   // --- Thresholds per user spec ---
   const flatThreshold = 0.006; // < 0.60% per day = "flat" (for Ascending/Descending)
   const trendThreshold = 0.0015; // > 0.15% per day = clear directional trend
+  const maxFlatDiffPct = 0.05; // NEW: Max 5% absolute price difference to be considered "Flat"
 
   const peakSlopePct = Math.abs(normPeakSlope);
   const valleySlopePct = Math.abs(normValleySlope);
 
+  // Check absolute difference percentage between peaks/valleys
+  const peakDiffPct = Math.abs(p2.price - p1.price) / p1.price;
+  const valleyDiffPct = Math.abs(v2.price - v1.price) / v1.price;
+
+  // Backward-compat booleans for debugData display & logical gates
+  const isResistanceFlat =
+    peakSlopePct < flatThreshold && peakDiffPct < maxFlatDiffPct;
+  const isResistanceFalling =
+    normPeakSlope < -trendThreshold && !isResistanceFlat;
+  const isSupportFlat =
+    valleySlopePct < flatThreshold && valleyDiffPct < maxFlatDiffPct;
+  const isSupportRising = normValleySlope > trendThreshold && !isSupportFlat;
+
   // --- Convergence (สำคัญมาก!) ---
   const rangeOld = p1.price - v1.price; // กรอบเดิม
   const rangeNew = p2.price - v2.price; // กรอบใหม่
-  const convergenceRatio = rangeNew / rangeOld;
+  const convergenceRatio = Math.abs(rangeNew / rangeOld);
   const isConverging = convergenceRatio < 0.85; // บีบแคบลง > 15%
 
   // --- Volume (ผ่อนให้ 30%) ---
@@ -1208,13 +1222,10 @@ function detectTrianglePatterns(
   // --- Type Detection per user pseudocode ---
   let triangleType: "Ascending" | "Descending" | "Symmetrical" | null = null;
 
-  if (peakSlopePct < flatThreshold && normValleySlope > trendThreshold) {
+  if (isResistanceFlat && isSupportRising) {
     // ยอดแบน + ฐานยก = Ascending
     triangleType = "Ascending";
-  } else if (
-    valleySlopePct < flatThreshold &&
-    normPeakSlope < -trendThreshold
-  ) {
+  } else if (isSupportFlat && isResistanceFalling) {
     // ฐานแบน + ยอดลง = Descending
     triangleType = "Descending";
   } else if (p2.price < p1.price && v2.price > v1.price) {
@@ -1236,12 +1247,6 @@ function detectTrianglePatterns(
 
   // --- Gate: ต้องบีบแคบลง (Convergence) หรือ Volume หดตัว ---
   if (!isConverging && !isVolumeDryingUp) return null;
-
-  // Backward-compat booleans for debugData display
-  const isResistanceFlat = peakSlopePct < flatThreshold;
-  const isResistanceFalling = normPeakSlope < -trendThreshold;
-  const isSupportFlat = valleySlopePct < flatThreshold;
-  const isSupportRising = normValleySlope > trendThreshold;
 
   const debugData = {
     // Raw points
