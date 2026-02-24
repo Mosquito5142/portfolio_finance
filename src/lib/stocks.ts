@@ -12,108 +12,78 @@ export const MAGNIFICENT_SEVEN = [
   "META",
 ];
 
-// กลุ่ม Mega Tech & Leader (ตัวนำตลาด บิ๊กเทค 4IR - วิ่งตามกระแสเงินทุนหลัก)
+// กลุ่ม Mega Tech & Leader
 export const TIER_1_MEGA_TECH = [
-  "NFLX", // 4IR (Streaming Tech)
-  "ORCL", // 4IR (Oracle Cloud / Database)
-  "AMD", // 4IR (Semiconductors / AI)
-  "INTC", // 4IR (Semiconductors)
+  "NFLX", // 4IR
+  "ORCL", // 4IR
+  "AMD", // 4IR
+  "INTC", // 4IR
 ];
 
-// กลุ่ม AI, Cloud & Cybersecurity (High Growth Software)
+// กลุ่ม AI, Cloud & Cybersecurity
 export const TIER_1_AI_CLOUD = [
-  "PLTR", // AI / Data Analytics
-  "CRWD", // Cybersecurity
-  "NET", // Cloudflare
-  "SNOW", // Data Cloud
-  "MDB", // MongoDB
-  "RBRK", // Data Security
-  "DOCN", // Cloud Infrastructure
-  "NBIS", // AI Infrastructure
-  "TEM", // AI Healthcare
-  "ZS", // 4IR (Zscaler / Cybersecurity)
-  "IOT", // 4IR (Samsara / Internet of Things)
-  "PANW", // Cybersecurity (Palo Alto Networks)
-  "NOW", // AI Enterprise Software (ServiceNow)
+  "PLTR",
+  "CRWD",
+  "NET",
+  "SNOW",
+  "MDB",
+  "RBRK",
+  "DOCN",
+  "NBIS",
+  "TEM",
+  "ZS", // 4IR
+  "IOT", // 4IR
+  "SHOP", // 4IR
+  "MELI",
 ];
 
-// กลุ่ม Growth & Deep Tech (4IR / อวกาศ / ชิป / EV Aviation / Fintech)
+// กลุ่ม Growth & Deep Tech
 export const TIER_1_GROWTH_TECH = [
-  "ASTS", // Space Mobile
-  "IONQ", // Quantum Computing
-  "RKLB", // Rocket Lab
-  "SOFI", // Fintech
-  "SYNA", // Semiconductors
-  "NVTS", // Semiconductors
-  "AEHR", // Semiconductor testing
-  "ALAB", // Semiconductors / AI Connectivity
-  "AXON", // Tech / Law Enforcement
-  "MU", // 4IR & Growth (Micron / Memory Chips)
-  "ARM", // 4IR (Arm Holdings / Chip Architecture)
-  "HOOD", // 4IR & Growth (Robinhood / Fintech)
-  "KTOS", // Growth (Kratos / Defense & Space)
-  "JOBY", // Growth (Joby Aviation / Flying EV)
-  "ACHR", // Growth (Archer Aviation / Flying EV)
-  "LMND", // Growth (Lemonade / AI Insurtech)
-  "PI", // Growth (Impinj / IoT & RFID)
-  "ASML", // Chip Machinery Monopoly (ASML Holding)
-  "TSM", // Chip Foundry (Taiwan Semiconductor)
-  "AMAT", // Chip Equipment (Applied Materials)
-  "KLAC", // Chip Testing (KLA Corp)
-  "LRCX", // Chip Manufacturing (Lam Research)
-  "CRDO", // AI Networking (Credo Technology)
-  "ANET", // AI Networking (Arista Networks)
+  "ASTS",
+  "IONQ",
+  "RKLB",
+  "SOFI",
+  "SYNA",
+  "NVTS",
+  "AEHR",
+  "ALAB",
+  "AXON",
+  "MU", // 4IR
+  "ARM", // 4IR
+  "HOOD", // 4IR
+  "KTOS", // Growth
+  "JOBY", // Growth
+  "ACHR", // Growth
+  "LMND", // Growth
+  "AVAV", // Growth
+  "DPRO", // Growth
+  "NOK", // Growth
 ];
 
-// กลุ่ม Healthcare & Biotech (High Risk / Explosive Moves)
-export const TIER_1_HEALTH_BIO = [
-  "TMDX", // Medical Devices
-  "VKTX", // Biotech (GLP-1 Weight loss)
-  "CLPT", // Medical Devices
-  "PRME", // Biotech / Gene editing
-];
+// กลุ่ม Healthcare & Biotech
+export const TIER_1_HEALTH_BIO = ["TMDX", "VKTX", "CLPT", "PRME"];
 
-// กลุ่มพลังงานแห่งอนาคต & ทรัพยากร (Nuclear / Data Center / Future Metals)
+// กลุ่มพลังงานแห่งอนาคต & ทรัพยากร
 export const TIER_1_ENERGY_RESOURCES = [
-  "EOSE", // Energy storage
-  "IREN", // Bitcoin Mining / Data Center
-  "OKLO", // 4IR & Growth (Nuclear Energy / Sam Altman)
-  "COPX", // Growth (Global X Copper Miners ETF - แร่ทองแดงสำหรับทำ AI/EV)
-  "CRML", // Growth (Critical Metals Corp - แร่หายาก)
-  "CEG", // Clean Energy (Constellation Energy)
-  "NEE", // Solar/Wind (NextEra Energy)
-  "VST", // Nuclear/Gas Power (Vistra Corp)
-  "NNE", // Micro Reactor (Nano Nuclear Energy)
-  "SMR", // SMR Reactor (NuScale Power)
-  "LEU", // Uranium Fuel (Centrus Energy)
-  "CCJ", // Uranium Mining (Cameco)
-  "BWXT", // Nuclear Components (BWX Technologies)
-  "GEV", // Power Grid (GE Vernova)
-  "CIFR", // Bitcoin/Data Center (Cipher Mining)
-  "WULF", // Nuclear Bitcoin Mining (TeraWulf)
-  "APLD", // AI Data Center (Applied Digital)
+  "EOSE",
+  "IREN",
+  "OKLO", // 4IR & Growth
+  "COPX", // Growth
+  "CRML", // Growth
+  "BWXT", // Growth
 ];
 
-// 🌟 กลุ่ม Alpha Picks (คัดกรองจาก Quant Rating ระดับ Strong Buy) 🌟
+// 🌟 กลุ่ม Alpha Picks
 export const ALPHA_PICKS_WATCHLIST = [
-  "APP", // AppLovin (AI Software & AdTech)
-  "POWL", // Powell Industries (Electrical Equipment)
-  "CLS", // Celestica (Electronics Manufacturing for AI/Cloud)
-  "MOD", // Modine Manufacturing (Thermal Management / Data Center Cooling)
-  "SAIA", // Saia Inc. (Trucking & Logistics)
-  "STRL", // Sterling Infrastructure (E-Infrastructure & Data Center Building)
-  "FTNT", // Fortinet (Cybersecurity)
-  "UBER", // Uber Technologies (Mobility & Delivery)
+  "APP", // 4IR
 ];
 
-// กลุ่มเก็งกำไรจัดจ้าน (Speculative / Drones / Small Cap - เหวี่ยงแรง ต้องคัทลอสไว)
+// กลุ่มเก็งกำไรจัดจ้าน
 export const TIER_2_SPECULATIVE = [
-  "JMIA", // E-commerce (Africa)
-  "ONDS", // Drone tech
-  "OSS", // Edge computing
-  "DPRO", // Growth (Draganfly / Drone tech)
-  "INV", // Growth (Speculative)
-  "RR", // Growth (Speculative)
+  "JMIA",
+  "ONDS",
+  "OSS",
+  "RR", // Growth
 ];
 
 // ---------------------------------------
@@ -127,12 +97,11 @@ export const UNIQUE_SYMBOLS = Array.from(
     ...TIER_1_GROWTH_TECH,
     ...TIER_1_HEALTH_BIO,
     ...TIER_1_ENERGY_RESOURCES,
-    ...ALPHA_PICKS_WATCHLIST, // <-- เพิ่มเข้ามารวมในเรดาร์สแกน
+    ...ALPHA_PICKS_WATCHLIST,
     ...TIER_2_SPECULATIVE,
   ]),
 );
 
-// ฟังก์ชันเช็คว่าเป็น Tier 1 (Fundamental Growth & High Momentum)
 export const isTier1 = (symbol: string) =>
   MAGNIFICENT_SEVEN.includes(symbol) ||
   TIER_1_MEGA_TECH.includes(symbol) ||
@@ -140,9 +109,8 @@ export const isTier1 = (symbol: string) =>
   TIER_1_GROWTH_TECH.includes(symbol) ||
   TIER_1_HEALTH_BIO.includes(symbol) ||
   TIER_1_ENERGY_RESOURCES.includes(symbol) ||
-  ALPHA_PICKS_WATCHLIST.includes(symbol); // <-- ให้สิทธิ์หุ้น Alpha Picks อยู่ใน Tier 1
+  ALPHA_PICKS_WATCHLIST.includes(symbol);
 
-// ฟังก์ชันเช็คว่าเป็น Tier 2 (เก็งกำไรสูงมาก / เหวี่ยงแรง)
 export const isTier2 = (symbol: string) => TIER_2_SPECULATIVE.includes(symbol);
 
 // คำอธิบายหุ้นรายตัว (สำหรับ Tooltip)
@@ -163,7 +131,7 @@ export const STOCK_DETAILS: Record<string, string> = {
   INTC: "Intel - ผู้ผลิตชิปรายใหญ่ (กำลังสร้างโรงงานใหม่เพื่อทวงคืนความยิ่งใหญ่)",
 
   // AI & CLOUD
-  PLTR: "Palantir - ซอฟต์แวร์วิเคราะห์ข้อมูลขั้นสูง (ใช้ในกองทัพสหรัฐฯ & องค์กรตางๆ)",
+  PLTR: "Palantir - ซอฟต์แวร์วิเคราะห์ข้อมูลขั้นสูง (ใช้ในกองทัพสหรัฐฯ & องค์กรต่างๆ)",
   CRWD: "CrowdStrike - ผู้นำด้าน Cybersecurity ป้องกันการแฮกที่เครื่องลูกข่าย (Endpoint)",
   NET: "Cloudflare - ผู้ให้บริการระบบความปลอดภัยเว็บไซต์ & CDN (ทำให้เว็บเร็วและปลอดภัย)",
   SNOW: "Snowflake - ระบบจัดการข้อมูลบน Cloud (Data Cloud & Warehousing)",
@@ -174,8 +142,8 @@ export const STOCK_DETAILS: Record<string, string> = {
   TEM: "Tempus AI - นำ AI มาใช้วิเคราะห์ข้อมูลพันธุกรรมเพื่อการรักษาโรค (Precision Medicine)",
   ZS: "Zscaler - ผู้นำด้าน Cloud Security แบบ Zero Trust (ทำงานที่ไหนก็ปลอดภัย)",
   IOT: "Samsara - เทคโนโลยี Internet of Things (IoT) สำหรับบริหารจัดการฟลีทรถ/เครื่องจักร",
-  PANW: "Palo Alto Networks - ผู้นำด้าน Cybersecurity ครบวงจร (Firewall & Cloud Security)",
-  NOW: "ServiceNow - แพลตฟอร์ม AI ช่วยจัดการงานในองค์กรให้เป็นอัตโนมัติ (Workflow Automation)",
+  SHOP: "Shopify - แพลตฟอร์มอีคอมเมิร์ซสำหรับสร้างร้านค้าออนไลน์แบบครบวงจร",
+  MELI: "MercadoLibre - แพลตฟอร์มอีคอมเมิร์ซและการชำระเงินที่ใหญ่ที่สุดในละตินอเมริกา",
 
   // GROWTH TECH
   ASTS: "AST SpaceMobile - ยิงสัญญาณ 5G จากดาวเทียมเข้ามือถือโดยตรง (ไม่ต้องใช้จานรับ)",
@@ -194,14 +162,9 @@ export const STOCK_DETAILS: Record<string, string> = {
   JOBY: "Joby Aviation - แท็กซี่บินได้พลังงานไฟฟ้า (eVTOL) เตรียมเปิดให้บริการ",
   ACHR: "Archer Aviation - แท็กซี่บินได้ (eVTOL) คู่แข่ง Joby (ร่วมมือกับ United Airlines)",
   LMND: "Lemonade - บริษัทประกันภัยยุคใหม่ (Insurtech) ใช้ AI จัดการเคลมรวดเร็ว",
-  PI: "Impinj - เทคโนโลยี RAIN RFID เชื่อมต่อสิ่งของเข้ากับอินเทอร์เน็ต (IoT)",
-  ASML: "ASML - ผู้ผลิตเครื่องพิมพ์ชิป EUV เพียงเจ้าเดียวในโลก (หัวใจสำคัญของการผลิตชิป)",
-  TSM: "TSMC - โรงงานผลิตชิปที่ใหญ่ที่สุดและล้ำสมัยที่สุดในโลก (ผลิตให้ Apple, Nvidia)",
-  AMAT: "Applied Materials - ผู้ผลิตเครื่องจักรและอุปกรณ์สำหรับโรงงานผลิตชิป",
-  KLAC: "KLA Corp - ผู้เชี่ยวชาญด้านการตรวจสอบความผิดพลาด (Defect Inspection) ในการผลิตชิป",
-  LRCX: "Lam Research - ผู้เชี่ยวชาญด้านกระบวนการกัดและเคลือบผิวชิป (Etching/Deposition)",
-  CRDO: "Credo - ชิปเชื่อมต่อความเร็วสูง (Connectivity) สำหรับ Data Center และ AI",
-  ANET: "Arista Networks - อุปกรณ์เครือข่าย (Switch) ความเร็วสูงสำหรับ Data Center ระดับโลก",
+  AVAV: "AeroVironment - โดรนทางการทหารและระบบยานยนต์ไร้คนขับ",
+  DPRO: "Draganfly - โซลูชั่นโดรนเพื่อการพาณิชย์และการกู้ภัย",
+  NOK: "Nokia - ผู้ผลิตอุปกรณ์เครือข่าย 5G และเทคโนโลยีโทรคมนาคม",
 
   // HEALTHCARE
   TMDX: "TransMedics - เครื่องเก็บรักษาอวัยวะเพื่อการปลูกถ่าย (หัวใจ/ปอด/ตับ) ให้เหมือนอยู่ในร่างกาย",
@@ -215,34 +178,14 @@ export const STOCK_DETAILS: Record<string, string> = {
   OKLO: "Oklo - โรงไฟฟ้านิวเคลียร์ขนาดเล็ก (Micro Reactor) ดีไซน์ล้ำ (Sam Altman ลงทุน)",
   COPX: "Global X Copper Miners ETF - กองทุนรวมบริษัทเหมืองทองแดง (แร่สำคัญของ AI และ EV)",
   CRML: "Critical Metals - เหมืองลิเธียมและแร่ธาตุหายากที่จำเป็นต่อเทคโนโลยี",
-  CEG: "Constellation Energy - ผู้ผลิตพลังงานสะอาดและนิวเคลียร์รายใหญ่ที่สุดในสหรัฐฯ",
-  NEE: "NextEra Energy - บริษัทพลังงานหมุนเวียน (ลม/แสงอาทิตย์) ที่ใหญ่ที่สุดในโลก",
-  VST: "Vistra - ผู้ผลิตไฟฟ้าเอกชนรายใหญ่ (มีการเติบโตในโรงไฟฟ้านิวเคลียร์และแบตเตอรี่)",
-  NNE: "Nano Nuclear Energy - พัฒนาเครื่องปฏิกรณ์นิวเคลียร์ขนาดจิ๋ว (พกพาได้)",
-  SMR: "NuScale Power - ผู้บุกเบิกเทคโนโลยีโรงไฟฟ้านิวเคลียร์ขนาดเล็ก (SMR)",
-  LEU: "Centrus Energy - ผู้ผลิตเชื้อเพลิงยูเรเนียมเข้มข้น (HALEU) สำหรับโรงไฟฟ้ารุ่นใหม่",
-  CCJ: "Cameco - บริษัทเหมืองยูเรเนียมที่ใหญ่ที่สุดในโลก (ต้นน้ำของพลังงานนิวเคลียร์)",
-  BWXT: "BWX Technologies - ผู้ผลิตชิ้นส่วนนิวเคลียร์ให้กองทัพเรือสหรัฐฯ และโรงไฟฟ้า",
-  GEV: "GE Vernova - ยักษ์ใหญ่ด้านโครงสร้างพื้นฐานพลังงาน (กังหันลม, กังหันก๊าซ, ระบบสายส่ง)",
-  CIFR: "Cipher Mining - เหมือง Bitcoin ระดับอุตสาหกรรมในสหรัฐฯ",
-  WULF: "TeraWulf - เหมือง Bitcoin พลังงานนิวเคลียร์ (Zero-Carbon)",
-  APLD: "Applied Digital - ให้บริการศูนย์ข้อมูล (Data Center) สำหรับงาน AI โดยเฉพาะ",
+  BWXT: "BWX Technologies - ผู้ผลิตเตาปฏิกรณ์นิวเคลียร์ขนาดเล็กสำหรับกองทัพเรือสหรัฐฯ และพลังงานสะอาด",
 
-  // 🌟 ALPHA PICKS
+  // ALPHA PICKS
   APP: "AppLovin - ซอฟต์แวร์ AI โฆษณาและสร้างรายได้จากแอปพลิเคชัน (Alpha Picks ท็อปฟอร์ม)",
-  POWL: "Powell Industries - ผู้ผลิตอุปกรณ์ควบคุมไฟฟ้าและสวิตช์เกียร์สำหรับอุตสาหกรรม",
-  CLS: "Celestica - รับจ้างผลิตชิ้นส่วนอิเล็กทรอนิกส์คุณภาพสูง (โซลูชันด้าน AI และ Cloud)",
-  MOD: "Modine Manufacturing - ระบบจัดการความร้อน (Cooling) ที่สำคัญมากสำหรับ Data Center",
-  SAIA: "Saia Inc. - บริษัทขนส่งลอจิสติกส์รายใหญ่ (ผลงานชนะตลาดต่อเนื่อง)",
-  STRL: "Sterling Infrastructure - ก่อสร้างโครงสร้างพื้นฐาน (E-Infrastructure และ Data Center)",
-  FTNT: "Fortinet - ผู้นำระดับโลกด้านความปลอดภัยทางไซเบอร์ (Cybersecurity)",
-  UBER: "Uber - แพลตฟอร์มเรียกรถและส่งอาหารที่ทำกำไรและกระแสเงินสดได้อย่างแข็งแกร่ง",
 
   // SPECULATIVE
   JMIA: "Jumia - แพลตฟอร์มอีคอมเมิร์ซที่ใหญ่ที่สุดในทวีปแอฟริกา (Amazon of Africa)",
   ONDS: "Ondas Holdings - ระบบเครือข่ายไร้สายส่วนตัวและโดรนอัตโนมัติสำหรับอุตสาหกรรม",
   OSS: "One Stop Systems - ฮาร์ดแวร์ประมวลผลประสิทธิภาพสูง (Edge Computing) สำหรับ AI",
-  DPRO: "Draganfly - โซลูชั่นโดรนเพื่อการพาณิชย์และการกู้ภัย",
-  INV: "Innovation (Speculative Placeholder) - หุ้นเก็งกำไรกลุ่มนวัตกรรม",
   RR: "Rich Road (Speculative Placeholder) - หุ้นเก็งกำไร",
 };
