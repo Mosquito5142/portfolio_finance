@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     const response = await fetch(scriptUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items }),
+      body: JSON.stringify({ actionType: "WATCHLIST", items }),
     });
 
     // Apps Script redirects on success (302), so we check for that too
