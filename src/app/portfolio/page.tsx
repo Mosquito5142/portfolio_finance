@@ -272,7 +272,7 @@ export default function PortfolioTracker() {
   const winRate =
     totalClosedTrades > 0 ? (winCount / totalClosedTrades) * 100 : 0;
 
-  // Currency Converter Formatter
+  // Currency Converter Formatter (For PnL & Global Summaries)
   const formatCurrency = (valUSD: number) => {
     const converted = currency === "THB" ? valUSD * usdtRate : valUSD;
     return new Intl.NumberFormat("th-TH", {
@@ -281,6 +281,14 @@ export default function PortfolioTracker() {
     }).format(converted);
   };
   const getSymbol = () => (currency === "THB" ? "฿" : "$");
+
+  // Strict USD Formatter (For Stock Prices and Position Values)
+  const formatUSD = (val: number) => {
+    return new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(val);
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 p-4 md:p-8 font-sans pt-24 custom-scrollbar">
@@ -479,19 +487,33 @@ export default function PortfolioTracker() {
                               {holdingQty} หุ้น
                             </span>
                           </div>
-                          <p className="text-xs text-slate-500 mt-1">
-                            ซื้อเมื่อ {new Date(item.date).toLocaleDateString()}{" "}
-                            @ {getSymbol()}
-                            {formatCurrency(item.price)}
+                          <p className="text-xs text-slate-400 mt-2">
+                            ราคาเข้า:{" "}
+                            <span className="text-slate-300 font-bold">
+                              ${formatUSD(item.price)}
+                            </span>
+                          </p>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            มูลค่าตอนซื้อ: {getSymbol()}
+                            {formatCurrency(item.price * holdingQty)}
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-lg font-bold text-white">
-                            {getSymbol()}
-                            {formatCurrency(currentPrice)}
+                          <p className="text-xs text-slate-400 mb-0.5">
+                            ราคาปัจจุบัน
+                          </p>
+                          <p className="text-xl font-bold text-white leading-none">
+                            ${formatUSD(currentPrice)}
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1 mb-2">
+                            มูลค่าตอนนี้:{" "}
+                            <span className="text-slate-200">
+                              {getSymbol()}
+                              {formatCurrency(currentPrice * holdingQty)}
+                            </span>
                           </p>
                           <p
-                            className={`text-sm font-medium flex items-center justify-end gap-1 ${
+                            className={`text-sm font-bold flex items-center justify-end gap-1 ${
                               isProfit ? "text-emerald-400" : "text-red-400"
                             }`}
                           >
@@ -511,8 +533,7 @@ export default function PortfolioTracker() {
                       <div className="mt-4 mb-3">
                         <div className="flex justify-between text-xs font-medium mb-1">
                           <span className="text-red-400 flex items-center gap-1">
-                            <span>จุดคัท</span> {getSymbol()}
-                            {formatCurrency(item.cutLoss)} (-
+                            <span>จุดคัท</span> ${formatUSD(item.cutLoss)} (-
                             {(
                               ((item.price - item.cutLoss) / item.price) *
                               100
@@ -520,8 +541,7 @@ export default function PortfolioTracker() {
                             %)
                           </span>
                           <span className="text-emerald-400 flex items-center gap-1">
-                            <span>เป้าหมาย</span> {getSymbol()}
-                            {formatCurrency(item.target)} (+
+                            <span>เป้าหมาย</span> ${formatUSD(item.target)} (+
                             {(
                               ((item.target - item.price) / item.price) *
                               100
@@ -688,13 +708,11 @@ export default function PortfolioTracker() {
                             </td>
                             <td className="px-4 py-3 text-right">
                               <span className="text-slate-500">
-                                {getSymbol()}
-                                {formatCurrency(item.price)}
+                                ${formatUSD(item.price)}
                               </span>
                               <span className="mx-1 text-slate-600">→</span>
                               <span className="text-white">
-                                {getSymbol()}
-                                {formatCurrency(item.soldPrice)}
+                                ${formatUSD(item.soldPrice)}
                               </span>
                             </td>
                             <td

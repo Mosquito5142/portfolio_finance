@@ -60,6 +60,17 @@ const MENU_ITEMS = [
     borderColor: "border-yellow-500/30",
     glowColor: "shadow-yellow-500/20",
   },
+  {
+    href: "/portfolio",
+    icon: "💼",
+    title: "พอร์ตการลงทุน",
+    subtitle: "จัดการหุ้นและ PnL",
+    description: "บันทึกหุ้น, จุดคัท/ทำกำไร, วัดผลและดูประวัติการซื้อขาย",
+    gradient: "from-emerald-600 to-teal-600",
+    hoverGradient: "hover:from-emerald-500 hover:to-teal-500",
+    borderColor: "border-emerald-500/30",
+    glowColor: "shadow-emerald-500/20",
+  },
 ];
 
 export default function HomePage() {
