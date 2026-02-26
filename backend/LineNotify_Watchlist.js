@@ -46,7 +46,7 @@ function isMarketOpen() {
 }
 
 // ========================================
-// 🎯 ฟังก์ชันหลัก - สำหรับ Watchlist เท่านั้น
+// 🎯 ฟังก์ชันหลัก - สำหรับ Watchlist & Portfolio
 // ========================================
 function checkAllAndNotify() {
   if (!isMarketOpen()) {
@@ -54,6 +54,7 @@ function checkAllAndNotify() {
     return;
   }
   checkPriceAndNotify();
+  checkPortfolioAndNotify();
 }
 
 // ========================================
@@ -139,7 +140,98 @@ function checkPriceAndNotify() {
 }
 
 // ========================================
-// 📤 ฟังก์ชันยิง LINE
+// 💼 2. ระบบเฝ้าพอร์ต (Portfolio TP & SL)
+// ========================================
+function checkPortfolioAndNotify() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_PORTFOLIO);
+  if (!sheet) return;
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+
+  // อ่านข้อมูล A ถึง M (รวม L=Current Price Formula ที่เพิ่งเพิ่ม)
+  var dataRange = sheet.getRange(2, 1, lastRow - 1, 13);
+  var data = dataRange.getValues();
+  var pendingAlerts = [];
+
+  data.forEach(function (row, index) {
+    var symbol = row[1]; // B: Symbol
+    var entryPrice = row[4]; // E: Price
+    var cutLossPrice = row[5]; // F: CutLoss
+    var targetPrice = row[6]; // G: Target
+    var status = row[10]; // K: Status (ACTIVE, CLOSED, PARTIAL_SOLD, ALERT_SENT)
+    var currentPrice = row[11]; // L: Current Price (จากหน้าแก้ POST)
+
+    // ข้ามหุ้นที่ขายไปแล้วหรือไม่ได้ใส่ราคา
+    if (status === "CLOSED" || status === "ALERT_SENT") return;
+    if (
+      currentPrice === "#N/A" ||
+      currentPrice === "Loading..." ||
+      currentPrice === "" ||
+      currentPrice == null
+    )
+      return;
+
+    var rowNum = index + 2;
+    var profitPct = ((currentPrice - entryPrice) / entryPrice) * 100;
+
+    // เช็คจุดทำกำไร (Target)
+    if (currentPrice >= targetPrice) {
+      var msgTarget =
+        "🎯 TARGET HIT!: " +
+        symbol +
+        "\n� ราคาปัจจุบัน: $" +
+        currentPrice +
+        " (เป้า: $" +
+        targetPrice +
+        ")\n🚀 กำไรทะลุเป้า: +" +
+        profitPct.toFixed(2) +
+        "%\n💡 อย่าลืมเข้าไประบบเพื่อล็อคกำไร/ปิดสถานะ!";
+
+      pendingAlerts.push({
+        rowNum: rowNum,
+        text: msgTarget,
+      });
+    }
+    // เช็คจุดตัดขาดทุน (Cut Loss)
+    else if (currentPrice <= cutLossPrice) {
+      var msgCut =
+        "🚨 CUT LOSS REACHED!: " +
+        symbol +
+        "\n🔻 ราคาปัจจุบัน: $" +
+        currentPrice +
+        " (จุดคัท: $" +
+        cutLossPrice +
+        ")\n🩸 ขาดทุน: " +
+        profitPct.toFixed(2) +
+        "%\n🛑 ถึงจุดต้องมอบตัว! ไปตั้งขายด่วน!!";
+
+      pendingAlerts.push({
+        rowNum: rowNum,
+        text: msgCut,
+      });
+    }
+  });
+
+  if (pendingAlerts.length > 0) {
+    var finalMessage =
+      "💼 PORTFOLIO ACTION REQUIRED 💼\n====================\n\n";
+    for (var i = 0; i < pendingAlerts.length; i++) {
+      finalMessage += i + 1 + ". " + pendingAlerts[i].text + "\n\n";
+    }
+    finalMessage += "====================\n⚠️";
+
+    if (sendLineMessagingAPI(finalMessage)) {
+      pendingAlerts.forEach(function (alert) {
+        sheet.getRange(alert.rowNum, 11).setValue("ALERT_SENT");
+      });
+    }
+  }
+}
+
+// ========================================
+// �📤 ฟังก์ชันยิง LINE
 // ========================================
 function sendLineMessagingAPI(message) {
   var url = "https://api.line.me/v2/bot/message/broadcast";
@@ -229,7 +321,7 @@ function doPost(e) {
       var item = json.item; // { date, ticker, quantity, price, cut, target }
       var newRow = sheet.getLastRow() + 1;
 
-      // หัวตารางอ้างอิง: A=Date, B=Symbol, C=Action, D=Quantity, E=Price, F=CutLoss, G=Target, H=SoldDate, I=SoldQty, J=SoldPrice, K=Status
+      // หัวตารางอ้างอิง: A=Date, B=Symbol, C=Action, D=Quantity, E=Price, F=CutLoss, G=Target, H=SoldDate, I=SoldQty, J=SoldPrice, K=Status, L=CurrentPriceFormula
       sheet.getRange(newRow, 1).setValue(item.date); // A: Date
       sheet.getRange(newRow, 2).setValue(item.ticker); // B: Symbol
       sheet.getRange(newRow, 3).setValue("BUY"); // C: Action
@@ -238,6 +330,15 @@ function doPost(e) {
       sheet.getRange(newRow, 6).setValue(item.cut); // F: CutLoss
       sheet.getRange(newRow, 7).setValue(item.target); // G: Target
       sheet.getRange(newRow, 11).setValue("ACTIVE"); // K: Status
+
+      // L: Current Price Formula แบบเดียวกับหน้า Watchlist
+      if (item.ticker.toUpperCase() === "CASH") {
+        sheet.getRange(newRow, 12).setValue(1);
+      } else {
+        sheet
+          .getRange(newRow, 12)
+          .setFormula("=GOOGLEFINANCE(B" + newRow + ")");
+      }
 
       return ContentService.createTextOutput(
         JSON.stringify({

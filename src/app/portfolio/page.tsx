@@ -2,6 +2,13 @@
 
 import { useState, useEffect } from "react";
 import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+} from "recharts";
+import {
   TrendingUp,
   TrendingDown,
   Briefcase,
@@ -49,6 +56,7 @@ export default function PortfolioTracker() {
   const [sellLoading, setSellLoading] = useState<number | null>(null);
   const [sellQty, setSellQty] = useState<{ [key: number]: string }>({});
   const [sellPrice, setSellPrice] = useState<{ [key: number]: string }>({});
+  const [sortBy, setSortBy] = useState<string>("date_desc");
 
   useEffect(() => {
     fetchExchangeRate();
@@ -84,7 +92,9 @@ export default function PortfolioTracker() {
         const activeRows = rows.filter((r) => r.status !== "CLOSED");
 
         const tickers = Array.from(
-          new Set(activeRows.map((r) => r.ticker)),
+          new Set(
+            activeRows.filter((r) => r.ticker !== "CASH").map((r) => r.ticker),
+          ),
         ).join(",");
 
         let livePrices: Record<string, any> = {};
@@ -109,6 +119,13 @@ export default function PortfolioTracker() {
 
         // Merge Live Prices back into data
         const mergedData = rows.map((r) => {
+          if (r.ticker === "CASH") {
+            return {
+              ...r,
+              livePrice: r.price, // Cash USD value is 1-to-1 with its entry
+              liveChangePercent: 0,
+            };
+          }
           if (r.status !== "CLOSED" && livePrices[r.ticker]) {
             return {
               ...r,
@@ -233,10 +250,38 @@ export default function PortfolioTracker() {
   };
 
   // derived data
-  const actives = portfolioData.filter((r) => r.status !== "CLOSED");
+  let actives = portfolioData.filter((r) => r.status !== "CLOSED");
   const histories = portfolioData.filter(
     (r) => r.status === "CLOSED" || r.status === "PARTIAL_SOLD",
   );
+
+  // Apply sorting
+  actives.sort((a, b) => {
+    const aQty = a.quantity - (a.soldQty || 0);
+    const bQty = b.quantity - (b.soldQty || 0);
+    const aPrice = a.livePrice || a.price;
+    const bPrice = b.livePrice || b.price;
+    const aValue = aPrice * aQty;
+    const bValue = bPrice * bQty;
+    const aPnlPct = ((aPrice - a.price) / a.price) * 100;
+    const bPnlPct = ((bPrice - b.price) / b.price) * 100;
+
+    switch (sortBy) {
+      case "value_desc":
+        return bValue - aValue;
+      case "value_asc":
+        return aValue - bValue;
+      case "pnl_desc":
+        return bPnlPct - aPnlPct;
+      case "pnl_asc":
+        return aPnlPct - bPnlPct;
+      case "name_asc":
+        return a.ticker.localeCompare(b.ticker);
+      case "date_desc":
+      default:
+        return b.rowIndex - a.rowIndex;
+    }
+  });
 
   let totalInvestedUSD = 0;
   let totalCurrentValueUSD = 0;
@@ -289,6 +334,33 @@ export default function PortfolioTracker() {
       maximumFractionDigits: 2,
     }).format(val);
   };
+
+  // --- Portfolio Composition Data ---
+  const compositionData = actives
+    .map((item) => {
+      const holdingQty = item.quantity - (item.soldQty || 0);
+      const currentPrice = item.livePrice || item.price;
+      const usdValue = currentPrice * holdingQty;
+      return {
+        name: item.ticker,
+        value: usdValue,
+      };
+    })
+    .filter((item) => item.value > 0)
+    .sort((a, b) => b.value - a.value);
+
+  const COLORS = [
+    "#3b82f6", // blue-500
+    "#10b981", // emerald-500
+    "#f59e0b", // amber-500
+    "#8b5cf6", // violet-500
+    "#ec4899", // pink-500
+    "#06b6d4", // cyan-500
+    "#f97316", // orange-500
+    "#84cc16", // lime-500
+    "#6366f1", // indigo-500
+    "#ef4444", // red-500
+  ];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 p-4 md:p-8 font-sans pt-24 custom-scrollbar">
@@ -419,27 +491,46 @@ export default function PortfolioTracker() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main List */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="flex gap-4 border-b border-slate-800">
-              <button
-                onClick={() => setActiveTab("ACTIVE")}
-                className={`pb-3 text-sm font-bold px-4 border-b-2 transition-colors ${
-                  activeTab === "ACTIVE"
-                    ? "border-emerald-500 text-emerald-400"
-                    : "border-transparent text-slate-500 hover:text-slate-300"
-                }`}
-              >
-                กำลังถือครอง ({actives.length})
-              </button>
-              <button
-                onClick={() => setActiveTab("HISTORY")}
-                className={`pb-3 text-sm font-bold px-4 border-b-2 transition-colors ${
-                  activeTab === "HISTORY"
-                    ? "border-amber-500 text-amber-400"
-                    : "border-transparent text-slate-500 hover:text-slate-300"
-                }`}
-              >
-                ประวัติการซื้อขาย
-              </button>
+            <div className="flex gap-4 border-b border-slate-800 justify-between items-center">
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setActiveTab("ACTIVE")}
+                  className={`pb-3 text-sm font-bold px-4 border-b-2 transition-colors ${
+                    activeTab === "ACTIVE"
+                      ? "border-emerald-500 text-emerald-400"
+                      : "border-transparent text-slate-500 hover:text-slate-300"
+                  }`}
+                >
+                  กำลังถือครอง ({actives.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab("HISTORY")}
+                  className={`pb-3 text-sm font-bold px-4 border-b-2 transition-colors ${
+                    activeTab === "HISTORY"
+                      ? "border-amber-500 text-amber-400"
+                      : "border-transparent text-slate-500 hover:text-slate-300"
+                  }`}
+                >
+                  ประวัติการซื้อขาย
+                </button>
+              </div>
+
+              {activeTab === "ACTIVE" && (
+                <div className="pb-2">
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1 outline-none focus:border-emerald-500 cursor-pointer"
+                  >
+                    <option value="date_desc">ล่าสุด</option>
+                    <option value="value_desc">มูลค่ารวม (มากไปน้อย)</option>
+                    <option value="value_asc">มูลค่ารวม (น้อยไปมาก)</option>
+                    <option value="pnl_desc">% กำไร (มากไปน้อย)</option>
+                    <option value="pnl_asc">% ขาดทุน (น้อยไปมาก)</option>
+                    <option value="name_asc">ชื่อหุ้น (A-Z)</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             {loading ? (
@@ -512,90 +603,97 @@ export default function PortfolioTracker() {
                               {formatCurrency(currentPrice * holdingQty)}
                             </span>
                           </p>
-                          <p
-                            className={`text-sm font-bold flex items-center justify-end gap-1 ${
-                              isProfit ? "text-emerald-400" : "text-red-400"
-                            }`}
-                          >
-                            {isProfit ? (
-                              <TrendingUp size={14} />
-                            ) : (
-                              <TrendingDown size={14} />
-                            )}
-                            {pnlPct.toFixed(2)}% ({isProfit ? "+" : ""}
-                            {getSymbol()}
-                            {formatCurrency(pnl)})
-                          </p>
+                          {item.ticker !== "CASH" && (
+                            <p
+                              className={`text-sm font-bold flex items-center justify-end gap-1 ${
+                                isProfit ? "text-emerald-400" : "text-red-400"
+                              }`}
+                            >
+                              {isProfit ? (
+                                <TrendingUp size={14} />
+                              ) : (
+                                <TrendingDown size={14} />
+                              )}
+                              {pnlPct.toFixed(2)}% ({isProfit ? "+" : ""}
+                              {getSymbol()}
+                              {formatCurrency(pnl)})
+                            </p>
+                          )}
                         </div>
                       </div>
 
                       {/* Thermometer / Risk Bar */}
-                      <div className="mt-4 mb-3">
-                        <div className="flex justify-between text-xs font-medium mb-1">
-                          <span className="text-red-400 flex items-center gap-1">
-                            <span>จุดคัท</span> ${formatUSD(item.cutLoss)} (-
-                            {(
-                              ((item.price - item.cutLoss) / item.price) *
-                              100
-                            ).toFixed(1)}
-                            %)
-                          </span>
-                          <span className="text-emerald-400 flex items-center gap-1">
-                            <span>เป้าหมาย</span> ${formatUSD(item.target)} (+
-                            {(
-                              ((item.target - item.price) / item.price) *
-                              100
-                            ).toFixed(1)}
-                            %)
-                          </span>
+                      {item.ticker !== "CASH" && (
+                        <div className="mt-4 mb-3">
+                          <div className="flex justify-between text-xs font-medium mb-1">
+                            <span className="text-red-400 flex items-center gap-1">
+                              <span>จุดคัท</span> ${formatUSD(item.cutLoss)} (-
+                              {(
+                                ((item.price - item.cutLoss) / item.price) *
+                                100
+                              ).toFixed(1)}
+                              %)
+                            </span>
+                            <span className="text-emerald-400 flex items-center gap-1">
+                              <span>เป้าหมาย</span> ${formatUSD(item.target)} (+
+                              {(
+                                ((item.target - item.price) / item.price) *
+                                100
+                              ).toFixed(1)}
+                              %)
+                            </span>
+                          </div>
+                          <div className="relative w-full h-2 rounded-full bg-slate-800 overflow-hidden flex">
+                            {/* We try to map current price visually between Cut and Target */}
+                            {(() => {
+                              const range = item.target - item.cutLoss;
+                              let currentPos =
+                                ((currentPrice - item.cutLoss) / range) * 100;
+                              let entryPos =
+                                ((item.price - item.cutLoss) / range) * 100;
+                              currentPos = Math.max(
+                                0,
+                                Math.min(100, currentPos),
+                              );
+                              entryPos = Math.max(0, Math.min(100, entryPos));
+                              return (
+                                <>
+                                  {/* Background Red to Green */}
+                                  <div className="absolute top-0 bottom-0 left-0 w-1/3 bg-gradient-to-r from-red-600/20 to-transparent"></div>
+                                  <div className="absolute top-0 bottom-0 right-0 w-1/3 bg-gradient-to-l from-emerald-600/20 to-transparent"></div>
+                                  {/* Entry Marker */}
+                                  <div
+                                    className="absolute top-0 bottom-0 w-[2px] bg-slate-500 z-10"
+                                    style={{ left: `${entryPos}%` }}
+                                  ></div>
+                                  {/* Current Price Dot */}
+                                  <div
+                                    className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full z-20 shadow-[0_0_10px_rgba(0,255,100,0.8)]"
+                                    style={{
+                                      left: `calc(${currentPos}% - 6px)`,
+                                      backgroundColor: isProfit
+                                        ? "#34d399"
+                                        : "#f87171",
+                                    }}
+                                  ></div>
+                                </>
+                              );
+                            })()}
+                          </div>
+                          <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                            <span>
+                              {toCutloss > 0
+                                ? `เหลืออีก ${toCutloss.toFixed(1)}% ถึงจุดคัท`
+                                : `🚨 ทะลุจุด Cut Loss!`}
+                            </span>
+                            <span>
+                              {toTarget > 0
+                                ? `ขาดอีก ${toTarget.toFixed(1)}% ถึงเป้า`
+                                : `🎯 ถึงเป้าทำกำไร!`}
+                            </span>
+                          </div>
                         </div>
-                        <div className="relative w-full h-2 rounded-full bg-slate-800 overflow-hidden flex">
-                          {/* We try to map current price visually between Cut and Target */}
-                          {(() => {
-                            const range = item.target - item.cutLoss;
-                            let currentPos =
-                              ((currentPrice - item.cutLoss) / range) * 100;
-                            let entryPos =
-                              ((item.price - item.cutLoss) / range) * 100;
-                            currentPos = Math.max(0, Math.min(100, currentPos));
-                            entryPos = Math.max(0, Math.min(100, entryPos));
-                            return (
-                              <>
-                                {/* Background Red to Green */}
-                                <div className="absolute top-0 bottom-0 left-0 w-1/3 bg-gradient-to-r from-red-600/20 to-transparent"></div>
-                                <div className="absolute top-0 bottom-0 right-0 w-1/3 bg-gradient-to-l from-emerald-600/20 to-transparent"></div>
-                                {/* Entry Marker */}
-                                <div
-                                  className="absolute top-0 bottom-0 w-[2px] bg-slate-500 z-10"
-                                  style={{ left: `${entryPos}%` }}
-                                ></div>
-                                {/* Current Price Dot */}
-                                <div
-                                  className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full z-20 shadow-[0_0_10px_rgba(0,255,100,0.8)]"
-                                  style={{
-                                    left: `calc(${currentPos}% - 6px)`,
-                                    backgroundColor: isProfit
-                                      ? "#34d399"
-                                      : "#f87171",
-                                  }}
-                                ></div>
-                              </>
-                            );
-                          })()}
-                        </div>
-                        <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                          <span>
-                            {toCutloss > 0
-                              ? `เหลืออีก ${toCutloss.toFixed(1)}% ถึงจุดคัท`
-                              : `🚨 ทะลุจุด Cut Loss!`}
-                          </span>
-                          <span>
-                            {toTarget > 0
-                              ? `ขาดอีก ${toTarget.toFixed(1)}% ถึงเป้า`
-                              : `🎯 ถึงเป้าทำกำไร!`}
-                          </span>
-                        </div>
-                      </div>
+                      )}
 
                       {/* Sell Actions */}
                       <div className="mt-4 pt-4 border-t border-slate-800/60 flex items-center justify-between">
@@ -736,16 +834,111 @@ export default function PortfolioTracker() {
             )}
           </div>
 
-          {/* Right Sidebar - Record Trade Form */}
-          <div className="space-y-6">
-            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl sticky top-24">
-              <div className="flex items-center gap-2 mb-6">
-                <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400">
-                  <Save size={20} />
+          {/* Right Sidebar */}
+          <div className="space-y-6 relative">
+            {/* Portfolio Composition Chart */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl">
+              <h2 className="text-lg font-bold text-white mb-4">
+                สัดส่วนพอร์ต (Portfolio)
+              </h2>
+              {compositionData.length > 0 ? (
+                <>
+                  <div className="h-56 w-full -ml-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={compositionData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={90}
+                          paddingAngle={2}
+                          dataKey="value"
+                          stroke="none"
+                        >
+                          {compositionData.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={COLORS[index % COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip
+                          formatter={(value: any) => [
+                            `${getSymbol()}${formatCurrency(Number(value))}`,
+                            "มูลค่า",
+                          ]}
+                          contentStyle={{
+                            backgroundColor: "#0f172a",
+                            borderColor: "#334155",
+                            borderRadius: "12px",
+                            color: "#f8fafc",
+                            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.5)",
+                          }}
+                          itemStyle={{ color: "#f8fafc", fontWeight: "bold" }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="mt-6 grid grid-cols-2 gap-y-3 gap-x-2">
+                    {compositionData.map((entry, index) => {
+                      const total = compositionData.reduce(
+                        (sum, item) => sum + item.value,
+                        0,
+                      );
+                      const percent = ((entry.value / total) * 100).toFixed(1);
+                      return (
+                        <div
+                          key={entry.name}
+                          className="flex items-center gap-2 text-[11px] text-slate-300"
+                        >
+                          <div
+                            className="w-3 h-3 rounded-full shrink-0 shadow-sm"
+                            style={{
+                              backgroundColor: COLORS[index % COLORS.length],
+                            }}
+                          ></div>
+                          <span className="font-bold text-white truncate w-10">
+                            {entry.name}
+                          </span>
+                          <span className="text-slate-400 ml-auto">
+                            {percent}%
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8 text-slate-500 text-sm">
+                  ไม่มีข้อมูลหุ้นในพอร์ต
                 </div>
-                <h2 className="text-lg font-bold text-white">
-                  บันทึกการซื้อหุ้นใหม่
-                </h2>
+              )}
+            </div>
+
+            {/* Record Trade Form */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl sticky top-24">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400">
+                    <Save size={20} />
+                  </div>
+                  <h2 className="text-lg font-bold text-white">
+                    บันทึกการซื้อหุ้นใหม่
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTicker("CASH");
+                    setPrice("1");
+                    setCutLoss("0");
+                    setTarget("0");
+                  }}
+                  className="text-[11px] bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 px-3 py-1.5 rounded-lg font-bold transition-colors border border-emerald-500/30"
+                >
+                  + เพิ่มเงินสด (Cash)
+                </button>
               </div>
 
               <form onSubmit={handleAddTrade} className="space-y-4">
@@ -766,14 +959,14 @@ export default function PortfolioTracker() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1">
-                      จำนวนหุ้น
+                      {ticker === "CASH" ? "ยอดเงิน ($)" : "จำนวนหุ้น"}
                     </label>
                     <input
                       type="number"
                       required
                       step="any"
                       min="0.0001"
-                      placeholder="100"
+                      placeholder={ticker === "CASH" ? "10000" : "100"}
                       value={quantity}
                       onChange={(e) => setQuantity(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -781,7 +974,9 @@ export default function PortfolioTracker() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1">
-                      ราคาซื้อ ($)
+                      {ticker === "CASH"
+                        ? "ราคาประเมินค่า (ใส่ 1)"
+                        : "ราคาซื้อ ($)"}
                     </label>
                     <input
                       type="number"
@@ -804,7 +999,7 @@ export default function PortfolioTracker() {
                       type="number"
                       required
                       step="any"
-                      min="0.01"
+                      min="0"
                       placeholder="140.00"
                       value={cutLoss}
                       onChange={(e) => setCutLoss(e.target.value)}
@@ -819,7 +1014,7 @@ export default function PortfolioTracker() {
                       type="number"
                       required
                       step="any"
-                      min="0.01"
+                      min="0"
                       placeholder="180.00"
                       value={target}
                       onChange={(e) => setTarget(e.target.value)}
