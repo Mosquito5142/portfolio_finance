@@ -34,6 +34,7 @@ interface PortfolioRow {
   // Merged live data
   livePrice?: number;
   liveChangePercent?: number;
+  portfolioType?: "main" | "growth";
 }
 
 export default function PortfolioTracker() {
@@ -58,6 +59,10 @@ export default function PortfolioTracker() {
   const [sellPrice, setSellPrice] = useState<{ [key: number]: string }>({});
   const [sortBy, setSortBy] = useState<string>("date_desc");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [viewFilter, setViewFilter] = useState<"all" | "main" | "growth">(
+    "all",
+  );
+  const [tradeType, setTradeType] = useState<"main" | "growth">("main");
 
   useEffect(() => {
     fetchExchangeRate();
@@ -167,6 +172,7 @@ export default function PortfolioTracker() {
             price: Number(price),
             cut: Number(cutLoss),
             target: Number(target),
+            portfolioType: tradeType,
           },
         }),
       });
@@ -177,6 +183,7 @@ export default function PortfolioTracker() {
         setPrice("");
         setCutLoss("");
         setTarget("");
+        setTradeType("main");
         setIsAddModalOpen(false);
         await fetchPortfolioData();
       } else {
@@ -225,6 +232,9 @@ export default function PortfolioTracker() {
             soldDate: dateStr,
             soldQty: sQty,
             soldPrice: sPrice,
+            portfolioType:
+              portfolioData.find((r) => r.rowIndex === rowIndex)
+                ?.portfolioType || "main",
           },
         }),
       });
@@ -252,9 +262,15 @@ export default function PortfolioTracker() {
   };
 
   // derived data
-  let actives = portfolioData.filter((r) => r.status !== "CLOSED");
+  let actives = portfolioData.filter(
+    (r) =>
+      r.status !== "CLOSED" &&
+      (viewFilter === "all" || r.portfolioType === viewFilter),
+  );
   const histories = portfolioData.filter(
-    (r) => r.status === "CLOSED" || r.status === "PARTIAL_SOLD",
+    (r) =>
+      (r.status === "CLOSED" || r.status === "PARTIAL_SOLD") &&
+      (viewFilter === "all" || r.portfolioType === viewFilter),
   );
 
   // Apply sorting
@@ -404,6 +420,40 @@ export default function PortfolioTracker() {
                 }`}
               >
                 USD (ดอลลาร์)
+              </button>
+            </div>
+
+            {/* Portfolio Filter Toggle */}
+            <div className="flex items-center bg-slate-900 border border-slate-700/50 rounded-lg p-1">
+              <button
+                onClick={() => setViewFilter("all")}
+                className={`px-3 py-1.5 rounded-md text-sm font-bold transition-all ${
+                  viewFilter === "all"
+                    ? "bg-white/10 text-white"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+              >
+                ทั้งหมด
+              </button>
+              <button
+                onClick={() => setViewFilter("main")}
+                className={`px-3 py-1.5 rounded-md text-sm font-bold transition-all ${
+                  viewFilter === "main"
+                    ? "bg-blue-600/20 text-blue-400"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+              >
+                พอร์ตหลัก (Main)
+              </button>
+              <button
+                onClick={() => setViewFilter("growth")}
+                className={`px-3 py-1.5 rounded-md text-sm font-bold transition-all ${
+                  viewFilter === "growth"
+                    ? "bg-amber-600/20 text-amber-400"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+              >
+                เติบโต (Growth)
               </button>
             </div>
             {/* Add Trade Button */}
@@ -696,6 +746,17 @@ export default function PortfolioTracker() {
                         <div className="flex items-center gap-3">
                           <h3 className="text-xl font-black tracking-tight text-white">
                             {item.ticker}
+                            {viewFilter === "all" && item.portfolioType && (
+                              <span
+                                className={`ml-2 text-[10px] px-1.5 py-0.5 rounded ${
+                                  item.portfolioType === "main"
+                                    ? "bg-blue-900/50 text-blue-400"
+                                    : "bg-amber-900/50 text-amber-400"
+                                }`}
+                              >
+                                {item.portfolioType.toUpperCase()}
+                              </span>
+                            )}
                           </h3>
                           <span className="bg-slate-800 text-slate-300 text-xs px-2 py-1 rounded-md">
                             {holdingQty} หุ้น
@@ -908,8 +969,19 @@ export default function PortfolioTracker() {
                           key={`${item.rowIndex}-sell-${idx}`}
                           className="hover:bg-slate-800/30 transition-colors"
                         >
-                          <td className="px-4 py-3 font-bold text-white">
+                          <td className="px-4 py-3 font-bold text-white items-center gap-2 flex">
                             {item.ticker}
+                            {viewFilter === "all" && item.portfolioType && (
+                              <span
+                                className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                  item.portfolioType === "main"
+                                    ? "bg-blue-900/50 text-blue-400"
+                                    : "bg-amber-900/50 text-amber-400"
+                                }`}
+                              >
+                                {item.portfolioType.toUpperCase()}
+                              </span>
+                            )}
                             {item.status === "PARTIAL_SOLD" && (
                               <span className="ml-2 text-[10px] bg-blue-900/50 text-blue-400 px-1 py-0.5 rounded">
                                 PARTIAL
@@ -987,6 +1059,37 @@ export default function PortfolioTracker() {
             </div>
 
             <form onSubmit={handleAddTrade} className="space-y-4">
+              {/* Portfolio Selection */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 mb-2">
+                  เลือกพอร์ตที่จะบันทึก
+                </label>
+                <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-700 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setTradeType("main")}
+                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+                      tradeType === "main"
+                        ? "bg-blue-600 text-white"
+                        : "text-slate-500 hover:text-slate-300"
+                    }`}
+                  >
+                    พอร์ตหลัก (Main)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTradeType("growth")}
+                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+                      tradeType === "growth"
+                        ? "bg-amber-600 text-white"
+                        : "text-slate-500 hover:text-slate-300"
+                    }`}
+                  >
+                    เติบโต (Growth)
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1">
                   หุ้น (Ticker Symbol)

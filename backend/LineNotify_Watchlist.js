@@ -3,7 +3,8 @@
 // ========================================
 var LINE_ACCESS_TOKEN = ""; // ใส่ Token ของคุณ
 var SHEET_WATCHLIST = "LineNotify_Watchlist";
-var SHEET_PORTFOLIO = "LineNotify_Portfolio"; // แผ่นงานสำหรับบันทึกการเทรด
+var SHEET_PORTFOLIO_MAIN = "Portfolio_main";
+var SHEET_PORTFOLIO_GROWTH = "Portfolio_growth";
 
 // ========================================
 // 🕒 ฟังก์ชันเช็คเวลาตลาด (Master's Timezone Fix)
@@ -144,74 +145,86 @@ function checkPriceAndNotify() {
 // ========================================
 function checkPortfolioAndNotify() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_PORTFOLIO);
-  if (!sheet) return;
-
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return;
-
-  // อ่านข้อมูล A ถึง M (รวม L=Current Price Formula ที่เพิ่งเพิ่ม)
-  var dataRange = sheet.getRange(2, 1, lastRow - 1, 13);
-  var data = dataRange.getValues();
+  var sheetsToCheck = [SHEET_PORTFOLIO_MAIN, SHEET_PORTFOLIO_GROWTH];
   var pendingAlerts = [];
 
-  data.forEach(function (row, index) {
-    var symbol = row[1]; // B: Symbol
-    var entryPrice = row[4]; // E: Price
-    var cutLossPrice = row[5]; // F: CutLoss
-    var targetPrice = row[6]; // G: Target
-    var status = row[10]; // K: Status (ACTIVE, CLOSED, PARTIAL_SOLD, ALERT_SENT)
-    var currentPrice = row[11]; // L: Current Price (จากหน้าแก้ POST)
+  sheetsToCheck.forEach(function (sheetName) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
 
-    // ข้ามหุ้นที่ขายไปแล้วหรือไม่ได้ใส่ราคา
-    if (status === "CLOSED" || status === "ALERT_SENT") return;
-    if (
-      currentPrice === "#N/A" ||
-      currentPrice === "Loading..." ||
-      currentPrice === "" ||
-      currentPrice == null
-    )
-      return;
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return;
 
-    var rowNum = index + 2;
-    var profitPct = ((currentPrice - entryPrice) / entryPrice) * 100;
+    // อ่านข้อมูล A ถึง M (รวม L=Current Price Formula ที่เพิ่งเพิ่ม)
+    var dataRange = sheet.getRange(2, 1, lastRow - 1, 13);
+    var data = dataRange.getValues();
 
-    // เช็คจุดทำกำไร (Target)
-    if (currentPrice >= targetPrice) {
-      var msgTarget =
-        "🎯 TARGET HIT!: " +
-        symbol +
-        "\n� ราคาปัจจุบัน: $" +
-        currentPrice +
-        " (เป้า: $" +
-        targetPrice +
-        ")\n🚀 กำไรทะลุเป้า: +" +
-        profitPct.toFixed(2) +
-        "%\n💡 อย่าลืมเข้าไประบบเพื่อล็อคกำไร/ปิดสถานะ!";
+    data.forEach(function (row, index) {
+      var symbol = row[1]; // B: Symbol
+      var entryPrice = row[4]; // E: Price
+      var cutLossPrice = row[5]; // F: CutLoss
+      var targetPrice = row[6]; // G: Target
+      var status = row[10]; // K: Status (ACTIVE, CLOSED, PARTIAL_SOLD, ALERT_SENT)
+      var currentPrice = row[11]; // L: Current Price (จากหน้าแก้ POST)
 
-      pendingAlerts.push({
-        rowNum: rowNum,
-        text: msgTarget,
-      });
-    }
-    // เช็คจุดตัดขาดทุน (Cut Loss)
-    else if (currentPrice <= cutLossPrice) {
-      var msgCut =
-        "🚨 CUT LOSS REACHED!: " +
-        symbol +
-        "\n🔻 ราคาปัจจุบัน: $" +
-        currentPrice +
-        " (จุดคัท: $" +
-        cutLossPrice +
-        ")\n🩸 ขาดทุน: " +
-        profitPct.toFixed(2) +
-        "%\n🛑 ถึงจุดต้องมอบตัว! ไปตั้งขายด่วน!!";
+      // ข้ามหุ้นที่ขายไปแล้วหรือไม่ได้ใส่ราคา
+      if (status === "CLOSED" || status === "ALERT_SENT") return;
+      if (
+        currentPrice === "#N/A" ||
+        currentPrice === "Loading..." ||
+        currentPrice === "" ||
+        currentPrice == null
+      )
+        return;
 
-      pendingAlerts.push({
-        rowNum: rowNum,
-        text: msgCut,
-      });
-    }
+      var rowNum = index + 2;
+      var profitPct = ((currentPrice - entryPrice) / entryPrice) * 100;
+      var portLabel =
+        sheetName === SHEET_PORTFOLIO_MAIN ? "[MAIN]" : "[GROWTH]";
+
+      // เช็คจุดทำกำไร (Target)
+      if (currentPrice >= targetPrice) {
+        var msgTarget =
+          "🎯 " +
+          portLabel +
+          " TARGET HIT!: " +
+          symbol +
+          "\n💰 ราคาปัจจุบัน: $" +
+          currentPrice +
+          " (เป้า: $" +
+          targetPrice +
+          ")\n🚀 กำไรทะลุเป้า: +" +
+          profitPct.toFixed(2) +
+          "%\n💡 อย่าลืมเข้าไประบบเพื่อล็อคกำไร/ปิดสถานะ!";
+
+        pendingAlerts.push({
+          rowNum: rowNum,
+          sheet: sheet,
+          text: msgTarget,
+        });
+      }
+      // เช็คจุดตัดขาดทุน (Cut Loss)
+      else if (currentPrice <= cutLossPrice) {
+        var msgCut =
+          "🚨 " +
+          portLabel +
+          " CUT LOSS REACHED!: " +
+          symbol +
+          "\n🔻 ราคาปัจจุบัน: $" +
+          currentPrice +
+          " (จุดคัท: $" +
+          cutLossPrice +
+          ")\n🩸 ขาดทุน: " +
+          profitPct.toFixed(2) +
+          "%\n🛑 ถึงจุดต้องมอบตัว! ไปตั้งขายด่วน!!";
+
+        pendingAlerts.push({
+          rowNum: rowNum,
+          sheet: sheet,
+          text: msgCut,
+        });
+      }
+    });
   });
 
   if (pendingAlerts.length > 0) {
@@ -224,14 +237,14 @@ function checkPortfolioAndNotify() {
 
     if (sendLineMessagingAPI(finalMessage)) {
       pendingAlerts.forEach(function (alert) {
-        sheet.getRange(alert.rowNum, 11).setValue("ALERT_SENT");
+        alert.sheet.getRange(alert.rowNum, 11).setValue("ALERT_SENT");
       });
     }
   }
 }
 
 // ========================================
-// �📤 ฟังก์ชันยิง LINE
+// 📩📤 ฟังก์ชันยิง LINE
 // ========================================
 function sendLineMessagingAPI(message) {
   var url = "https://api.line.me/v2/bot/message/broadcast";
@@ -315,10 +328,15 @@ function doPost(e) {
     // 2. PORTFOLIO - บันทึกการซื้อ (BUY)
     // ---------------------------------
     if (actionType === "PORTFOLIO_BUY") {
-      var sheet = ss.getSheetByName(SHEET_PORTFOLIO);
-      if (!sheet) throw new Error("Portfolio sheet not found");
+      var item = json.item; // { date, ticker, quantity, price, cut, target, portfolioType }
 
-      var item = json.item; // { date, ticker, quantity, price, cut, target }
+      var targetSheetName =
+        item.portfolioType === "growth"
+          ? SHEET_PORTFOLIO_GROWTH
+          : SHEET_PORTFOLIO_MAIN;
+      var sheet = ss.getSheetByName(targetSheetName);
+      if (!sheet)
+        throw new Error("Portfolio sheet + " + targetSheetName + " not found");
       var newRow = sheet.getLastRow() + 1;
 
       // หัวตารางอ้างอิง: A=Date, B=Symbol, C=Action, D=Quantity, E=Price, F=CutLoss, G=Target, H=SoldDate, I=SoldQty, J=SoldPrice, K=Status, L=CurrentPriceFormula
@@ -352,10 +370,15 @@ function doPost(e) {
     // 3. PORTFOLIO - บันทึกการขาย (SELL)
     // ---------------------------------
     if (actionType === "PORTFOLIO_SELL") {
-      var sheet = ss.getSheetByName(SHEET_PORTFOLIO);
-      if (!sheet) throw new Error("Portfolio sheet not found");
+      var item = json.item; // { rowIndex, soldDate, soldQty, soldPrice, portfolioType }
 
-      var item = json.item; // { rowIndex, soldDate, soldQty, soldPrice }
+      var targetSheetName =
+        item.portfolioType === "growth"
+          ? SHEET_PORTFOLIO_GROWTH
+          : SHEET_PORTFOLIO_MAIN;
+      var sheet = ss.getSheetByName(targetSheetName);
+      if (!sheet)
+        throw new Error("Portfolio sheet " + targetSheetName + " not found");
 
       // อัปเดตข้อมูลการขายในแถวที่ระบุ (rowIndex ที่ได้จากการดึง GET)
       var targetRow = item.rowIndex; // ต้องตรงตาม index + 2
@@ -381,36 +404,43 @@ function doPost(e) {
     // 4. PORTFOLIO - ดึงข้อมูลทั้งหมด (GET workaround)
     // ---------------------------------
     if (actionType === "PORTFOLIO_GET") {
-      var sheet = ss.getSheetByName(SHEET_PORTFOLIO);
-      if (!sheet) throw new Error("Portfolio sheet not found");
-
-      var lastRow = sheet.getLastRow();
       var data = [];
+      var sheetsToCheck = [
+        { name: SHEET_PORTFOLIO_MAIN, type: "main" },
+        { name: SHEET_PORTFOLIO_GROWTH, type: "growth" },
+      ];
 
-      if (lastRow >= 2) {
-        var range = sheet.getRange(2, 1, lastRow - 1, 11);
-        var values = range.getValues();
+      sheetsToCheck.forEach(function (sData) {
+        var sheet = ss.getSheetByName(sData.name);
+        if (!sheet) return; // Skip if sheet doesn't exist yet
 
-        values.forEach(function (row, index) {
-          var symbol = row[1];
-          if (symbol && symbol !== "") {
-            data.push({
-              rowIndex: index + 2,
-              date: row[0],
-              ticker: symbol,
-              action: row[2],
-              quantity: row[3],
-              price: row[4],
-              cutLoss: row[5],
-              target: row[6],
-              soldDate: row[7],
-              soldQty: row[8],
-              soldPrice: row[9],
-              status: row[10],
-            });
-          }
-        });
-      }
+        var lastRow = sheet.getLastRow();
+        if (lastRow >= 2) {
+          var range = sheet.getRange(2, 1, lastRow - 1, 11);
+          var values = range.getValues();
+
+          values.forEach(function (row, index) {
+            var symbol = row[1];
+            if (symbol && symbol !== "") {
+              data.push({
+                rowIndex: index + 2,
+                date: row[0],
+                ticker: symbol,
+                action: row[2],
+                quantity: row[3],
+                price: row[4],
+                cutLoss: row[5],
+                target: row[6],
+                soldDate: row[7],
+                soldQty: row[8],
+                soldPrice: row[9],
+                status: row[10],
+                portfolioType: sData.type,
+              });
+            }
+          });
+        }
+      });
 
       return ContentService.createTextOutput(
         JSON.stringify({ status: "success", data: data }),
@@ -431,43 +461,46 @@ function doPost(e) {
 // ========================================
 function doGet(e) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_PORTFOLIO);
-
-  if (!sheet) {
-    return ContentService.createTextOutput(
-      JSON.stringify({ status: "error", message: "Sheet not found" }),
-    ).setMimeType(ContentService.MimeType.JSON);
-  }
 
   try {
-    var lastRow = sheet.getLastRow();
     var data = [];
+    var sheetsToCheck = [
+      { name: SHEET_PORTFOLIO_MAIN, type: "main" },
+      { name: SHEET_PORTFOLIO_GROWTH, type: "growth" },
+    ];
 
-    if (lastRow >= 2) {
-      // ดึงแค่คอลัมน์ A ถึง K (11 คอลัมน์)
-      var range = sheet.getRange(2, 1, lastRow - 1, 11);
-      var values = range.getValues();
+    sheetsToCheck.forEach(function (sData) {
+      var sheet = ss.getSheetByName(sData.name);
+      if (!sheet) return;
 
-      values.forEach(function (row, index) {
-        var symbol = row[1]; // B: Symbol
-        if (symbol && symbol !== "") {
-          data.push({
-            rowIndex: index + 2, // สำคัญ! ใช้สำหรับระบุแถวตอนจะอัปเดตขาย (SELL)
-            date: row[0],
-            ticker: symbol,
-            action: row[2],
-            quantity: row[3],
-            price: row[4],
-            cutLoss: row[5],
-            target: row[6],
-            soldDate: row[7],
-            soldQty: row[8],
-            soldPrice: row[9],
-            status: row[10],
-          });
-        }
-      });
-    }
+      var lastRow = sheet.getLastRow();
+
+      if (lastRow >= 2) {
+        var range = sheet.getRange(2, 1, lastRow - 1, 11);
+        var values = range.getValues();
+
+        values.forEach(function (row, index) {
+          var symbol = row[1]; // B: Symbol
+          if (symbol && symbol !== "") {
+            data.push({
+              rowIndex: index + 2, // สำคัญ! ใช้สำหรับระบุแถวตอนจะอัปเดตขาย (SELL)
+              date: row[0],
+              ticker: symbol,
+              action: row[2],
+              quantity: row[3],
+              price: row[4],
+              cutLoss: row[5],
+              target: row[6],
+              soldDate: row[7],
+              soldQty: row[8],
+              soldPrice: row[9],
+              status: row[10],
+              portfolioType: sData.type,
+            });
+          }
+        });
+      }
+    });
 
     var output = ContentService.createTextOutput(
       JSON.stringify({ status: "success", data: data }),
