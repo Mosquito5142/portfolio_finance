@@ -420,9 +420,8 @@ export default function PortfolioTracker() {
     "#8b5cf6", // violet-500
     "#ec4899", // pink-500
     "#06b6d4", // cyan-500
-    "#f97316", // orange-500
     "#84cc16", // lime-500
-    "#6366f1", // indigo-500
+    "#f97316", // orange-500
     "#ef4444", // red-500
   ];
 
@@ -666,7 +665,11 @@ export default function PortfolioTracker() {
                       {compositionData.map((entry, index) => (
                         <Cell
                           key={`cell-${index}`}
-                          fill={COLORS[index % COLORS.length]}
+                          fill={
+                            entry.name === "CASH"
+                              ? "#ffffff" // Always white for CASH
+                              : COLORS[index % COLORS.length]
+                          }
                         />
                       ))}
                     </Pie>
@@ -702,7 +705,10 @@ export default function PortfolioTracker() {
                       <div
                         className="w-4 h-4 rounded-full shrink-0 shadow-sm"
                         style={{
-                          backgroundColor: COLORS[index % COLORS.length],
+                          backgroundColor:
+                            entry.name === "CASH"
+                              ? "#ffffff"
+                              : COLORS[index % COLORS.length],
                         }}
                       ></div>
                       <span className="font-bold text-white truncate w-16">
