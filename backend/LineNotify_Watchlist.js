@@ -144,6 +144,11 @@ function checkPriceAndNotify() {
 // 💼 2. ระบบเฝ้าพอร์ต (Portfolio TP & SL)
 // ========================================
 function checkPortfolioAndNotify() {
+  if (!isMarketOpen()) {
+    Logger.log("💼 นอกเวลาทำการ - ข้ามการตรวจพอร์ต");
+    return;
+  }
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheetsToCheck = [SHEET_PORTFOLIO_MAIN, SHEET_PORTFOLIO_GROWTH];
   var pendingAlerts = [];
