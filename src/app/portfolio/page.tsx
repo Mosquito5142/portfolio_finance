@@ -388,98 +388,84 @@ export default function PortfolioTracker() {
     <div className="min-h-screen bg-slate-950 text-slate-200 p-4 md:p-8 font-sans pt-24 custom-scrollbar">
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Header Setup */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-          <div>
+        <div className="flex flex-col gap-6 mb-4">
+          {/* Row 1: Title (Top) */}
+          <div className="flex justify-center">
             <h1 className="text-3xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-blue-500 flex items-center gap-3">
               <Briefcase size={32} className="text-emerald-500" />
               พอร์ตการลงทุน (Portfolio)
             </h1>
-            <p className="text-slate-400 mt-2">
-              ติดตามมูลค่าพอร์ต สถานะจุดตัดขาดทุน/ทำกำไร และประวัติการซื้อขาย 📈
-            </p>
           </div>
-          <div className="flex flex-col xl:flex-row items-start xl:items-center gap-4 mt-4 md:mt-0">
-            {/* Group 1: Toggles */}
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Currency Toggle */}
-              <div className="flex items-center bg-slate-900 border border-slate-700/50 rounded-lg p-1">
-                <button
-                  onClick={() => setCurrency("THB")}
-                  className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${
-                    currency === "THB"
-                      ? "bg-blue-600/20 text-blue-400"
-                      : "text-slate-500 hover:text-slate-300"
-                  }`}
-                >
-                  THB (บาท)
-                </button>
-                <button
-                  onClick={() => setCurrency("USD")}
-                  className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${
-                    currency === "USD"
-                      ? "bg-emerald-600/20 text-emerald-400"
-                      : "text-slate-500 hover:text-slate-300"
-                  }`}
-                >
-                  USD (ดอลลาร์)
-                </button>
-              </div>
 
-              {/* Portfolio Filter Toggle */}
-              <div className="flex items-center bg-slate-900 border border-slate-700/50 rounded-lg p-1">
-                <button
-                  onClick={() => setViewFilter("all")}
-                  className={`px-3 py-1.5 rounded-md text-sm font-bold transition-all ${
-                    viewFilter === "all"
-                      ? "bg-white/10 text-white"
-                      : "text-slate-500 hover:text-slate-300"
-                  }`}
-                >
-                  ทั้งหมด
-                </button>
-                <button
-                  onClick={() => setViewFilter("main")}
-                  className={`px-3 py-1.5 rounded-md text-sm font-bold transition-all ${
-                    viewFilter === "main"
-                      ? "bg-blue-600/20 text-blue-400"
-                      : "text-slate-500 hover:text-slate-300"
-                  }`}
-                >
-                  พอร์ตหลัก (Main)
-                </button>
-                <button
-                  onClick={() => setViewFilter("growth")}
-                  className={`px-3 py-1.5 rounded-md text-sm font-bold transition-all ${
-                    viewFilter === "growth"
-                      ? "bg-amber-600/20 text-amber-400"
-                      : "text-slate-500 hover:text-slate-300"
-                  }`}
-                >
-                  เติบโต (Growth)
-                </button>
-              </div>
+          {/* Row 2: Portfolio Filter (Center) */}
+          <div className="flex justify-center">
+            <div className="flex items-center bg-slate-900 border border-slate-700/50 rounded-lg p-1 shadow-lg">
+              <button
+                onClick={() => setViewFilter("all")}
+                className={`px-5 py-2 rounded-md font-bold transition-all ${
+                  viewFilter === "all"
+                    ? "bg-white/10 text-white"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+              >
+                ทั้งหมด
+              </button>
+              <button
+                onClick={() => setViewFilter("main")}
+                className={`px-5 py-2 rounded-md font-bold transition-all ${
+                  viewFilter === "main"
+                    ? "bg-blue-600/20 text-blue-400"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+              >
+                พอร์ตหลัก (Main)
+              </button>
+              <button
+                onClick={() => setViewFilter("growth")}
+                className={`px-5 py-2 rounded-md font-bold transition-all ${
+                  viewFilter === "growth"
+                    ? "bg-amber-600/20 text-amber-400"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+              >
+                เติบโต (Growth)
+              </button>
+            </div>
+          </div>
+
+          {/* Row 3: Add Trade (Right) and Currency Toggle (Left) */}
+          <div className="flex justify-between items-center bg-slate-900/40 p-3 rounded-xl border border-slate-800/50">
+            {/* Currency Toggle */}
+            <div className="flex items-center bg-slate-900 border border-slate-700/50 rounded-lg p-1">
+              <button
+                onClick={() => setCurrency("THB")}
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${
+                  currency === "THB"
+                    ? "bg-blue-600/20 text-blue-400"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+              >
+                THB (บาท)
+              </button>
+              <button
+                onClick={() => setCurrency("USD")}
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${
+                  currency === "USD"
+                    ? "bg-emerald-600/20 text-emerald-400"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+              >
+                USD (ดอลลาร์)
+              </button>
             </div>
 
-            {/* Group 2: Actions */}
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Add Trade Button */}
+            {/* Actions */}
+            <div className="flex gap-3">
               <button
                 onClick={() => setIsAddModalOpen(true)}
-                className="bg-blue-600 hover:bg-blue-500 text-sm font-bold px-4 py-2 border border-blue-500 rounded-lg flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(59,130,246,0.5)] whitespace-nowrap"
+                className="bg-blue-600 hover:bg-blue-500 text-sm font-bold px-5 py-2.5 border border-blue-500 rounded-lg flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(59,130,246,0.5)] whitespace-nowrap"
               >
-                <Save size={16} />+ บันทึกหุ้นใหม่
-              </button>
-              {/* Refresh Data */}
-              <button
-                onClick={fetchPortfolioData}
-                disabled={loading}
-                className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-sm px-4 py-2 border border-slate-700 rounded-lg flex items-center gap-2 transition-all whitespace-nowrap"
-              >
-                <RefreshCw
-                  size={16}
-                  className={loading ? "animate-spin" : ""}
-                />
-                รีเฟรชข้อมูล
+                <Save size={18} />+ บันทึกหุ้นใหม่
               </button>
             </div>
           </div>
