@@ -18,6 +18,8 @@ export const TIER_1_MEGA_TECH = [
   "ORCL", // 4IR
   "AMD", // 4IR
   "INTC", // 4IR
+  "TSM", // Semi
+  "ASML", // Semi Equip
 ];
 
 // กลุ่ม AI, Cloud & Cybersecurity
@@ -35,6 +37,7 @@ export const TIER_1_AI_CLOUD = [
   "IOT", // 4IR
   "SHOP", // 4IR
   "MELI",
+  "SMCI", // AI Server
 ];
 
 // กลุ่ม Growth & Deep Tech
@@ -79,14 +82,9 @@ export const ALPHA_PICKS_WATCHLIST = [
 ];
 
 // กลุ่มเก็งกำไรจัดจ้าน
-export const TIER_2_SPECULATIVE = [
-  "JMIA",
-  "ONDS",
-  "OSS",
-  "RR", // Growth
-];
+export const TIER_2_SPECULATIVE = ["JMIA", "ONDS", "OSS"];
 
-export const FINVIZ_WATCHLIST = ["UUUU", "REGN", "IMVT", "PBW", "SNDX"];
+export const FINVIZ_WATCHLIST = ["UUUU", "IMVT"];
 
 // ---------------------------------------
 // 2. SETTING: รวมลิสต์เพื่อส่งเข้าสแกน
