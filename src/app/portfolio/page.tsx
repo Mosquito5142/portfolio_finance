@@ -371,6 +371,48 @@ export default function PortfolioTracker() {
     .filter((item) => item.value > 0)
     .sort((a, b) => b.value - a.value);
 
+  // --- Global Portfolio Split Metrics (for Filter Buttons) ---
+  let mainVal = 0;
+  let mainPnl = 0;
+  let mainCost = 0;
+
+  let gtVal = 0;
+  let gtPnl = 0;
+  let gtCost = 0;
+
+  // calculate across ALL active items
+  portfolioData
+    .filter((r) => r.status !== "CLOSED")
+    .forEach((item) => {
+      const holdingQty = item.quantity - (item.soldQty || 0);
+      const currentPrice = item.livePrice || item.price;
+      const usdValue = currentPrice * holdingQty;
+      const usdCost = item.price * holdingQty;
+      const usdPnl = usdValue - usdCost;
+
+      if (item.portfolioType === "main" || !item.portfolioType) {
+        mainVal += usdValue;
+        mainPnl += usdPnl;
+        mainCost += usdCost;
+      } else if (item.portfolioType === "growth") {
+        gtVal += usdValue;
+        gtPnl += usdPnl;
+        gtCost += usdCost;
+      }
+    });
+
+  const totalVal = mainVal + gtVal;
+  const mainWeight =
+    totalVal > 0 ? ((mainVal / totalVal) * 100).toFixed(0) : "0";
+  const gtWeight = totalVal > 0 ? ((gtVal / totalVal) * 100).toFixed(0) : "0";
+
+  const mainPnlPct =
+    mainCost > 0 ? ((mainPnl / mainCost) * 100).toFixed(1) : "0.0";
+  const mainPnlSign = Number(mainPnlPct) >= 0 ? "+" : "";
+
+  const gtPnlPct = gtCost > 0 ? ((gtPnl / gtCost) * 100).toFixed(1) : "0.0";
+  const gtPnlSign = Number(gtPnlPct) >= 0 ? "+" : "";
+
   const COLORS = [
     "#3b82f6", // blue-500
     "#10b981", // emerald-500
@@ -399,7 +441,7 @@ export default function PortfolioTracker() {
 
           {/* Row 2: Portfolio Filter (Center) */}
           <div className="flex justify-center">
-            <div className="flex items-center bg-slate-900 border border-slate-700/50 rounded-lg p-1 shadow-lg">
+            <div className="flex items-center bg-slate-900 border border-slate-700/50 rounded-lg p-1 shadow-lg text-sm">
               <button
                 onClick={() => setViewFilter("all")}
                 className={`px-5 py-2 rounded-md font-bold transition-all ${
@@ -408,7 +450,7 @@ export default function PortfolioTracker() {
                     : "text-slate-500 hover:text-slate-300"
                 }`}
               >
-                ทั้งหมด
+                ทั้งหมด (100%)
               </button>
               <button
                 onClick={() => setViewFilter("main")}
@@ -418,7 +460,18 @@ export default function PortfolioTracker() {
                     : "text-slate-500 hover:text-slate-300"
                 }`}
               >
-                พอร์ตหลัก (Main)
+                พอร์ตหลัก ({mainWeight}%{" "}
+                <span
+                  className={
+                    Number(mainPnlPct) >= 0
+                      ? "text-emerald-500"
+                      : "text-red-500"
+                  }
+                >
+                  {mainPnlSign}
+                  {mainPnlPct}%
+                </span>
+                )
               </button>
               <button
                 onClick={() => setViewFilter("growth")}
@@ -428,7 +481,16 @@ export default function PortfolioTracker() {
                     : "text-slate-500 hover:text-slate-300"
                 }`}
               >
-                เติบโต (Growth)
+                เติบโต ({gtWeight}%{" "}
+                <span
+                  className={
+                    Number(gtPnlPct) >= 0 ? "text-emerald-500" : "text-red-500"
+                  }
+                >
+                  {gtPnlSign}
+                  {gtPnlPct}%
+                </span>
+                )
               </button>
             </div>
           </div>
