@@ -37,6 +37,7 @@ interface PortfolioRow {
   livePrice?: number;
   liveChangePercent?: number;
   portfolioType?: "main" | "growth";
+  targetAlloc?: number;
 }
 
 export default function PortfolioTracker() {
@@ -55,10 +56,16 @@ export default function PortfolioTracker() {
   const [price, setPrice] = useState("");
   const [cutLoss, setCutLoss] = useState("");
   const [target, setTarget] = useState("");
+  const [targetAlloc, setTargetAlloc] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
   const [sellLoading, setSellLoading] = useState<number | null>(null);
   const [sellQty, setSellQty] = useState<{ [key: number]: string }>({});
   const [sellPrice, setSellPrice] = useState<{ [key: number]: string }>({});
+
+  // Rebalancing Simulator State
+  const [simPrice, setSimPrice] = useState<{ [key: number]: string }>({});
+  const [simAmount, setSimAmount] = useState<{ [key: number]: string }>({});
+
   const [sortBy, setSortBy] = useState<string>("date_desc");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [viewFilter, setViewFilter] = useState<"all" | "main" | "growth">(
@@ -175,6 +182,7 @@ export default function PortfolioTracker() {
             price: Number(price),
             cut: Number(cutLoss),
             target: Number(target),
+            targetAlloc: Number(targetAlloc) || 0,
             portfolioType: tradeType,
           },
         }),
@@ -186,6 +194,7 @@ export default function PortfolioTracker() {
         setPrice("");
         setCutLoss("");
         setTarget("");
+        setTargetAlloc("");
         setTradeType("main");
         setIsAddModalOpen(false);
         await fetchPortfolioData();
@@ -447,7 +456,17 @@ export default function PortfolioTracker() {
         const pnlUSD = (currPrice - item.price) * qty;
         const pnlPct = ((currPrice - item.price) / item.price) * 100;
         const iSign = pnlUSD >= 0 ? "+" : "";
-        summaryText += `${index + 1}. ${item.ticker}: ${qty} หุ้น | ทุน: $${formatUSD(item.price)} | ปัจจุบัน: $${formatUSD(currPrice)} | PnL: ${iSign}$${formatUSD(Math.abs(pnlUSD))} (${iSign}${Math.abs(pnlPct).toFixed(2)}%)\n`;
+
+        const itemUSD = currPrice * qty;
+        const currentAllocPct =
+          totalCurrentValueUSD > 0 ? (itemUSD / totalCurrentValueUSD) * 100 : 0;
+
+        let allocText = ` | สัดส่วน: ${currentAllocPct.toFixed(1)}%`;
+        if (item.targetAlloc && item.targetAlloc > 0) {
+          allocText += ` (เป้า: ${item.targetAlloc.toFixed(1)}%)`;
+        }
+
+        summaryText += `${index + 1}. ${item.ticker}: ${qty} หุ้น | ทุน: $${formatUSD(item.price)} | ปัจจุบัน: $${formatUSD(currPrice)} | PnL: ${iSign}$${formatUSD(Math.abs(pnlUSD))} (${iSign}${Math.abs(pnlPct).toFixed(2)}%)${allocText}\n`;
       });
     }
 
@@ -848,6 +867,17 @@ export default function PortfolioTracker() {
                 const toCutloss =
                   ((currentPrice - item.cutLoss) / currentPrice) * 100; // positive means still buffer left
 
+                // Allocation calculations
+                const itemUSD = currentPrice * holdingQty;
+                const currentAllocPct =
+                  totalCurrentValueUSD > 0
+                    ? (itemUSD / totalCurrentValueUSD) * 100
+                    : 0;
+                const targetAllocPct = Number(item.targetAlloc) || 0;
+                const targetValueUSD =
+                  (totalCurrentValueUSD * targetAllocPct) / 100;
+                const diffUSD = targetValueUSD - itemUSD;
+
                 return (
                   <div
                     key={`${item.portfolioType}-${item.rowIndex}`}
@@ -985,6 +1015,145 @@ export default function PortfolioTracker() {
                               : `🎯 ถึงเป้าทำกำไร!`}
                           </span>
                         </div>
+                      </div>
+                    )}
+
+                    {/* Target Allocation & Rebalancing */}
+                    {viewFilter !== "all" && (
+                      <div className="mt-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
+                            สัดส่วนพอร์ต (Allocation)
+                          </span>
+                          {targetAllocPct > 0 && (
+                            <span
+                              className={`text-xs font-bold px-2 py-0.5 rounded-full ${Math.abs(currentAllocPct - targetAllocPct) <= 2 ? "bg-emerald-900/50 text-emerald-400" : "bg-amber-900/50 text-amber-400"}`}
+                            >
+                              เป้าหมาย: {targetAllocPct.toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex justify-between items-end">
+                          <div>
+                            <p
+                              className={`text-xl font-bold ${currentAllocPct > targetAllocPct + 2 && targetAllocPct > 0 ? "text-amber-400" : "text-white"}`}
+                            >
+                              {currentAllocPct.toFixed(1)}%
+                            </p>
+                            <p className="text-[10px] text-slate-500 mt-0.5">
+                              ปัจจุบัน
+                            </p>
+                          </div>
+
+                          {targetAllocPct > 0 ? (
+                            <div className="text-right">
+                              {diffUSD > 0 ? (
+                                <p className="text-sm font-bold text-blue-400">
+                                  + เติมเงิน {getSymbol()}
+                                  {formatCurrency(diffUSD)}
+                                </p>
+                              ) : (
+                                <p className="text-sm font-bold text-amber-400">
+                                  - นำออก {getSymbol()}
+                                  {formatCurrency(Math.abs(diffUSD))}
+                                </p>
+                              )}
+                              <p className="text-[10px] text-slate-500 mt-0.5">
+                                เพื่อให้ได้ {getSymbol()}
+                                {formatCurrency(targetValueUSD)}
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="text-right text-xs text-slate-500 flex flex-col items-end">
+                              <span>ไม่ได้ตั้งเป้าหมาย</span>
+                              <span className="text-[9px]">
+                                (ใส่ % ในคอลัมน์ M ของ Sheet)
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        {/* Progress Bar for Allocation */}
+                        <div className="mt-3 w-full h-1.5 bg-slate-800 rounded-full overflow-hidden flex relative">
+                          <div
+                            className={`h-full ${currentAllocPct > targetAllocPct && targetAllocPct > 0 ? "bg-amber-500" : "bg-blue-500"}`}
+                            style={{
+                              width: `${Math.min(currentAllocPct, 100)}%`,
+                            }}
+                          />
+                          {targetAllocPct > 0 && targetAllocPct < 100 && (
+                            <div
+                              className="absolute top-0 bottom-0 w-[2px] bg-emerald-400 z-10"
+                              style={{ left: `${targetAllocPct}%` }}
+                            />
+                          )}
+                        </div>
+
+                        {/* --- Inline Allocation Simulator --- */}
+                        {item.ticker !== "CASH" && (
+                          <div className="mt-4 pt-3 border-t border-slate-700/50">
+                            <p className="text-xs text-slate-400 font-bold mb-2">
+                              จำลองแผนการซื้อเพิ่ม (What-If)
+                            </p>
+                            <div className="flex gap-2 items-center">
+                              <input
+                                type="number"
+                                placeholder="ราคาเข้า ($)"
+                                className="w-24 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center focus:ring-1 focus:ring-blue-500 outline-none"
+                                value={simPrice[item.rowIndex] || ""}
+                                onChange={(e) =>
+                                  setSimPrice({
+                                    ...simPrice,
+                                    [item.rowIndex]: e.target.value,
+                                  })
+                                }
+                              />
+                              <input
+                                type="number"
+                                placeholder="จำนวนเงิน ($)"
+                                className="w-28 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center focus:ring-1 focus:ring-blue-500 outline-none"
+                                value={simAmount[item.rowIndex] || ""}
+                                onChange={(e) =>
+                                  setSimAmount({
+                                    ...simAmount,
+                                    [item.rowIndex]: e.target.value,
+                                  })
+                                }
+                              />
+                              <div className="flex-1 text-right">
+                                {Number(simPrice[item.rowIndex]) > 0 &&
+                                Number(simAmount[item.rowIndex]) > 0 ? (
+                                  (() => {
+                                    const addedVal = Number(
+                                      simAmount[item.rowIndex],
+                                    );
+                                    const simulatedTotalPort =
+                                      totalCurrentValueUSD + addedVal;
+                                    const simulatedItemVal = itemUSD + addedVal;
+                                    const simAlloc =
+                                      (simulatedItemVal / simulatedTotalPort) *
+                                      100;
+
+                                    return (
+                                      <div className="text-[10px] leading-tight flex flex-col items-end">
+                                        <span className="text-slate-400">
+                                          สัดส่วนใหม่:
+                                        </span>
+                                        <span className="text-blue-400 font-bold text-sm">
+                                          {simAlloc.toFixed(1)}%
+                                        </span>
+                                      </div>
+                                    );
+                                  })()
+                                ) : (
+                                  <span className="text-[10px] text-slate-500 italic">
+                                    รอข้อมูลจำลอง...
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -1163,6 +1332,7 @@ export default function PortfolioTracker() {
                   setPrice("1");
                   setCutLoss("0");
                   setTarget("0");
+                  setTargetAlloc("0");
                 }}
                 className="text-[11px] bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 px-3 py-1.5 rounded-lg font-bold transition-colors border border-emerald-500/30"
               >
@@ -1171,7 +1341,7 @@ export default function PortfolioTracker() {
             </div>
 
             <form onSubmit={handleAddTrade} className="space-y-4">
-              {/* Portfolio Selection */}
+              {/* Portfolio Selection & Target Alloc */}
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-2">
                   เลือกพอร์ตที่จะบันทึก
@@ -1280,6 +1450,30 @@ export default function PortfolioTracker() {
                     onChange={(e) => setTarget(e.target.value)}
                     className="w-full bg-slate-950 border border-emerald-900/30 rounded-xl px-4 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                   />
+                </div>
+              </div>
+
+              {/* Add target allocation setting */}
+              <div className="border-t border-slate-800 pt-4 mt-2">
+                <label className="block text-xs font-medium text-blue-400 mb-1">
+                  สัดส่วนเป้าหมายในพอร์ต (% Target Allocation)
+                </label>
+                <div className="flex gap-4 items-center">
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    max="100"
+                    placeholder="เช่น 10"
+                    value={targetAlloc}
+                    onChange={(e) => setTargetAlloc(e.target.value)}
+                    className="w-1/3 bg-slate-950 border border-blue-900/30 rounded-xl px-4 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                  <div className="text-[11px] text-slate-500 leading-tight">
+                    * ใส่เปอร์เซ็นต์ที่ต้องการให้หุ้นตัวนี้มีน้ำหนักในพอร์ต
+                    <br />
+                    (สามารถจำลองการซื้อสัดส่วนได้ในการ์ดหุ้นบนหน้าหลัก)
+                  </div>
                 </div>
               </div>
 

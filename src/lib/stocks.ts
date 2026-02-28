@@ -26,8 +26,10 @@ export const TIER_1_MEGA_TECH = [
 export const TIER_1_AI_CLOUD = [
   "PLTR",
   "CRWD",
+  "PANW",
   "NET",
   "SNOW",
+  "NOW",
   "MDB",
   "RBRK",
   "DOCN",
@@ -54,6 +56,7 @@ export const TIER_1_GROWTH_TECH = [
   "MU", // 4IR
   "ARM", // 4IR
   "HOOD", // 4IR
+  "ONTO", // Semi Equip
   "KTOS", // Growth
   "JOBY", // Growth
   "ACHR", // Growth
@@ -64,7 +67,14 @@ export const TIER_1_GROWTH_TECH = [
 ];
 
 // กลุ่ม Healthcare & Biotech
-export const TIER_1_HEALTH_BIO = ["LLY", "TMDX", "VKTX", "CLPT", "PRME"];
+export const TIER_1_HEALTH_BIO = [
+  "LLY",
+  "TMDX",
+  "VKTX",
+  "CLPT",
+  "PRME",
+  "RXRX",
+];
 
 // กลุ่มพลังงานแห่งอนาคต & ทรัพยากร
 export const TIER_1_ENERGY_RESOURCES = [
@@ -84,7 +94,7 @@ export const ALPHA_PICKS_WATCHLIST = [
 // กลุ่มเก็งกำไรจัดจ้าน
 export const TIER_2_SPECULATIVE = ["JMIA", "ONDS", "OSS"];
 
-export const FINVIZ_WATCHLIST = ["UUUU", "IMVT"];
+export const FINVIZ_WATCHLIST = ["UUUU", "IMVT", "BTC-USD"];
 
 // ---------------------------------------
 // 2. SETTING: รวมลิสต์เพื่อส่งเข้าสแกน
@@ -136,8 +146,10 @@ export const STOCK_DETAILS: Record<string, string> = {
   // AI & CLOUD
   PLTR: "Palantir - ซอฟต์แวร์วิเคราะห์ข้อมูลขั้นสูง (ใช้ในกองทัพสหรัฐฯ & องค์กรต่างๆ)",
   CRWD: "CrowdStrike - ผู้นำด้าน Cybersecurity ป้องกันการแฮกที่เครื่องลูกข่าย (Endpoint)",
+  PANW: "Palo Alto Networks - ผู้นำด้าน Cybersecurity ครบวงจร ทั้ง Cloud & Network",
   NET: "Cloudflare - ผู้ให้บริการระบบความปลอดภัยเว็บไซต์ & CDN (ทำให้เว็บเร็วและปลอดภัย)",
   SNOW: "Snowflake - ระบบจัดการข้อมูลบน Cloud (Data Cloud & Warehousing)",
+  NOW: "ServiceNow - AI & Cloud Platform สำหรับการจัดการเวิร์กโฟลว์ระดับองค์กร",
   MDB: "MongoDB - ฐานข้อมูลยุคใหม่ (NoSQL) ที่แอปฯ สมัยใหม่ต้องใช้",
   RBRK: "Rubrik - ระบบความปลอดภัยข้อมูล & Zero Trust (สำรองข้อมูลกัน Ransomware)",
   DOCN: "DigitalOcean - บริการ Cloud ที่เน้นใช้งานง่ายสำหรับ Developer & SME",
@@ -161,6 +173,7 @@ export const STOCK_DETAILS: Record<string, string> = {
   MU: "Micron - ผู้ผลิตชิปหน่วยความจำ (Memory/DRAM) ที่จำเป็นสำหรับ AI Server",
   ARM: "Arm Holdings - เจ้าของสถาปัตยกรรมชิปที่ใช้ในสมาร์ทโฟนเกือบทุกเครื่องในโลก",
   HOOD: "Robinhood - แอปเทรดหุ้นและคริปโตยอดนิยมของรายย่อย (UX/UI ใช้งานง่าย)",
+  ONTO: "Onto Innovation - เครื่องมือขั้นสูงสำหรับวิเคราะห์และตรวจสอบคุณภาพแผ่นเวเฟอร์ (Semiconductor)",
   KTOS: "Kratos - ผู้ผลิตโดรนความเร็วสูง (Supersonic Drones) สำหรับซ้อมรบและการทหาร",
   JOBY: "Joby Aviation - แท็กซี่บินได้พลังงานไฟฟ้า (eVTOL) เตรียมเปิดให้บริการ",
   ACHR: "Archer Aviation - แท็กซี่บินได้ (eVTOL) คู่แข่ง Joby (ร่วมมือกับ United Airlines)",
@@ -175,6 +188,7 @@ export const STOCK_DETAILS: Record<string, string> = {
   VKTX: "Viking Therapeutics - พัฒนายาลดความอ้วน (GLP-1) คู่แข่งรายใหม่ที่น่าจับตา",
   CLPT: "ClearPoint Neuro - ระบบนำทางสำหรับการผ่าตัดสมองที่มีความแม่นยำสูง",
   PRME: "Prime Medicine - เทคโนโลยีตัดต่อพันธุกรรมรุ่นใหม่ (Prime Editing) แม่นยำกว่า CRISPR",
+  RXRX: "Recursion Pharmaceuticals - Techbio ใช้ AI ค้นพบยาใหม่ (Nvidia ลงทุน)",
 
   // ENERGY & RESOURCES
   EOSE: "EOS Energy - แบตเตอรี่ Zinc-based สำหรับเก็บพลังงานระดับ Grid (ปลอดภัยกว่า Lithium)",
@@ -198,4 +212,5 @@ export const STOCK_DETAILS: Record<string, string> = {
   IMVT: "IMVU - แพลตฟอร์มการสร้างตัวละคร 3D (VR) สำหรับการสื่อสารและเกม",
   PBW: "Pebblebrook Holdings - ผู้เช่าพื้นที่สำหรับ AI Server และ AI Data Center",
   SNDX: "Sanderson Farms - ผู้ผลิตเนื้อสัตว์สำหรับ AI Server และ AI Data Center",
+  "BTC-USD": "Bitcoin (BTC/USD) - สกุลเงินดิจิทัลอันดับ 1 ของโลก",
 };

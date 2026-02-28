@@ -344,7 +344,7 @@ function doPost(e) {
         throw new Error("Portfolio sheet + " + targetSheetName + " not found");
       var newRow = sheet.getLastRow() + 1;
 
-      // หัวตารางอ้างอิง: A=Date, B=Symbol, C=Action, D=Quantity, E=Price, F=CutLoss, G=Target, H=SoldDate, I=SoldQty, J=SoldPrice, K=Status, L=CurrentPriceFormula
+      // หัวตารางอ้างอิง: A=Date, B=Symbol, C=Action, D=Quantity, E=Price, F=CutLoss, G=Target, H=SoldDate, I=SoldQty, J=SoldPrice, K=Status, L=CurrentPriceFormula, M=TargetAlloc
       sheet.getRange(newRow, 1).setValue(item.date); // A: Date
       sheet.getRange(newRow, 2).setValue(item.ticker); // B: Symbol
       sheet.getRange(newRow, 3).setValue("BUY"); // C: Action
@@ -353,6 +353,7 @@ function doPost(e) {
       sheet.getRange(newRow, 6).setValue(item.cut); // F: CutLoss
       sheet.getRange(newRow, 7).setValue(item.target); // G: Target
       sheet.getRange(newRow, 11).setValue("ACTIVE"); // K: Status
+      sheet.getRange(newRow, 13).setValue(item.targetAlloc || 0); // M: TargetAlloc
 
       // L: Current Price Formula แบบเดียวกับหน้า Watchlist
       if (item.ticker.toUpperCase() === "CASH") {
@@ -421,7 +422,7 @@ function doPost(e) {
 
         var lastRow = sheet.getLastRow();
         if (lastRow >= 2) {
-          var range = sheet.getRange(2, 1, lastRow - 1, 11);
+          var range = sheet.getRange(2, 1, lastRow - 1, 13);
           var values = range.getValues();
 
           values.forEach(function (row, index) {
@@ -440,6 +441,7 @@ function doPost(e) {
                 soldQty: row[8],
                 soldPrice: row[9],
                 status: row[10],
+                targetAlloc: row[12] || 0,
                 portfolioType: sData.type,
               });
             }
