@@ -17,8 +17,8 @@ import {
   isTier1,
   isTier2,
 } from "@/lib/stocks";
-import PatternCard from "@/components/PatternCard";
 import { StockScan } from "@/types/stock";
+import PatternCard from "@/components/PatternCard";
 
 // Helper Component for Checkbox
 const TickerCheckbox = ({
@@ -486,44 +486,6 @@ export default function PatternScreenerPage() {
       return b.rankingScore - a.rankingScore;
     })
     .slice(0, 5); // Pick Top 5 per mode logic (but scanned all)
-
-  const copyTopPicksToClipboard = () => {
-    if (topPicks.length === 0) return;
-
-    const date = new Date().toLocaleDateString("th-TH");
-    const modeLabel =
-      scanMode === "value"
-        ? "Value Hunting"
-        : scanMode === "sniper"
-          ? "Sniper Trading"
-          : "Trend Following";
-
-    let text = `🚀 TOP PICKS TODAY (${date}) - Mode: ${modeLabel}\n`;
-    text += `--------------------------------------------------\n`;
-
-    topPicks.forEach((pick, index) => {
-      const data = pick.data!;
-      // Smart values are already in metrics/advancedIndicators
-      const entry = data.metrics?.supportLevel || 0;
-      const target = data.metrics?.resistanceLevel || 0;
-      const cut = data.advancedIndicators?.suggestedStopLoss || 0;
-
-      const candle =
-        data.advancedIndicators?.candlePattern?.name !== "None"
-          ? ` (🕯️ ${data.advancedIndicators?.candlePattern?.name})`
-          : "";
-
-      text += `${index + 1}. ${pick.symbol} (${data.overallSignal})${candle}\n`;
-      text += `   💰 รับ (Entry): $${entry.toFixed(2)}\n`;
-      text += `   🛑 คัด (Cut): $${cut.toFixed(2)}\n`;
-      text += `   🎯 เป้า (Target): $${target.toFixed(2)}\n`;
-      text += `   📝 Note: ${data.advancedIndicators?.rsiInterpretation || ""}\n`;
-      text += `--------------------------------------------------\n`;
-    });
-
-    navigator.clipboard.writeText(text);
-    alert("คัดลอกโพยลง Clipboard เรียบร้อยแล้ว! 📋");
-  };
 
   // ========== SEND TO GOOGLE SHEET ==========
   const [sendingToSheet, setSendingToSheet] = useState(false);
@@ -1197,12 +1159,6 @@ export default function PatternScreenerPage() {
                   หุ้นที่คะแนนดีที่สุด 5 อันดับแรก พร้อมแผนการเล่นรายวัน
                 </p>
               </div>
-              <button
-                onClick={copyTopPicksToClipboard}
-                className="bg-white hover:bg-gray-100 text-purple-900 px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95 shadow-lg"
-              >
-                📋 Copy ทั้งหมด
-              </button>
               <div className="flex items-center gap-2 bg-gray-900/50 p-1.5 rounded-xl border border-purple-500/30">
                 <select
                   value={entryType}

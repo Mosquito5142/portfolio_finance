@@ -16,6 +16,8 @@ import {
   AlertTriangle,
   RefreshCw,
   DollarSign,
+  Copy,
+  CheckCheck,
 } from "lucide-react";
 
 interface PortfolioRow {
@@ -63,6 +65,7 @@ export default function PortfolioTracker() {
     "all",
   );
   const [tradeType, setTradeType] = useState<"main" | "growth">("main");
+  const [isCopied, setIsCopied] = useState(false);
 
   useEffect(() => {
     fetchExchangeRate();
@@ -425,6 +428,35 @@ export default function PortfolioTracker() {
     "#ef4444", // red-500
   ];
 
+  const handleCopySummary = () => {
+    let summaryText = `[สรุปพอร์ตการลงทุน - ${viewFilter === "all" ? "ทั้งหมด" : viewFilter === "main" ? "Main" : "Growth"}]\n`;
+    summaryText += `เงินลงทุนสุทธิ: ${getSymbol()}${formatCurrency(totalInvestedUSD)}\n`;
+    const sign = unrealizedPnLUSD >= 0 ? "+" : "";
+    summaryText += `กำไร/ขาดทุน ยังไม่รับรู้: ${sign}${getSymbol()}${formatCurrency(unrealizedPnLUSD)} (${sign}${unrealizedPnLPct.toFixed(2)}%)\n`;
+    const rSign = realizedPnLUSD >= 0 ? "+" : "";
+    summaryText += `กำไร/ขาดทุน รับรู้แล้ว (Realized): ${rSign}${getSymbol()}${formatCurrency(realizedPnLUSD)}\n`;
+    summaryText += `Win Rate: ${winRate.toFixed(1)}% (${winCount} ชนะ - ${lossCount} แพ้)\n\n`;
+
+    summaryText += `[รายการหุ้นที่ถืออยู่]\n`;
+    if (actives.length === 0) {
+      summaryText += `- ไม่มีหุ้นในพอร์ต -\n`;
+    } else {
+      actives.forEach((item, index) => {
+        const qty = item.quantity - (item.soldQty || 0);
+        const currPrice = item.livePrice || item.price;
+        const pnlUSD = (currPrice - item.price) * qty;
+        const pnlPct = ((currPrice - item.price) / item.price) * 100;
+        const iSign = pnlUSD >= 0 ? "+" : "";
+        summaryText += `${index + 1}. ${item.ticker}: ${qty} หุ้น | ทุน: $${formatUSD(item.price)} | ปัจจุบัน: $${formatUSD(currPrice)} | PnL: ${iSign}$${formatUSD(Math.abs(pnlUSD))} (${iSign}${Math.abs(pnlPct).toFixed(2)}%)\n`;
+      });
+    }
+
+    navigator.clipboard.writeText(summaryText).then(() => {
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    });
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 p-4 md:p-8 font-sans pt-24 custom-scrollbar">
       <div className="max-w-7xl mx-auto space-y-8">
@@ -521,7 +553,23 @@ export default function PortfolioTracker() {
             </div>
 
             {/* Actions */}
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap justify-end">
+              <button
+                onClick={handleCopySummary}
+                className="bg-slate-800 hover:bg-slate-700 text-sm font-bold px-4 py-2.5 border border-slate-700 rounded-lg flex items-center gap-2 transition-all whitespace-nowrap text-slate-300 hover:text-white"
+              >
+                {isCopied ? (
+                  <>
+                    <CheckCheck size={18} className="text-emerald-500" />
+                    <span className="text-emerald-500">คัดลอกแล้ว</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy size={18} />
+                    คัดลอกสรุปพอร์ต
+                  </>
+                )}
+              </button>
               <button
                 onClick={() => setIsAddModalOpen(true)}
                 className="bg-blue-600 hover:bg-blue-500 text-sm font-bold px-5 py-2.5 border border-blue-500 rounded-lg flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(59,130,246,0.5)] whitespace-nowrap"

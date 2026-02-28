@@ -683,45 +683,47 @@ export default function TrianglePatternsPage() {
             return (
               <div className="space-y-6">
                 {/* Summary Stats */}
-                <div className="flex flex-wrap items-center gap-3 text-sm">
-                  <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                    🚨 พบ {validScans.length} หุ้น
-                  </h2>
-                  {ascending.length > 0 && (
-                    <span className="bg-green-900/40 text-green-400 border border-green-500/40 px-3 py-1 rounded-full text-xs font-bold">
-                      📈 Ascending {ascending.length}
-                    </span>
-                  )}
-                  {symmetrical.length > 0 && (
-                    <span className="bg-yellow-900/40 text-yellow-400 border border-yellow-500/40 px-3 py-1 rounded-full text-xs font-bold">
-                      ⚖️ Symmetrical {symmetrical.length}
-                    </span>
-                  )}
-                  {descending.length > 0 && (
-                    <span className="bg-red-900/40 text-red-400 border border-red-500/40 px-3 py-1 rounded-full text-xs font-bold">
-                      📉 Descending {descending.length}
-                    </span>
-                  )}
-                  {bullFlags.length > 0 && (
-                    <span className="bg-pink-900/40 text-pink-400 border border-pink-500/40 px-3 py-1 rounded-full text-xs font-bold">
-                      🚩 Bull Flag {bullFlags.length}
-                    </span>
-                  )}
-                  {vcps.length > 0 && (
-                    <span className="bg-purple-900/40 text-purple-400 border border-purple-500/40 px-3 py-1 rounded-full text-xs font-bold">
-                      📉 VCP {vcps.length}
-                    </span>
-                  )}
-                  {cups.length > 0 && (
-                    <span className="bg-orange-900/40 text-orange-400 border border-orange-500/40 px-3 py-1 rounded-full text-xs font-bold">
-                      ☕ Cup&Handle {cups.length}
-                    </span>
-                  )}
-                  {doubleBottoms.length > 0 && (
-                    <span className="bg-teal-900/40 text-teal-400 border border-teal-500/40 px-3 py-1 rounded-full text-xs font-bold">
-                      بلی Double Bottom {doubleBottoms.length}
-                    </span>
-                  )}
+                <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                      🚨 พบ {validScans.length} หุ้น
+                    </h2>
+                    {ascending.length > 0 && (
+                      <span className="bg-green-900/40 text-green-400 border border-green-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                        📈 Ascending {ascending.length}
+                      </span>
+                    )}
+                    {symmetrical.length > 0 && (
+                      <span className="bg-yellow-900/40 text-yellow-400 border border-yellow-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                        ⚖️ Symmetrical {symmetrical.length}
+                      </span>
+                    )}
+                    {descending.length > 0 && (
+                      <span className="bg-red-900/40 text-red-400 border border-red-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                        📉 Descending {descending.length}
+                      </span>
+                    )}
+                    {bullFlags.length > 0 && (
+                      <span className="bg-pink-900/40 text-pink-400 border border-pink-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                        🚩 Bull Flag {bullFlags.length}
+                      </span>
+                    )}
+                    {vcps.length > 0 && (
+                      <span className="bg-purple-900/40 text-purple-400 border border-purple-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                        📉 VCP {vcps.length}
+                      </span>
+                    )}
+                    {cups.length > 0 && (
+                      <span className="bg-orange-900/40 text-orange-400 border border-orange-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                        ☕ Cup&Handle {cups.length}
+                      </span>
+                    )}
+                    {doubleBottoms.length > 0 && (
+                      <span className="bg-teal-900/40 text-teal-400 border border-teal-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                        بلی Double Bottom {doubleBottoms.length}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Confluence Filters */}
