@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   PieChart,
   Pie,
@@ -18,6 +19,7 @@ import {
   DollarSign,
   Copy,
   CheckCheck,
+  BrainCircuit,
 } from "lucide-react";
 
 interface PortfolioRow {
@@ -573,6 +575,13 @@ export default function PortfolioTracker() {
 
             {/* Actions */}
             <div className="flex gap-3 flex-wrap justify-end">
+              <Link
+                href="/portfolio/analyzer"
+                className="bg-emerald-600/20 hover:bg-emerald-600/40 text-sm font-bold px-4 py-2.5 border border-emerald-500/50 rounded-lg flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)] whitespace-nowrap text-emerald-400 hover:text-emerald-300"
+              >
+                <BrainCircuit size={18} />
+                AI วิเคราะห์พอร์ต
+              </Link>
               <button
                 onClick={handleCopySummary}
                 className="bg-slate-800 hover:bg-slate-700 text-sm font-bold px-4 py-2.5 border border-slate-700 rounded-lg flex items-center gap-2 transition-all whitespace-nowrap text-slate-300 hover:text-white"
