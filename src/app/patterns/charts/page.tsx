@@ -697,7 +697,7 @@ export default function TrianglePatternsPage() {
               if (activeTab === "high_prob") {
                 // High Prob = Distance <= 10% and Confidence >= 70
                 return (
-                  Math.abs(pat.distanceToBreakout || 100) <= 20 &&
+                  Math.abs(pat.distanceToBreakout || 100) <= 10 &&
                   (pat.confidence || 0) >= 70
                 );
               }

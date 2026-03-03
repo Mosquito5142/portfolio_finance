@@ -97,6 +97,8 @@ interface StockPrice {
   vaLow?: number;
 }
 
+import { PatternResult, KeyMetrics, AdvancedIndicators } from "@/types/stock";
+
 interface SocialDataResult {
   buzzScore: number;
   newsCount: number;
@@ -114,15 +116,32 @@ interface InsiderSocialData {
   social: SocialDataResult | null;
 }
 
+// Map the top-level response from /api/patterns
+interface PatternScanData {
+  symbol: string;
+  patterns: PatternResult[];
+  matrixScore: number;
+  metrics: KeyMetrics;
+  advancedIndicators: AdvancedIndicators;
+  finalSignal: "BUY" | "SELL" | "HOLD";
+}
+
+interface PatternDataResult {
+  symbol: string;
+  data: PatternScanData | null;
+}
+
 interface StockGladiator {
   symbol: string;
   priceData: StockPrice;
   socialData: InsiderSocialData | null;
-  // Scores (100 total)
-  trendScore: number; // max 30
-  safetyScore: number; // max 20
-  rrScore: number; // max 30
-  newsScore: number; // max 20
+  patternData: PatternScanData | null;
+  // Scores (140 total max)
+  trendScore: number; // max 30 (Based on Price vs MA)
+  safetyScore: number; // max 20 (Based on RSI)
+  rrScore: number; // max 30 (Risk/Reward)
+  newsScore: number; // max 20 (Tier 1 News)
+  patternScore: number; // max 40 (Matrix + Indicators)
   totalScore: number;
   // Details
   rrRatio: number;
@@ -236,19 +255,20 @@ export default function ComparePage() {
   function calculateGladiatorScores(
     priceData: StockPrice,
     socialData: InsiderSocialData | null,
-  ): Omit<StockGladiator, "symbol" | "priceData" | "socialData" | "rank"> {
+    patternData: PatternScanData | null,
+  ): Omit<
+    StockGladiator,
+    "symbol" | "priceData" | "socialData" | "patternData" | "rank"
+  > {
     // === 1. TREND SCORE (max 30) ===
     let trendScore = 0;
 
-    // Price > SMA200: +10
     if (priceData.ma200 && priceData.currentPrice > priceData.ma200) {
       trendScore += 10;
     }
-    // Price > SMA50: +10
     if (priceData.ma50 && priceData.currentPrice > priceData.ma50) {
       trendScore += 10;
     }
-    // MACD > Signal: +10
     if (
       priceData.macd !== undefined &&
       priceData.macdSignal !== undefined &&
@@ -263,7 +283,10 @@ export default function ComparePage() {
 
     if (rsi >= 40 && rsi <= 60) {
       safetyScore = 20; // Safe Zone = Perfect
-    } else if (rsi < 30) {
+    } else if (
+      rsi < 30 ||
+      (patternData?.metrics?.rsi && patternData.metrics.rsi < 30)
+    ) {
       safetyScore = 15; // Oversold = Risky but high reward
     } else if (rsi >= 30 && rsi < 40) {
       safetyScore = 17; // Near oversold
@@ -275,8 +298,39 @@ export default function ComparePage() {
 
     // === 3. RISK/REWARD RATIO SCORE (max 30) ===
     const entryPrice = priceData.currentPrice;
-    const targetPrice = priceData.resistance || priceData.currentPrice * 1.15;
-    const stopLoss = priceData.support || priceData.currentPrice * 0.9;
+
+    // Prefer the strict Pattern Engine math for targets and stops if available
+    let targetPrice = priceData.resistance || priceData.currentPrice * 1.15;
+    let stopLoss = priceData.support || priceData.currentPrice * 0.9;
+
+    if (patternData) {
+      // Find lowest support for stop loss (strict safety)
+      if (patternData.metrics?.supportLevel)
+        stopLoss = patternData.metrics.supportLevel;
+      if (patternData.metrics?.pivotLevels) {
+        // Nearest pivot support below price
+        const supports = [
+          patternData.metrics.pivotLevels.s1,
+          patternData.metrics.pivotLevels.s2,
+          patternData.metrics.pivotLevels.s3,
+        ].filter((s) => s && s < entryPrice);
+        if (supports.length > 0) stopLoss = Math.max(...(supports as number[]));
+      }
+
+      // Find nearest resistance for target
+      if (patternData.metrics?.resistanceLevel)
+        targetPrice = patternData.metrics.resistanceLevel;
+      if (patternData.metrics?.pivotLevels) {
+        // Nearest pivot resistance above price
+        const resistances = [
+          patternData.metrics.pivotLevels.r1,
+          patternData.metrics.pivotLevels.r2,
+          patternData.metrics.pivotLevels.r3,
+        ].filter((r) => r && r > entryPrice);
+        if (resistances.length > 0)
+          targetPrice = Math.min(...(resistances as number[]));
+      }
+    }
 
     const rrRatio = calculateRR(entryPrice, targetPrice, stopLoss);
     let rrScore = 0;
@@ -309,19 +363,59 @@ export default function ComparePage() {
       newsScore = 5; // Has news but no Tier 1
     }
 
-    // === TOTAL ===
-    const totalScore = trendScore + safetyScore + rrScore + newsScore;
+    // === 5. PATTERN & MATRIX SCORE (max 40) ===
+    let patternScore = 0;
+    if (patternData) {
+      // Fusion Engine Matrix Score (-100 to 100 mapped to 0 to 20)
+      if (patternData.matrixScore !== undefined) {
+        const mappedScore = Math.max(
+          0,
+          Math.min(20, (patternData.matrixScore / 100) * 10 + 10),
+        );
+        patternScore += mappedScore;
+      }
+
+      // Advanced Pattern Bonus (+10)
+      if (patternData.patterns && patternData.patterns.length > 0) {
+        // High confidence pattern (>70%)
+        if (patternData.patterns.some((p) => (p.confidence || 0) >= 70)) {
+          patternScore += 10;
+        } else {
+          patternScore += 5;
+        }
+      }
+
+      // Advanced Indicators Bonus (+10)
+      let indicatorCount = 0;
+      if (patternData.advancedIndicators?.bollingerBands?.isSqueeze)
+        indicatorCount++;
+      if (patternData.advancedIndicators?.adx?.isTrending) indicatorCount++;
+      if (
+        patternData.advancedIndicators?.volumeProfile?.poc &&
+        entryPrice > patternData.advancedIndicators.volumeProfile.poc
+      )
+        indicatorCount++;
+
+      patternScore += Math.min(10, indicatorCount * 4);
+    }
+
+    // === TOTAL (max 140) ===
+    const totalScore = Math.round(
+      trendScore + safetyScore + rrScore + newsScore + patternScore,
+    );
 
     // Recommendation based on score
     let recommendation = "";
-    if (totalScore >= 85) {
-      recommendation = "ซื้อเต็มมือ! (Strong Buy)";
+    if (totalScore >= 110) {
+      recommendation = "ALL IN (Sniper Pick) 🎯";
+    } else if (totalScore >= 90) {
+      recommendation = "ซื้อไม้ใหญ่ (High Conviction) 🔥";
     } else if (totalScore >= 70) {
-      recommendation = "ซื้อได้ (Buy)";
-    } else if (totalScore >= 55) {
-      recommendation = "ซื้อไม้เล็ก / รอได้";
+      recommendation = "ทยอยซื้อได้ (Standard Buy) ✅";
+    } else if (totalScore >= 50) {
+      recommendation = "รอก่อนดีกว่า (Wait) ⏸️";
     } else {
-      recommendation = "อย่าเพิ่งซื้อ รอจังหวะ";
+      recommendation = "หนีไป! (Avoid) ❌";
     }
 
     return {
@@ -329,6 +423,7 @@ export default function ComparePage() {
       safetyScore,
       rrScore,
       newsScore,
+      patternScore,
       totalScore,
       rrRatio,
       entryPrice,
@@ -348,23 +443,39 @@ export default function ComparePage() {
     const second = gladiators[1];
     const scoreDiff = first.totalScore - second.totalScore;
 
-    // Case: Both scores are low
-    if (first.totalScore < 60 && second.totalScore < 60) {
-      return `⚠️ อย่าเพิ่งซื้อทั้งคู่! ทั้ง ${first.symbol} และ ${second.symbol} คะแนนต่ำกว่า 60 ตลาดยังไม่เป็นใจ กำเงินสดรอจังหวะใหม่ดีกว่า`;
+    const maxScore = 140;
+
+    // Extract dominant factors for the winner
+    let winnerReason = "";
+    if (first.patternScore > second.patternScore + 10) {
+      winnerReason = `มีทรงกราฟสวยกว่าชัดเจน (${first.patternData?.patterns?.[0]?.name || "โครงสร้างราคาแข็งแกร่ง"})`;
+    } else if (first.rrScore > second.rrScore + 10) {
+      winnerReason = `อัตราส่วน Risk/Reward คุ้มเสี่ยงกว่ามาก (R/R ${first.rrRatio.toFixed(1)}x vs ${second.rrRatio.toFixed(1)}x)`;
+    } else if (first.newsScore > second.newsScore + 10) {
+      winnerReason = `มีข่าวระดับ Tier 1 สนับสนุนชัดเจนกว่า`;
+    } else if (first.trendScore > second.trendScore + 10) {
+      winnerReason = `แนวโน้มขาขึ้น (Trend) แข็งแกร่งกว่า`;
+    } else {
+      winnerReason = `คะแนนรวมทุกมิติ (Matrix) สมดุลและเสถียรกว่า`;
     }
 
-    // Case: Landslide victory (>15 points)
-    if (scoreDiff > 15) {
-      return `🏆 ${first.symbol} ชนะขาดลอย! พื้นฐานแน่นกว่าและความเสี่ยงต่ำกว่า แนะนำให้ทุ่มเงินก้อนใหญ่ไปที่ ${first.symbol} (10-15%) และอาจจะแบ่งเงินเล็กน้อย (2-5%) ไปซิ่งกับ ${second.symbol}`;
+    // Case: Both scores are low (< 50% of 140)
+    if (first.totalScore < 70 && second.totalScore < 70) {
+      return `⚠️ อย่าเพิ่งซื้อทั้งคู่! ทั้ง ${first.symbol} และ ${second.symbol} โมเมนตัมกำลังอ่อนแรงตลาดยังไม่เป็นใจ กำเงินสดรอจังหวะใหม่ดีกว่า`;
     }
 
-    // Case: Close match (<5 points)
-    if (scoreDiff <= 5) {
-      return `⚔️ สูสีมาก! เลือกยาก ถ้าชอบความมั่นคงให้เลือก ${first.symbol} ถ้าชอบเสี่ยงลุ้นรวยเร็วให้เลือก ${second.symbol} หรือแบ่งเงิน 50/50 ก็ได้`;
+    // Case: Landslide victory (>20 points)
+    if (scoreDiff > 20) {
+      return `🏆 ${first.symbol} ชนะขาดลอย! ${winnerReason} แนะนำให้โฟกัสที่ ${first.symbol} เป็นหลัก (น้ำหนัก 10-15% ของพอร์ต) ถ้ากราฟพร้อมให้ลุยได้เลย`;
     }
 
-    // Case: Clear winner (5-15 points)
-    return `✅ ${first.symbol} ดีกว่า! นำอยู่ ${scoreDiff} แต้ม จัดหนัก ${first.symbol} (10%) และเก็บ ${second.symbol} (5%) ไว้รอจังหวะ`;
+    // Case: Close match (<10 points)
+    if (scoreDiff <= 10) {
+      return `⚔️ สูสีมาก (ต่างกันแค่ ${scoreDiff} แต้ม)! ถ้าชอบทรงกราฟเทพๆ ให้เลือกตัวที่ Pattern สวย แต่ถ้าเน้นถือยาวให้เลือกตัวที่มีคะแนน Trend/News สูง หรือแบ่งเงิน 50/50 ก็ได้`;
+    }
+
+    // Case: Clear winner (10-20 points)
+    return `✅ ${first.symbol} ดูมีภาษีดีกว่า! นำอยู่ ${scoreDiff} แต้ม โดยเฉือนชนะไปเพราะ ${winnerReason}`;
   }
 
   async function compareStocks() {
@@ -398,10 +509,36 @@ export default function ComparePage() {
         return { symbol, data: null };
       });
 
+      // Fetch pattern data for each symbol
+      const patternPromises = selectedSymbols.map(async (symbol) => {
+        try {
+          const res = await fetch(`/api/patterns?symbols=${symbol}`);
+          if (res.ok) {
+            const data = await res.json();
+            // /api/patterns returns an array, so we select the first matching symbol.
+            const patternMatch = data.find((p: any) => p.symbol === symbol);
+            return {
+              symbol,
+              data: (patternMatch?.data as PatternScanData) || null,
+            };
+          }
+        } catch {
+          // Ignore errors
+        }
+        return { symbol, data: null };
+      });
+
       const socialResults = await Promise.all(socialPromises);
+      const patternResults = await Promise.all(patternPromises);
+
       const socialMap: Record<string, InsiderSocialData | null> = {};
+      const patternMap: Record<string, PatternScanData | null> = {};
+
       socialResults.forEach((r) => {
         socialMap[r.symbol] = r.data;
+      });
+      patternResults.forEach((r) => {
+        patternMap[r.symbol] = r.data;
       });
 
       // Calculate gladiator scores
@@ -411,11 +548,13 @@ export default function ComparePage() {
           const scores = calculateGladiatorScores(
             priceData[symbol],
             socialMap[symbol],
+            patternMap[symbol],
           );
           return {
             symbol,
             priceData: priceData[symbol],
             socialData: socialMap[symbol],
+            patternData: patternMap[symbol],
             ...scores,
             rank: 0,
           };
@@ -717,6 +856,62 @@ export default function ComparePage() {
                           </span>
                         </div>
                       </div>
+
+                      {/* Pattern & Indicators */}
+                      <div className="flex flex-col gap-2 bg-gray-900/50 rounded-lg p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className="text-lg">🎯</span>
+                            <span className="text-gray-300">
+                              Pattern Matrix
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-yellow-400">
+                              {getStars(g.patternScore, 40)}
+                            </span>
+                            <span className="text-white font-bold">
+                              {g.patternScore}/40
+                            </span>
+                          </div>
+                        </div>
+                        {g.patternData?.patterns &&
+                          g.patternData.patterns.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {g.patternData.patterns.map((p, i) => (
+                                <span
+                                  key={i}
+                                  className={`text-[10px] px-2 py-0.5 rounded-full ${p.signal === "bullish" ? "bg-green-900/50 text-green-300 border border-green-700/50" : p.signal === "bearish" ? "bg-red-900/50 text-red-300 border border-red-700/50" : "bg-gray-800 text-gray-300 border border-gray-600"}`}
+                                >
+                                  {p.name} {p.confidence >= 70 ? "⭐" : ""}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {g.patternData?.advancedIndicators?.bollingerBands
+                            ?.isSqueeze && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-blue-900/40 text-blue-300 rounded border border-blue-700/30">
+                              BB Squeeze
+                            </span>
+                          )}
+                          {g.patternData?.advancedIndicators?.adx
+                            ?.isTrending && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-orange-900/40 text-orange-300 rounded border border-orange-700/30">
+                              ADX &gt; 25
+                            </span>
+                          )}
+                          {g.patternData?.advancedIndicators?.volumeProfile
+                            ?.poc &&
+                            g.entryPrice >
+                              g.patternData.advancedIndicators.volumeProfile
+                                .poc && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-purple-900/40 text-purple-300 rounded border border-purple-700/30">
+                                &gt; POC
+                              </span>
+                            )}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Trading Info */}
@@ -787,6 +982,7 @@ export default function ComparePage() {
                     <th className="py-2 text-center">Safety</th>
                     <th className="py-2 text-center">R/R</th>
                     <th className="py-2 text-center">News</th>
+                    <th className="py-2 text-center">Pattern</th>
                     <th className="py-2 text-center">Total</th>
                     <th className="py-2 text-right">Upside</th>
                   </tr>
@@ -810,8 +1006,11 @@ export default function ComparePage() {
                       <td className="py-3 text-center text-white">
                         {g.newsScore}/20
                       </td>
+                      <td className="py-3 text-center text-white">
+                        {g.patternScore}/40
+                      </td>
                       <td className="py-3 text-center font-bold text-yellow-400">
-                        {g.totalScore}/100
+                        {g.totalScore}/140
                       </td>
                       <td className="py-3 text-right text-green-400">
                         +{g.upsidePercent.toFixed(1)}%
