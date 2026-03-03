@@ -494,10 +494,10 @@ export default function PortfolioTracker() {
 
           {/* Row 2: Portfolio Filter (Center) */}
           <div className="flex justify-center">
-            <div className="flex items-center bg-slate-900 border border-slate-700/50 rounded-lg p-1 shadow-lg text-sm">
+            <div className="flex flex-wrap justify-center items-center bg-slate-900 border border-slate-700/50 rounded-lg p-1 shadow-lg text-sm gap-1">
               <button
                 onClick={() => setViewFilter("all")}
-                className={`px-5 py-2 rounded-md font-bold transition-all ${
+                className={`px-3 py-1.5 md:px-5 md:py-2 text-xs md:text-sm rounded-md font-bold transition-all ${
                   viewFilter === "all"
                     ? "bg-white/10 text-white"
                     : "text-slate-500 hover:text-slate-300"
@@ -507,7 +507,7 @@ export default function PortfolioTracker() {
               </button>
               <button
                 onClick={() => setViewFilter("main")}
-                className={`px-5 py-2 rounded-md font-bold transition-all ${
+                className={`px-3 py-1.5 md:px-5 md:py-2 text-xs md:text-sm rounded-md font-bold transition-all ${
                   viewFilter === "main"
                     ? "bg-blue-600/20 text-blue-400"
                     : "text-slate-500 hover:text-slate-300"
@@ -528,7 +528,7 @@ export default function PortfolioTracker() {
               </button>
               <button
                 onClick={() => setViewFilter("growth")}
-                className={`px-5 py-2 rounded-md font-bold transition-all ${
+                className={`px-3 py-1.5 md:px-5 md:py-2 text-xs md:text-sm rounded-md font-bold transition-all ${
                   viewFilter === "growth"
                     ? "bg-amber-600/20 text-amber-400"
                     : "text-slate-500 hover:text-slate-300"
@@ -549,12 +549,12 @@ export default function PortfolioTracker() {
           </div>
 
           {/* Row 3: Add Trade (Right) and Currency Toggle (Left) */}
-          <div className="flex justify-between items-center bg-slate-900/40 p-3 rounded-xl border border-slate-800/50">
+          <div className="flex flex-col xl:flex-row justify-between items-center gap-4 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50">
             {/* Currency Toggle */}
-            <div className="flex items-center bg-slate-900 border border-slate-700/50 rounded-lg p-1">
+            <div className="flex items-center bg-slate-900 border border-slate-700/50 rounded-lg p-1 w-full xl:w-auto justify-center">
               <button
                 onClick={() => setCurrency("THB")}
-                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all flex-1 xl:flex-none text-center ${
                   currency === "THB"
                     ? "bg-blue-600/20 text-blue-400"
                     : "text-slate-500 hover:text-slate-300"
@@ -564,7 +564,7 @@ export default function PortfolioTracker() {
               </button>
               <button
                 onClick={() => setCurrency("USD")}
-                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${
+                className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all flex-1 xl:flex-none text-center ${
                   currency === "USD"
                     ? "bg-emerald-600/20 text-emerald-400"
                     : "text-slate-500 hover:text-slate-300"
@@ -575,35 +575,40 @@ export default function PortfolioTracker() {
             </div>
 
             {/* Actions */}
-            <div className="flex gap-3 flex-wrap justify-end">
+            <div className="flex gap-2 sm:gap-3 flex-wrap justify-center xl:justify-end w-full xl:w-auto">
               <Link
                 href="/portfolio/analyzer"
-                className="bg-emerald-600/20 hover:bg-emerald-600/40 text-sm font-bold px-4 py-2.5 border border-emerald-500/50 rounded-lg flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)] whitespace-nowrap text-emerald-400 hover:text-emerald-300"
+                className="bg-emerald-600/20 hover:bg-emerald-600/40 text-sm font-bold px-3 py-2 sm:px-4 sm:py-2.5 border border-emerald-500/50 rounded-lg flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)] whitespace-nowrap text-emerald-400 hover:text-emerald-300 flex-1 sm:flex-none"
               >
                 <BrainCircuit size={18} />
-                AI วิเคราะห์พอร์ต
+                AI <span className="hidden sm:inline">วิเคราะห์พอร์ต</span>
               </Link>
               <button
                 onClick={handleCopySummary}
-                className="bg-slate-800 hover:bg-slate-700 text-sm font-bold px-4 py-2.5 border border-slate-700 rounded-lg flex items-center gap-2 transition-all whitespace-nowrap text-slate-300 hover:text-white"
+                className="bg-slate-800 hover:bg-slate-700 text-sm font-bold px-3 py-2 sm:px-4 sm:py-2.5 border border-slate-700 rounded-lg flex items-center justify-center gap-2 transition-all whitespace-nowrap text-slate-300 hover:text-white flex-1 sm:flex-none"
               >
                 {isCopied ? (
                   <>
                     <CheckCheck size={18} className="text-emerald-500" />
-                    <span className="text-emerald-500">คัดลอกแล้ว</span>
+                    <span className="text-emerald-500 hidden sm:inline">
+                      คัดลอกแล้ว
+                    </span>
                   </>
                 ) : (
                   <>
                     <Copy size={18} />
-                    คัดลอกสรุปพอร์ต
+                    <span className="hidden sm:inline">คัดลอกสรุปพอร์ต</span>
+                    <span className="sm:hidden">คัดลอกสรุป</span>
                   </>
                 )}
               </button>
               <button
                 onClick={() => setIsAddModalOpen(true)}
-                className="bg-blue-600 hover:bg-blue-500 text-sm font-bold px-5 py-2.5 border border-blue-500 rounded-lg flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(59,130,246,0.5)] whitespace-nowrap"
+                className="bg-blue-600 hover:bg-blue-500 text-sm font-bold px-4 py-2 sm:px-5 sm:py-2.5 border border-blue-500 rounded-lg flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(59,130,246,0.5)] whitespace-nowrap flex-1 sm:flex-none"
               >
-                <Save size={18} />+ บันทึกหุ้นใหม่
+                <Save size={18} />
+                <span className="hidden sm:inline">+ บันทึกหุ้นใหม่</span>
+                <span className="sm:hidden">+ เพิ่มหุ้น</span>
               </button>
             </div>
           </div>
@@ -806,8 +811,8 @@ export default function PortfolioTracker() {
 
         {/* Main List */}
         <div className="space-y-6">
-          <div className="flex gap-4 border-b border-slate-800 justify-between items-center">
-            <div className="flex gap-4">
+          <div className="flex flex-col sm:flex-row gap-4 border-b border-slate-800 justify-between items-start sm:items-center">
+            <div className="flex gap-4 w-full sm:w-auto overflow-x-auto custom-scrollbar border-b sm:border-b-0 border-slate-800">
               <button
                 onClick={() => setActiveTab("ACTIVE")}
                 className={`pb-3 text-sm font-bold px-4 border-b-2 transition-colors ${
@@ -1106,7 +1111,7 @@ export default function PortfolioTracker() {
                             <p className="text-xs text-slate-400 font-bold mb-2">
                               จำลองแผนการซื้อเพิ่ม (What-If)
                             </p>
-                            <div className="flex gap-2 items-center">
+                            <div className="flex flex-wrap gap-2 items-center">
                               <input
                                 type="number"
                                 placeholder="ราคาเข้า ($)"
@@ -1167,11 +1172,11 @@ export default function PortfolioTracker() {
                     )}
 
                     {/* Sell Actions */}
-                    <div className="mt-4 pt-4 border-t border-slate-800/60 flex items-center justify-between">
-                      <span className="text-xs text-slate-500 uppercase tracking-widest font-bold">
+                    <div className="mt-4 pt-4 border-t border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <span className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1 sm:mb-0">
                         ปิดโพชิชัน (ขาย)
                       </span>
-                      <div className="flex gap-2 items-center">
+                      <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
                         <button
                           onClick={() => {
                             setSellQty({
@@ -1232,8 +1237,8 @@ export default function PortfolioTracker() {
               })}
             </div>
           ) : (
-            <div className="bg-slate-900/50 rounded-xl border border-slate-800 overflow-hidden">
-              <table className="w-full text-sm text-left">
+            <div className="bg-slate-900/50 rounded-xl border border-slate-800 overflow-x-auto custom-scrollbar w-full">
+              <table className="w-full text-sm text-left min-w-[600px]">
                 <thead className="bg-slate-800/50 text-slate-400 text-xs uppercase font-medium">
                   <tr>
                     <th className="px-4 py-3">หุ้น</th>
@@ -1411,7 +1416,7 @@ export default function PortfolioTracker() {
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 uppercase"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1">
                     {ticker === "CASH" ? "ยอดเงิน ($)" : "จำนวนหุ้น"}
@@ -1445,7 +1450,7 @@ export default function PortfolioTracker() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4 border-t border-slate-800 pt-4 mt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-800 pt-4 mt-2">
                 <div>
                   <label className="block text-xs font-medium text-red-400 mb-1">
                     จุดตัดขาดทุน (Cut Loss $)
@@ -1483,7 +1488,7 @@ export default function PortfolioTracker() {
                 <label className="block text-xs font-medium text-blue-400 mb-1">
                   สัดส่วนเป้าหมายในพอร์ต (% Target Allocation)
                 </label>
-                <div className="flex gap-4 items-center">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 sm:items-center">
                   <input
                     type="number"
                     step="any"
@@ -1492,7 +1497,7 @@ export default function PortfolioTracker() {
                     placeholder="เช่น 10"
                     value={targetAlloc}
                     onChange={(e) => setTargetAlloc(e.target.value)}
-                    className="w-1/3 bg-slate-950 border border-blue-900/30 rounded-xl px-4 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full sm:w-1/3 bg-slate-950 border border-blue-900/30 rounded-xl px-4 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                   />
                   <div className="text-[11px] text-slate-500 leading-tight">
                     * ใส่เปอร์เซ็นต์ที่ต้องการให้หุ้นตัวนี้มีน้ำหนักในพอร์ต

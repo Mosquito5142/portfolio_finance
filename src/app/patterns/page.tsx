@@ -672,7 +672,7 @@ export default function PatternScreenerPage() {
       {/* Header */}
       <header className="bg-gray-900/80 backdrop-blur-sm border-b border-purple-500/30 sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-0">
             <div className="flex items-center gap-3">
               <span className="text-3xl">📊</span>
               <div>
@@ -684,26 +684,29 @@ export default function PatternScreenerPage() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap justify-center font-medium">
               <Link
                 href="/patterns/charts"
-                className="text-gray-400 hover:text-blue-400 text-sm font-bold bg-blue-900/20 px-3 py-1 rounded border border-blue-500/30 transition-all"
+                className="text-gray-400 hover:text-blue-400 text-sm font-bold bg-blue-900/20 px-3 py-1 rounded border border-blue-500/30 transition-all whitespace-nowrap"
               >
                 📐 Triangles
               </Link>
               <Link
                 href="/search"
-                className="text-gray-400 hover:text-purple-400 text-sm"
+                className="text-gray-400 hover:text-purple-400 text-sm whitespace-nowrap"
               >
                 🔍 Search
               </Link>
               <Link
                 href="/gold"
-                className="text-gray-400 hover:text-yellow-400 text-sm"
+                className="text-gray-400 hover:text-yellow-400 text-sm whitespace-nowrap"
               >
                 🟡 Gold
               </Link>
-              <Link href="/" className="text-gray-400 hover:text-white text-sm">
+              <Link
+                href="/"
+                className="text-gray-400 hover:text-white text-sm whitespace-nowrap"
+              >
                 ← กลับ
               </Link>
             </div>
@@ -1036,8 +1039,8 @@ export default function PatternScreenerPage() {
         {/* We need to define TickerCheckbox outside or use inline rendering if component definition is not allowed inside render */}
 
         {/* Scan Controls */}
-        <div className="bg-gray-800/50 rounded-2xl border border-gray-700/50 p-6">
-          <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="bg-gray-800/50 rounded-2xl border border-gray-700/50 p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between flex-wrap gap-4">
             <div>
               <h2 className="text-white font-bold text-lg">🔍 Mass Scan</h2>
               <p className="text-gray-500 text-sm">
@@ -1052,7 +1055,7 @@ export default function PatternScreenerPage() {
             <button
               onClick={handleScan}
               disabled={scanning || selectedTickers.length === 0}
-              className={`px-6 py-3 rounded-xl font-bold transition-all ${
+              className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold transition-all ${
                 scanning || selectedTickers.length === 0
                   ? "bg-gray-700 text-gray-400 cursor-not-allowed"
                   : "bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-500/20"
@@ -1070,7 +1073,7 @@ export default function PatternScreenerPage() {
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               onClick={() => setScanMode("value")}
-              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all whitespace-nowrap ${
                 scanMode === "value"
                   ? "bg-green-600 text-white"
                   : "bg-gray-700/50 text-gray-400 hover:bg-gray-700"
@@ -1080,7 +1083,7 @@ export default function PatternScreenerPage() {
             </button>
             <button
               onClick={() => setScanMode("trend")}
-              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all whitespace-nowrap ${
                 scanMode === "trend"
                   ? "bg-purple-600 text-white"
                   : "bg-gray-700/50 text-gray-400 hover:bg-gray-700"
@@ -1090,7 +1093,7 @@ export default function PatternScreenerPage() {
             </button>
             <button
               onClick={() => setScanMode("sniper")}
-              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all whitespace-nowrap ${
                 scanMode === "sniper"
                   ? "bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.3)]"
                   : "bg-gray-700/50 text-gray-400 hover:bg-gray-700"
@@ -1180,9 +1183,9 @@ export default function PatternScreenerPage() {
             <div className="absolute top-0 right-0 p-4 opacity-10 text-9xl">
               🚀
             </div>
-            <div className="flex items-center justify-between mb-6 relative z-10">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 relative z-10 gap-4">
               <div>
-                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <h2 className="text-xl sm:text-2xl font-bold text-white flex flex-wrap items-center gap-2">
                   🚀 TOP PICKS TODAY
                   <span
                     className={`text-xs font-normal px-2 py-1 rounded-lg ${
@@ -1200,11 +1203,11 @@ export default function PatternScreenerPage() {
                         : "Trend Following"}
                   </span>
                 </h2>
-                <p className="text-purple-300/70 text-sm mt-1">
+                <p className="text-purple-300/70 text-xs sm:text-sm mt-1">
                   หุ้นที่คะแนนดีที่สุด 5 อันดับแรก พร้อมแผนการเล่นรายวัน
                 </p>
               </div>
-              <div className="flex items-center gap-2 bg-gray-900/50 p-1.5 rounded-xl border border-purple-500/30">
+              <div className="flex flex-wrap items-center gap-2 bg-gray-900/50 p-1.5 rounded-xl border border-purple-500/30 w-full md:w-auto">
                 <select
                   value={entryType}
                   onChange={(e) => setEntryType(e.target.value as any)}
@@ -1372,11 +1375,11 @@ export default function PatternScreenerPage() {
         {/* Results Summary */}
         {scans.length > 0 && !scanning && (
           <div
-            className={`grid gap-4 ${scanMode === "value" ? "grid-cols-5" : "grid-cols-4"}`}
+            className={`grid gap-2 sm:gap-4 ${scanMode === "value" ? "grid-cols-2 md:grid-cols-5" : "grid-cols-2 md:grid-cols-4"}`}
           >
             <button
               onClick={() => setFilterSignal("ALL")}
-              className={`p-4 rounded-xl border transition-all ${
+              className={`p-3 sm:p-4 rounded-xl border transition-all ${
                 filterSignal === "ALL"
                   ? "bg-purple-900/50 border-purple-500"
                   : "bg-gray-800/50 border-gray-700/50 hover:border-purple-500/50"
