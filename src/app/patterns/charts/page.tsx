@@ -59,6 +59,9 @@ export default function TrianglePatternsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [customTickers, setCustomTickers] = useState<string[]>([]);
 
+  // Portfolio State
+  const [portfolioTickers, setPortfolioTickers] = useState<string[]>([]);
+
   // Debug Data State
   const [debugVisible, setDebugVisible] = useState<Record<string, boolean>>({});
   const toggleDebug = (symbol: string) => {
@@ -73,6 +76,11 @@ export default function TrianglePatternsPage() {
     "distance" | "convergence" | "confidence"
   >("distance");
 
+  // Tab State for filtering grouped results
+  const [activeTab, setActiveTab] = useState<
+    "high_prob" | "all" | "reversal" | "continuation"
+  >("high_prob");
+
   // Confluence Filter State
   const [filterSMA, setFilterSMA] = useState(false);
   const [filterMACD, setFilterMACD] = useState(false);
@@ -86,6 +94,42 @@ export default function TrianglePatternsPage() {
       status: "pending",
     }));
     setScans(initialScans);
+
+    // Fetch user's active portfolio tickers
+    fetch("/api/sheets/portfolio")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json?.data) {
+          const actives = json.data.filter(
+            (r: any) =>
+              r.status !== "CLOSED" &&
+              r.ticker !== "CASH" &&
+              r.quantity - (r.soldQty || 0) > 0,
+          );
+          const pTickers = Array.from(
+            new Set(actives.map((r: any) => r.ticker)),
+          ) as string[];
+          setPortfolioTickers(pTickers);
+
+          // Auto-inject any unknown tickers from portfolio into the system so user can scan them
+          const newTickers = pTickers.filter(
+            (t) => !UNIQUE_SYMBOLS.includes(t),
+          );
+          if (newTickers.length > 0) {
+            setCustomTickers((prev) =>
+              Array.from(new Set([...prev, ...newTickers])),
+            );
+            setScans((prev) => {
+              const existingSymbols = prev.map((s) => s.symbol);
+              const itemsToAdd: StockScan[] = newTickers
+                .filter((t) => !existingSymbols.includes(t))
+                .map((t) => ({ symbol: t, data: null, status: "pending" }));
+              return [...prev, ...itemsToAdd];
+            });
+          }
+        }
+      })
+      .catch((e) => console.error("Failed to load portfolio for screener", e));
   }, []);
 
   const addCustomTicker = (ticker: string) => {
@@ -165,13 +209,25 @@ export default function TrianglePatternsPage() {
   };
 
   // Filter only stocks that have valid patterns
+  const validPatternNames = [
+    "Triangle",
+    "Bull Flag",
+    "VCP",
+    "Cup",
+    "Double Bottom",
+    "Head & Shoulders",
+    "Wedge",
+    "Rectangle",
+    "Pennant",
+    "Triple Bottom",
+    "Triple Top",
+  ];
+
   const baseScans = scans
     .filter((s) => s.status === "done" && s.data)
     .filter((s) => {
       const hasPattern = s.data?.patterns.some((p) =>
-        ["Triangle", "Bull Flag", "VCP", "Cup", "Double Bottom"].some((name) =>
-          p.name.includes(name),
-        ),
+        validPatternNames.some((name) => p.name.includes(name)),
       );
       return hasPattern;
     });
@@ -195,14 +251,10 @@ export default function TrianglePatternsPage() {
     .sort((a, b) => {
       // Base Sort by distance to breakout (closest first), actual custom sort is applied later in render
       const aPat = a.data?.patterns.find((p) =>
-        ["Triangle", "Bull Flag", "VCP", "Cup", "Double Bottom"].some((name) =>
-          p.name.includes(name),
-        ),
+        validPatternNames.some((name) => p.name.includes(name)),
       );
       const bPat = b.data?.patterns.find((p) =>
-        ["Triangle", "Bull Flag", "VCP", "Cup", "Double Bottom"].some((name) =>
-          p.name.includes(name),
-        ),
+        validPatternNames.some((name) => p.name.includes(name)),
       );
       const aDist = Math.abs(aPat?.distanceToBreakout || 100);
       const bDist = Math.abs(bPat?.distanceToBreakout || 100);
@@ -299,6 +351,11 @@ export default function TrianglePatternsPage() {
                     Quick Select:
                   </span>
                   {[
+                    {
+                      label: "My Portfolio 🌟",
+                      list: portfolioTickers,
+                      color: "bg-yellow-600",
+                    },
                     {
                       label: "ALL LIST",
                       list: UNIQUE_SYMBOLS,
@@ -586,11 +643,23 @@ export default function TrianglePatternsPage() {
           validScans.length > 0 &&
           (() => {
             // --- Helpers for grouping & sorting ---
+            const validPatternNames = [
+              "Triangle",
+              "Bull Flag",
+              "VCP",
+              "Cup",
+              "Double Bottom",
+              "Head & Shoulders",
+              "Wedge",
+              "Rectangle",
+              "Pennant",
+              "Triple Bottom",
+              "Triple Top",
+            ];
+
             const getPattern = (s: StockScan) =>
               s.data?.patterns.find((p) =>
-                ["Triangle", "Bull Flag", "VCP", "Cup", "Double Bottom"].some(
-                  (name) => p.name.includes(name),
-                ),
+                validPatternNames.some((name) => p.name.includes(name)),
               );
 
             const getDistance = (s: StockScan) => {
@@ -618,8 +687,29 @@ export default function TrianglePatternsPage() {
               return pat?.confidence || 0;
             };
 
+            // Filter by Tab
+            const tabFiltered = validScans.filter((s) => {
+              if (activeTab === "all") return true;
+
+              const pat = getPattern(s);
+              if (!pat) return false;
+
+              if (activeTab === "high_prob") {
+                // High Prob = Distance <= 10% and Confidence >= 70
+                return (
+                  Math.abs(pat.distanceToBreakout || 100) <= 20 &&
+                  (pat.confidence || 0) >= 70
+                );
+              }
+              if (activeTab === "reversal") return pat.type === "reversal";
+              if (activeTab === "continuation")
+                return pat.type === "continuation";
+
+              return true;
+            });
+
             // Sort
-            const sorted = [...validScans].sort((a, b) => {
+            const sorted = [...tabFiltered].sort((a, b) => {
               if (sortBy === "distance") return getDistance(a) - getDistance(b);
               if (sortBy === "convergence")
                 return getConvergence(a) - getConvergence(b);
@@ -650,7 +740,41 @@ export default function TrianglePatternsPage() {
               getPattern(s)?.name.includes("Cup"),
             );
 
+            // NEW PATTERNS (Sniper Bot v3)
+            const headAndShoulders = sorted.filter((s) =>
+              getPattern(s)?.name.includes("Head & Shoulders"),
+            );
+            const wedges = sorted.filter((s) =>
+              getPattern(s)?.name.includes("Wedge"),
+            );
+            const rectangles = sorted.filter((s) =>
+              getPattern(s)?.name.includes("Rectangle"),
+            );
+            const pennants = sorted.filter((s) =>
+              getPattern(s)?.name.includes("Pennant"),
+            );
+            const triplePatterns = sorted.filter((s) =>
+              getPattern(s)?.name.includes("Triple"),
+            );
+
             const groups = [
+              {
+                label: "👤 Head & Shoulders",
+                color: "indigo",
+                items: headAndShoulders,
+              },
+              { label: "🪃 Wedges", color: "cyan", items: wedges },
+              { label: "🎗️ Pennant", color: "rose", items: pennants },
+              {
+                label: "▭ Rectangle (Trading Range)",
+                color: "zinc",
+                items: rectangles,
+              },
+              {
+                label: "🔱 Triple Bottom / Top",
+                color: "fuchsia",
+                items: triplePatterns,
+              },
               { label: "🚩 Bull Flag", color: "pink", items: bullFlags },
               {
                 label: "📉 VCP (Volatility Contraction)",
@@ -682,11 +806,50 @@ export default function TrianglePatternsPage() {
 
             return (
               <div className="space-y-6">
+                {/* Tabs UI */}
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  {[
+                    {
+                      key: "high_prob" as const,
+                      label: "⭐ High Probability",
+                      desc: "Distance < 10% & Confidence > 70%",
+                    },
+                    {
+                      key: "reversal" as const,
+                      label: "🔄 Reversals",
+                      desc: "H&S, Wedges, Triple Patterns",
+                    },
+                    {
+                      key: "continuation" as const,
+                      label: "📈 Continuations",
+                      desc: "Triangles, Flags, Rectangles",
+                    },
+                    {
+                      key: "all" as const,
+                      label: "🌐 All Signals",
+                      desc: "Show All Triggered Patterns",
+                    },
+                  ].map((tab) => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setActiveTab(tab.key)}
+                      className={`px-4 py-2 rounded-xl border flex flex-col items-start transition-all ${
+                        activeTab === tab.key
+                          ? "bg-blue-600 border-blue-400 shadow-lg shadow-blue-500/20 text-white"
+                          : "bg-slate-800 border-slate-700 text-gray-400 hover:bg-slate-700"
+                      }`}
+                    >
+                      <span className="font-bold">{tab.label}</span>
+                      <span className="text-[10px] opacity-70">{tab.desc}</span>
+                    </button>
+                  ))}
+                </div>
+
                 {/* Summary Stats */}
                 <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
                   <div className="flex flex-wrap items-center gap-3">
                     <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                      🚨 พบ {validScans.length} หุ้น
+                      🚨 พบ {tabFiltered.length} หุ้นในหมวดนี้
                     </h2>
                     {ascending.length > 0 && (
                       <span className="bg-green-900/40 text-green-400 border border-green-500/40 px-3 py-1 rounded-full text-xs font-bold">
@@ -720,7 +883,32 @@ export default function TrianglePatternsPage() {
                     )}
                     {doubleBottoms.length > 0 && (
                       <span className="bg-teal-900/40 text-teal-400 border border-teal-500/40 px-3 py-1 rounded-full text-xs font-bold">
-                        بلی Double Bottom {doubleBottoms.length}
+                        بلی D.Bottom {doubleBottoms.length}
+                      </span>
+                    )}
+                    {headAndShoulders.length > 0 && (
+                      <span className="bg-indigo-900/40 text-indigo-400 border border-indigo-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                        👤 H&S {headAndShoulders.length}
+                      </span>
+                    )}
+                    {wedges.length > 0 && (
+                      <span className="bg-cyan-900/40 text-cyan-400 border border-cyan-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                        🪃 Wedges {wedges.length}
+                      </span>
+                    )}
+                    {rectangles.length > 0 && (
+                      <span className="bg-zinc-900/40 text-zinc-400 border border-zinc-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                        ▭ Rectangle {rectangles.length}
+                      </span>
+                    )}
+                    {pennants.length > 0 && (
+                      <span className="bg-rose-900/40 text-rose-400 border border-rose-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                        🎗️ Pennant {pennants.length}
+                      </span>
+                    )}
+                    {triplePatterns.length > 0 && (
+                      <span className="bg-fuchsia-900/40 text-fuchsia-400 border border-fuchsia-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                        🔱 Triple {triplePatterns.length}
                       </span>
                     )}
                   </div>
@@ -860,6 +1048,32 @@ export default function TrianglePatternsPage() {
                                   <p className="text-sm text-gray-400 mt-1">
                                     {pat.description}
                                   </p>
+                                )}
+                                {/* Sniper Bot v3 - Advanced Technical Badges */}
+                                {s.data?.advancedIndicators && (
+                                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                                    {s.data.advancedIndicators.bollingerBands
+                                      ?.isSqueeze && (
+                                      <span className="text-[10px] bg-slate-800 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        🗜️ BB Squeeze
+                                      </span>
+                                    )}
+                                    {s.data.advancedIndicators.adx
+                                      ?.isTrending && (
+                                      <span className="text-[10px] bg-slate-800 text-orange-300 border border-orange-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        🔥 ADX{" "}
+                                        {s.data.advancedIndicators.adx.adx.toFixed(
+                                          1,
+                                        )}
+                                      </span>
+                                    )}
+                                    {s.data.advancedIndicators.volumeProfile
+                                      ?.isAbovePOC && (
+                                      <span className="text-[10px] bg-slate-800 text-teal-300 border border-teal-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        📍 &gt; POC
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                               <div className="text-right">

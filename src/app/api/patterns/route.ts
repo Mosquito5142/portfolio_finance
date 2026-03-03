@@ -11,8 +11,10 @@ interface PatternResult {
   description: string;
   entryZone?: { low: number; high: number }; // NEW: Entry price range
   breakoutLevel?: number; // NEW: Key level to watch
+  lowerBreakoutLevel?: number; // For bilateral patterns like Symmetrical Triangle
   distanceToBreakout?: number; // NEW: % away from breakout
   targetPrice?: number;
+  lowerTargetPrice?: number;
   stopLoss?: number;
   debugData?: any; // For raw math/calculation display
 }
@@ -248,6 +250,23 @@ interface AdvancedIndicators {
   chandelierExit: {
     long: number;
     short: number;
+  };
+  // NEW: Sniper Bot v3 - Advanced Technicals
+  bollingerBands: {
+    upper: number;
+    lower: number;
+    bandwidth: number;
+    isSqueeze: boolean;
+  };
+  adx: {
+    adx: number;
+    pdi: number;
+    mdi: number;
+    isTrending: boolean;
+  };
+  volumeProfile: {
+    poc: number;
+    isAbovePOC: boolean;
   };
 }
 
@@ -1140,21 +1159,17 @@ function detectTrianglePatterns(
   // Need at least 2 peaks and 2 valleys to draw trendlines
   if (peaks.length < 2 || valleys.length < 2) return null;
 
-  // Use the LAST peak/valley, but pick the HIGHEST peak and LOWEST valley BEFORE it to form the major structural trendlines
+  // Use the two most recent distinct peaks/valleys to form the structural trendlines
   const p2 = peaks[peaks.length - 1];
-  let p1 = peaks[0];
-  for (let i = 1; i < peaks.length - 1; i++) {
-    if (peaks[i].price > p1.price) {
-      p1 = peaks[i];
-    }
+  let p1 = peaks.length > 1 ? peaks[peaks.length - 2] : peaks[0];
+  if (p2.index - p1.index < 5 && peaks.length > 2) {
+    p1 = peaks[peaks.length - 3]; // Ensure some distance
   }
 
   const v2 = valleys[valleys.length - 1];
-  let v1 = valleys[0];
-  for (let i = 1; i < valleys.length - 1; i++) {
-    if (valleys[i].price < v1.price) {
-      v1 = valleys[i];
-    }
+  let v1 = valleys.length > 1 ? valleys[valleys.length - 2] : valleys[0];
+  if (v2.index - v1.index < 5 && valleys.length > 2) {
+    v1 = valleys[valleys.length - 3]; // Ensure some distance
   }
 
   // Ensure reasonable separation
@@ -1168,10 +1183,10 @@ function detectTrianglePatterns(
   const normPeakSlope = peakSlope / p1.price;
   const normValleySlope = valleySlope / v1.price;
 
-  // --- Thresholds per user spec ---
-  const flatThreshold = 0.006; // < 0.60% per day = "flat" (for Ascending/Descending)
-  const trendThreshold = 0.0015; // > 0.15% per day = clear directional trend
-  const maxFlatDiffPct = 0.05; // NEW: Max 5% absolute price difference to be considered "Flat"
+  // --- Thresholds per user spec (Super Relaxed for more hits) ---
+  const flatThreshold = 0.025; // < 2.50% per day = "flat" (for Ascending/Descending)
+  const trendThreshold = 0.0002; // > 0.02% per day = clear directional trend
+  const maxFlatDiffPct = 0.15; // Max 15% absolute price difference to be considered "Flat"
 
   const peakSlopePct = Math.abs(normPeakSlope);
   const valleySlopePct = Math.abs(normValleySlope);
@@ -1193,7 +1208,7 @@ function detectTrianglePatterns(
   const rangeOld = p1.price - v1.price; // กรอบเดิม
   const rangeNew = p2.price - v2.price; // กรอบใหม่
   const convergenceRatio = Math.abs(rangeNew / rangeOld);
-  const isConverging = convergenceRatio < 0.85; // บีบแคบลง > 15%
+  const isConverging = convergenceRatio < 0.98; // บีบแคบลง > 2% (Super Relaxed)
 
   // --- Volume (ผ่อนให้ 30%) ---
   const patternStartIdx = Math.min(p1.index, v1.index);
@@ -1239,11 +1254,11 @@ function detectTrianglePatterns(
   // ถ้าราคาหลุดต่ำกว่า v2 ไป > 5% = สามเหลี่ยมหัก / Breakdown แล้ว (จับ SOFI)
   if (currentPrice < v2.price * 0.95) return null;
 
-  // --- Filter 2: ระยะห่างจาก Breakout ต้องไม่เกิน 20% ---
-  // ถ้า Breakout อยู่ไกลเกิน 20% = ไม่ Actionable (จับ IREN)
+  // --- Filter 2: ระยะห่างจาก Breakout ต้องไม่เกิน 25% ---
+  // ถ้า Breakout อยู่ไกลเกิน = ไม่ Actionable
   const distanceToBreakoutPct =
     ((p2.price - currentPrice) / currentPrice) * 100;
-  if (distanceToBreakoutPct > 20) return null;
+  if (distanceToBreakoutPct > 25) return null;
 
   // --- Gate: ต้องบีบแคบลง (Convergence) หรือ Volume หดตัว ---
   if (!isConverging && !isVolumeDryingUp) return null;
@@ -1325,10 +1340,12 @@ function detectTrianglePatterns(
       signal: "neutral",
       status: "forming",
       confidence: 65,
-      description: `บีบอัดสปริง (ยอดต่ำลง ฐานยกขึ้น) = รอระเบิดเลือกทาง ⚖️`,
+      description: `บีบอัดสปริง (ยอดต่ำลง ฐานยกขึ้น) = รอระเบิดเลือกทาง (⬆️ Breakout: ${p2.price.toFixed(2)}, ⬇️ Breakdown: ${v2.price.toFixed(2)}) ⚖️`,
       entryZone: { low: v2.price, high: p2.price },
       breakoutLevel: p2.price,
+      lowerBreakoutLevel: v2.price,
       targetPrice: p2.price + (p1.price - v1.price) * 0.5,
+      lowerTargetPrice: v2.price - (p1.price - v1.price) * 0.5,
       stopLoss: v2.price * 0.98,
       debugData,
     };
@@ -1338,7 +1355,541 @@ function detectTrianglePatterns(
 }
 
 // ==========================================
-// NEW ADVANCED PATTERNS (Bull Flag, Double Bottom, VCP, Cup & Handle)
+// NEW ADVANCED PATTERNS (Sniper Bot v3)
+// ==========================================
+
+function detectHeadAndShoulders(
+  bars: any[],
+  currentPrice: number,
+): PatternResult | null {
+  const lookback = Math.min(120, bars.length); // 6 months context
+  if (lookback < 60) return null;
+  const recentBars = bars.slice(-lookback);
+
+  // Find pivot highs and lows (window of 5 days)
+  const windowSize = 5;
+  const peaks: { index: number; price: number }[] = [];
+  const valleys: { index: number; price: number }[] = [];
+
+  for (let i = windowSize; i < recentBars.length - windowSize; i++) {
+    // Check Peak
+    let isPeak = true;
+    for (let j = 1; j <= windowSize; j++) {
+      if (
+        recentBars[i].high <= recentBars[i - j].high ||
+        recentBars[i].high < recentBars[i + j].high
+      ) {
+        isPeak = false;
+        break;
+      }
+    }
+    if (isPeak) peaks.push({ index: i, price: recentBars[i].high });
+
+    // Check Valley
+    let isValley = true;
+    for (let j = 1; j <= windowSize; j++) {
+      if (
+        recentBars[i].low >= recentBars[i - j].low ||
+        recentBars[i].low > recentBars[i + j].low
+      ) {
+        isValley = false;
+        break;
+      }
+    }
+    if (isValley) valleys.push({ index: i, price: recentBars[i].low });
+  }
+
+  if (peaks.length < 3 && valleys.length < 3) return null;
+
+  // 1. INVERSE HEAD & SHOULDERS (Bullish Reversal)
+  // Needs 3 valleys: Left Shoulder (V1), Head (V2, lowest), Right Shoulder (V3)
+  if (valleys.length >= 3) {
+    const v3 = valleys[valleys.length - 1]; // Right
+    const v2 = valleys[valleys.length - 2]; // Head
+    const v1 = valleys[valleys.length - 3]; // Left
+
+    if (v2.price < v1.price && v2.price < v3.price) {
+      // Find neckline peaks between these valleys
+      const peak1 = peaks.find((p) => p.index > v1.index && p.index < v2.index);
+      const peak2 = peaks.find((p) => p.index > v2.index && p.index < v3.index);
+
+      if (peak1 && peak2) {
+        // Neckline is roughly drawn across peak1 and peak2
+        const necklineSlope =
+          (peak2.price - peak1.price) / (peak2.index - peak1.index);
+        const currentIndex = recentBars.length - 1;
+        const currentNecklinePrice =
+          peak2.price + necklineSlope * (currentIndex - peak2.index);
+
+        const distanceToBreakout =
+          ((currentNecklinePrice - currentPrice) / currentPrice) * 100;
+
+        // Is it forming or breaking out?
+        // Right shoulder shouldn't be too low (must be > head + 2%)
+        if (
+          v3.price > v2.price * 1.02 &&
+          currentPrice >= v3.price &&
+          distanceToBreakout <= 15 // Only show if we're not too far from the neckline
+        ) {
+          const isBreakout = currentPrice > currentNecklinePrice; // strictly above neckline
+          return {
+            name: "Inverse Head & Shoulders 👤⤴️",
+            type: "reversal",
+            signal: "bullish",
+            status: isBreakout ? "ready" : "forming",
+            confidence: 83, // Bulkowski's high rating
+            description: `จบขาลงแบบคลาสสิค ทำไหล่ซ้าย-หัว-ไหล่ขวา (ทำ Higher Low หลังจุดต่ำสุด) ทรงพลังมาก`,
+            entryZone: { low: v3.price * 1.01, high: currentNecklinePrice },
+            breakoutLevel: currentNecklinePrice,
+            distanceToBreakout: distanceToBreakout > 0 ? distanceToBreakout : 0,
+            targetPrice:
+              currentNecklinePrice + (currentNecklinePrice - v2.price), // Project head depth upwards correctly
+            stopLoss: v3.price * 0.98, // Below right shoulder
+            debugData: {
+              v1: v1.price,
+              v2: v2.price,
+              v3: v3.price,
+              neckline: currentNecklinePrice,
+            },
+          };
+        }
+      }
+    }
+  }
+
+  // 2. HEAD & SHOULDERS TOP (Bearish Reversal)
+  // Needs 3 peaks: Left (P1), Head (P2, highest), Right (P3)
+  if (peaks.length >= 3) {
+    const p3 = peaks[peaks.length - 1];
+    const p2 = peaks[peaks.length - 2];
+    const p1 = peaks[peaks.length - 3];
+
+    if (p2.price > p1.price && p2.price > p3.price) {
+      // Neckline valleys
+      const valley1 = valleys.find(
+        (v) => v.index > p1.index && v.index < p2.index,
+      );
+      const valley2 = valleys.find(
+        (v) => v.index > p2.index && v.index < p3.index,
+      );
+
+      if (valley1 && valley2) {
+        const necklineSlope =
+          (valley2.price - valley1.price) / (valley2.index - valley1.index);
+        const currentIndex = recentBars.length - 1;
+        const currentNecklinePrice =
+          valley2.price + necklineSlope * (currentIndex - valley2.index);
+
+        const distanceToBreakout =
+          ((currentPrice - currentNecklinePrice) / currentPrice) * 100;
+
+        if (
+          p3.price < p2.price * 0.98 &&
+          currentPrice <= p3.price &&
+          distanceToBreakout <= 15
+        ) {
+          const isBreakout = currentPrice < currentNecklinePrice; // strictly below neckline
+          return {
+            name: "Head & Shoulders Top 👤⤵️",
+            type: "reversal",
+            signal: "bearish",
+            status: isBreakout ? "ready" : "forming",
+            confidence: 77,
+            description: `จบขาขึ้น ทำหัวและไหล่ขวาเตี้ยลง ระวังหลุดแนวรับ Neckline แล้วไหลยาว`,
+            entryZone: { low: currentNecklinePrice, high: p3.price * 0.99 },
+            breakoutLevel: currentNecklinePrice,
+            distanceToBreakout: distanceToBreakout > 0 ? distanceToBreakout : 0,
+            targetPrice:
+              currentNecklinePrice - (p2.price - currentNecklinePrice), // Project head depth downwards correctly
+            stopLoss: p3.price * 1.02, // Above right shoulder
+            debugData: {
+              p1: p1.price,
+              p2: p2.price,
+              p3: p3.price,
+              neckline: currentNecklinePrice,
+            },
+          };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function detectWedgePatterns(
+  bars: any[],
+  currentPrice: number,
+): PatternResult | null {
+  const lookback = Math.min(90, bars.length);
+  if (lookback < 40) return null;
+  const recentBars = bars.slice(-lookback);
+
+  const windowSize = 5;
+  const peaks: { index: number; price: number }[] = [];
+  const valleys: { index: number; price: number }[] = [];
+
+  for (let i = windowSize; i < recentBars.length - windowSize; i++) {
+    let isPeak = true;
+    for (let j = 1; j <= windowSize; j++) {
+      if (
+        recentBars[i].high <= recentBars[i - j].high ||
+        recentBars[i].high < recentBars[i + j].high
+      ) {
+        isPeak = false;
+        break;
+      }
+    }
+    if (isPeak) peaks.push({ index: i, price: recentBars[i].high });
+
+    let isValley = true;
+    for (let j = 1; j <= windowSize; j++) {
+      if (
+        recentBars[i].low >= recentBars[i - j].low ||
+        recentBars[i].low > recentBars[i + j].low
+      ) {
+        isValley = false;
+        break;
+      }
+    }
+    if (isValley) valleys.push({ index: i, price: recentBars[i].low });
+  }
+
+  if (peaks.length < 2 || valleys.length < 2) return null;
+
+  // Grab the 2 most recent distinct peaks/valleys
+  const p2 = peaks[peaks.length - 1];
+  const p1 = peaks.find((p) => p.index < p2.index - 5) || peaks[0];
+  const v2 = valleys[valleys.length - 1];
+  const v1 = valleys.find((v) => v.index < v2.index - 5) || valleys[0];
+
+  const peakSlope = (p2.price - p1.price) / (p2.index - p1.index || 1);
+  const valleySlope = (v2.price - v1.price) / (v2.index - v1.index || 1);
+
+  // Normalize properly
+  const normPeakSlope = peakSlope / p1.price;
+  const normValleySlope = valleySlope / v1.price;
+
+  // Wedges require slopes in the SAME direction
+  const isFalling = normPeakSlope < -0.0015 && normValleySlope < -0.0015;
+  const isRising = normPeakSlope > 0.0015 && normValleySlope > 0.0015;
+
+  // Convergence Check (Must point toward each other AND be < 0.85 ratio)
+  const normPeakAbs = Math.abs(normPeakSlope) || 1;
+  const normValleyAbs = Math.abs(normValleySlope) || 1;
+
+  const convergenceRatioFalling = normValleyAbs / normPeakAbs;
+  const isConvergingFalling =
+    normPeakSlope < normValleySlope && convergenceRatioFalling < 0.85; // Support falling slower than resistance
+
+  const convergenceRatioRising = normPeakAbs / normValleyAbs;
+  const isConvergingRising =
+    normValleySlope > normPeakSlope && convergenceRatioRising < 0.85; // Resistance rising slower than support
+
+  // Add volume drying up logic
+  const patternStartIdx = Math.min(p1.index, v1.index);
+  const patternLength = lookback - patternStartIdx;
+  let isVolumeDryingUp = false;
+
+  if (patternLength >= 10 && recentBars[0]?.volume !== undefined) {
+    const patternBars = recentBars.slice(patternStartIdx);
+    const halfPattern = Math.floor(patternBars.length / 2);
+
+    const firstHalfVol =
+      patternBars
+        .slice(0, halfPattern)
+        .reduce((a, b) => a + (b.volume || 0), 0) / halfPattern;
+    const secondHalfVol =
+      patternBars.slice(halfPattern).reduce((a, b) => a + (b.volume || 0), 0) /
+      (patternBars.length - halfPattern);
+
+    isVolumeDryingUp = secondHalfVol < firstHalfVol * 1.3;
+  } else {
+    isVolumeDryingUp = true; // Fallback if no volume data
+  }
+
+  // Strictly enforce Volume for Wedges
+  if (!isVolumeDryingUp) return null;
+
+  const currentIndex = recentBars.length - 1;
+  const currentResistance = p2.price + peakSlope * (currentIndex - p2.index);
+  const currentSupport = v2.price + valleySlope * (currentIndex - v2.index);
+
+  // Wedge constraints: Price must be generally within or breaking out of the bounds
+  if (
+    currentPrice < currentSupport * 0.96 ||
+    currentPrice > currentResistance * 1.04
+  )
+    return null;
+
+  if (isFalling && isConvergingFalling) {
+    const distanceToBreakout =
+      ((currentResistance - currentPrice) / currentPrice) * 100;
+    if (distanceToBreakout > 15) return null;
+
+    const isBreakout = currentPrice > currentResistance * 0.99;
+    return {
+      name: "Falling Wedge 📉🪃",
+      type: "reversal",
+      signal: "bullish",
+      status: isBreakout ? "ready" : "forming",
+      confidence: 81,
+      description: `การกดราคาลงเริ่มอ่อนแรง (แนวรับลงช้ากว่าแนวต้าน) บีบอัดรอดีดสวนกลับแรงคล้ายสปริง`,
+      entryZone: { low: currentSupport, high: currentResistance * 1.01 },
+      breakoutLevel: currentResistance,
+      distanceToBreakout: distanceToBreakout > 0 ? distanceToBreakout : 0,
+      targetPrice: p1.price, // Target the start of the wedge
+      stopLoss: currentSupport * 0.97,
+      debugData: {
+        p1: { index: p1.index, price: p1.price.toFixed(2) },
+        p2: { index: p2.index, price: p2.price.toFixed(2) },
+        v1: { index: v1.index, price: v1.price.toFixed(2) },
+        v2: { index: v2.index, price: v2.price.toFixed(2) },
+        mathPeakSlope: `(${p2.price.toFixed(2)} - ${p1.price.toFixed(2)}) / (${p2.index} - ${p1.index}) = ${peakSlope.toFixed(4)}`,
+        mathValleySlope: `(${v2.price.toFixed(2)} - ${v1.price.toFixed(2)}) / (${v2.index} - ${v1.index}) = ${valleySlope.toFixed(4)}`,
+        mathNormPeakSlope: `(${peakSlope.toFixed(4)} / ${p1.price.toFixed(2)}) * 100 = ${(normPeakSlope * 100).toFixed(4)}%`,
+        mathNormValleySlope: `(${valleySlope.toFixed(4)} / ${v1.price.toFixed(2)}) * 100 = ${(normValleySlope * 100).toFixed(4)}%`,
+        mathConvergence: `${convergenceRatioFalling.toFixed(2)}`,
+        isResistanceFlat: false,
+        isSupportRising: false,
+        isConverging: true,
+        convergenceRatio: convergenceRatioFalling.toFixed(2),
+        isVolumeDryingUp: true,
+      },
+    };
+  }
+
+  if (isRising && isConvergingRising) {
+    const distanceToBreakout =
+      ((currentPrice - currentSupport) / currentPrice) * 100;
+    if (distanceToBreakout > 15) return null;
+
+    const isBreakout = currentPrice < currentSupport * 1.01;
+    return {
+      name: "Rising Wedge 📈⚠️",
+      type: "reversal",
+      signal: "bearish",
+      status: isBreakout ? "ready" : "forming",
+      confidence: 74,
+      description: `ราคายกตัวแต่แรงซื้อแผ่ว (แนวต้านขึ้นช้ากว่าแนวรับ) ระวังหลุดกรอบเทขายหนัก`,
+      entryZone: { low: currentSupport * 0.99, high: currentResistance },
+      breakoutLevel: currentSupport,
+      distanceToBreakout: distanceToBreakout > 0 ? distanceToBreakout : 0,
+      targetPrice: v1.price, // Target start of wedge
+      stopLoss: currentResistance * 1.03,
+      debugData: {
+        p1: { index: p1.index, price: p1.price.toFixed(2) },
+        p2: { index: p2.index, price: p2.price.toFixed(2) },
+        v1: { index: v1.index, price: v1.price.toFixed(2) },
+        v2: { index: v2.index, price: v2.price.toFixed(2) },
+        mathPeakSlope: `(${p2.price.toFixed(2)} - ${p1.price.toFixed(2)}) / (${p2.index} - ${p1.index}) = ${peakSlope.toFixed(4)}`,
+        mathValleySlope: `(${v2.price.toFixed(2)} - ${v1.price.toFixed(2)}) / (${v2.index} - ${v1.index}) = ${valleySlope.toFixed(4)}`,
+        mathNormPeakSlope: `(${peakSlope.toFixed(4)} / ${p1.price.toFixed(2)}) * 100 = ${(normPeakSlope * 100).toFixed(4)}%`,
+        mathNormValleySlope: `(${valleySlope.toFixed(4)} / ${v1.price.toFixed(2)}) * 100 = ${(normValleySlope * 100).toFixed(4)}%`,
+        mathConvergence: `${convergenceRatioRising.toFixed(2)}`,
+        isResistanceFlat: false,
+        isSupportRising: true,
+        isConverging: true,
+        convergenceRatio: convergenceRatioRising.toFixed(2),
+        isVolumeDryingUp: true,
+      },
+    };
+  }
+
+  return null;
+}
+
+function detectRectangle(
+  bars: any[],
+  currentPrice: number,
+): PatternResult | null {
+  const lookback = Math.min(60, bars.length);
+  if (lookback < 30) return null;
+  const recentBars = bars.slice(-lookback);
+
+  const highs = recentBars.map((b) => b.high);
+  const lows = recentBars.map((b) => b.low);
+
+  const resistance = Math.max(...highs.slice(0, 45)); // Exclude very recent breakout
+  const support = Math.min(...lows.slice(0, 45));
+
+  // Range should be tight enough (e.g., max 15% distance from support to resistance)
+  const rangeWidth = (resistance - support) / support;
+  if (rangeWidth > 0.15 || rangeWidth < 0.03) return null;
+
+  // Verify multiple touches (at least 2 near support, 2 near resistance)
+  let resistanceTouches = 0;
+  let supportTouches = 0;
+
+  for (const b of recentBars) {
+    if (b.high >= resistance * 0.98 && b.high <= resistance * 1.02)
+      resistanceTouches++;
+    if (b.low <= support * 1.02 && b.low >= support * 0.98) supportTouches++;
+  }
+
+  // Not a robust rectangle if not enough touches
+  if (resistanceTouches < 2 || supportTouches < 2) return null;
+
+  // Bullish Breakout Check
+  const distanceToResBreakout =
+    ((resistance - currentPrice) / currentPrice) * 100;
+
+  if (distanceToResBreakout <= 5 && distanceToResBreakout >= -2) {
+    const isBreakout = currentPrice > resistance * 0.99;
+    return {
+      name: "Rectangle (Bullish) ▭",
+      type: "continuation",
+      signal: "bullish",
+      status: isBreakout ? "ready" : "forming",
+      confidence: 75,
+      description: `การสะสมพลังในกล่อง (Trading Range) เมื่อทะลุกรอบบนได้จะวิ่งแรงเท่าความกว้างกล่อง`,
+      entryZone: { low: resistance * 0.98, high: resistance * 1.02 },
+      breakoutLevel: resistance,
+      distanceToBreakout: distanceToResBreakout > 0 ? distanceToResBreakout : 0,
+      targetPrice: resistance + (resistance - support),
+      stopLoss: resistance * 0.95, // Tight stop below breakout
+      debugData: { resistanceTouches, supportTouches, rangeWidth },
+    };
+  }
+
+  return null;
+}
+
+function detectPennant(
+  bars: any[],
+  currentPrice: number,
+  trend: any,
+): PatternResult | null {
+  // Flag uses 30 days. Pennant is usually shorter, 15-20 days, after a pole.
+  const lookback = Math.min(40, bars.length);
+  if (lookback < 20) return null;
+  const recentBars = bars.slice(-lookback);
+
+  // 1. the Pole (first 10-15 days)
+  let peakPrice = 0;
+  let peakIndex = 0;
+  for (let i = 0; i < 20; i++) {
+    if (recentBars[i].high > peakPrice) {
+      peakPrice = recentBars[i].high;
+      peakIndex = i;
+    }
+  }
+
+  const basePrice = recentBars[0].low;
+  const poleHeight = (peakPrice - basePrice) / basePrice;
+  if (poleHeight < 0.12) return null; // Needs a strong pole
+
+  // 2. The Pennant (from peak to current)
+  const pennantBars = recentBars.slice(peakIndex + 1);
+  if (pennantBars.length < 5 || pennantBars.length > 20) return null;
+
+  // Pennant has converging highs and lows
+  const highestAfterPeak = Math.max(...pennantBars.map((b) => b.high));
+  const lowestAfterPeak = Math.min(...pennantBars.map((b) => b.low));
+
+  // Must not retrace too much
+  const retracement = (peakPrice - lowestAfterPeak) / peakPrice;
+  if (retracement > 0.2) return null;
+
+  // Check convergence (higher lows, lower highs ideally)
+  const isConverging =
+    pennantBars[pennantBars.length - 1].high < highestAfterPeak &&
+    pennantBars[pennantBars.length - 1].low > lowestAfterPeak;
+
+  const distanceToBreakout = ((peakPrice - currentPrice) / currentPrice) * 100;
+
+  if (distanceToBreakout <= 8 && isConverging) {
+    const isBreakout = currentPrice > peakPrice * 0.98;
+    return {
+      name: "Pennant 🎗️",
+      type: "continuation",
+      signal: "bullish",
+      status: isBreakout ? "ready" : "forming",
+      confidence: 73,
+      description: `สามเหลี่ยมชายธงขนาดเล็กที่เกิดหลังการกระชากขึ้นแรง พักตัวสั้นพร้อมวิ่งต่อ`,
+      entryZone: { low: peakPrice * 0.98, high: peakPrice * 1.02 },
+      breakoutLevel: peakPrice,
+      distanceToBreakout: distanceToBreakout > 0 ? distanceToBreakout : 0,
+      targetPrice: peakPrice + (peakPrice - basePrice), // Full pole projection
+      stopLoss: lowestAfterPeak * 0.98,
+      debugData: { poleHeight, retracement, converging: isConverging },
+    };
+  }
+
+  return null;
+}
+
+function detectTriplePattern(
+  bars: any[],
+  currentPrice: number,
+): PatternResult | null {
+  const lookback = Math.min(90, bars.length);
+  if (lookback < 60) return null;
+  const recentBars = bars.slice(-lookback);
+
+  const windowSize = 5;
+  const valleys: { index: number; price: number }[] = [];
+
+  for (let i = windowSize; i < recentBars.length - windowSize; i++) {
+    let isValley = true;
+    for (let j = 1; j <= windowSize; j++) {
+      if (
+        recentBars[i].low >= recentBars[i - j].low ||
+        recentBars[i].low > recentBars[i + j].low
+      ) {
+        isValley = false;
+        break;
+      }
+    }
+    if (isValley) valleys.push({ index: i, price: recentBars[i].low });
+  }
+
+  // Triple Bottom
+  if (valleys.length >= 3) {
+    const v3 = valleys[valleys.length - 1];
+    const v2 = valleys[valleys.length - 2];
+    const v1 = valleys[valleys.length - 3];
+
+    // Check if they are all roughly at the same horizontal support
+    const avgValley = (v1.price + v2.price + v3.price) / 3;
+    const diff1 = Math.abs(v1.price - avgValley) / avgValley;
+    const diff2 = Math.abs(v2.price - avgValley) / avgValley;
+    const diff3 = Math.abs(v3.price - avgValley) / avgValley;
+
+    if (diff1 < 0.03 && diff2 < 0.03 && diff3 < 0.03) {
+      // Find the highest peak between these valleys (Neckline)
+      const interPeaks = recentBars
+        .slice(v1.index, v3.index)
+        .map((b) => b.high);
+      const neckline = Math.max(...interPeaks);
+
+      const distanceToBreakout =
+        ((neckline - currentPrice) / currentPrice) * 100;
+
+      if (currentPrice > avgValley && distanceToBreakout <= 10) {
+        const isBreakout = currentPrice > neckline * 0.98;
+        return {
+          name: "Triple Bottom 🔱",
+          type: "reversal",
+          signal: "bullish",
+          status: isBreakout ? "ready" : "forming",
+          confidence: 78,
+          description: `ย่ำฐาน 3 ครั้งไม่หลุด (Strong Support) มีโอกาสพลิกกลับเป็นขาขึ้นสูงมาก`,
+          entryZone: { low: neckline * 0.98, high: neckline * 1.02 },
+          breakoutLevel: neckline,
+          distanceToBreakout: distanceToBreakout > 0 ? distanceToBreakout : 0,
+          targetPrice: neckline + (neckline - avgValley),
+          stopLoss: avgValley * 0.97,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+// ==========================================
+// END NEW ADVANCED PATTERNS
 // ==========================================
 function detectAdvancedPatterns(
   bars: any[],
@@ -1363,6 +1914,26 @@ function detectAdvancedPatterns(
   // 4. Cup and Handle (ถ้วยและหูถ้วย)
   const cupAndHandle = detectCupAndHandle(bars, currentPrice);
   if (cupAndHandle) patterns.push(cupAndHandle);
+
+  // 5. Head and Shoulders (Top & Inverse)
+  const headAndShoulders = detectHeadAndShoulders(bars, currentPrice);
+  if (headAndShoulders) patterns.push(headAndShoulders);
+
+  // 6. Wedges (Falling & Rising)
+  const wedge = detectWedgePatterns(bars, currentPrice);
+  if (wedge) patterns.push(wedge);
+
+  // 7. Rectangle (Trading Range)
+  const rectangle = detectRectangle(bars, currentPrice);
+  if (rectangle) patterns.push(rectangle);
+
+  // 8. Pennant
+  const pennant = detectPennant(bars, currentPrice, trend);
+  if (pennant) patterns.push(pennant);
+
+  // 9. Triple Bottom
+  const triplePattern = detectTriplePattern(bars, currentPrice);
+  if (triplePattern) patterns.push(triplePattern);
 
   return patterns;
 }
@@ -1699,6 +2270,163 @@ async function getMarketContext() {
       timestamp: now,
     };
   }
+}
+
+// ========== NEW: BOLlINGER BAND SQUEEZE ==========
+function calculateBollingerBands(
+  closes: number[],
+  period: number = 20,
+  multiplier: number = 2,
+): { upper: number; lower: number; bandwidth: number; isSqueeze: boolean } {
+  if (closes.length < period)
+    return { upper: 0, lower: 0, bandwidth: 0, isSqueeze: false };
+
+  const currentSma = calculateSMA(closes, period);
+  const currentStdDev = calculateStdDev(closes, period);
+  const upper = currentSma + currentStdDev * multiplier;
+  const lower = currentSma - currentStdDev * multiplier;
+  const bandwidth = (upper - lower) / currentSma;
+
+  // Check for Squeeze (Is bandwidth at a 6-month low?)
+  const lookback = Math.min(120, closes.length); // ~6 months
+  if (lookback < 60) return { upper, lower, bandwidth, isSqueeze: false };
+
+  // Calculate historical bandwidths to find minimum
+  let minBandwidth = Number.MAX_VALUE;
+  for (let i = closes.length - lookback + period; i < closes.length - 10; i++) {
+    const historicalSlice = closes.slice(0, i);
+    const hSma = calculateSMA(historicalSlice, period);
+    const hStdDev = calculateStdDev(historicalSlice, period);
+    const hUpper = hSma + hStdDev * multiplier;
+    const hLower = hSma - hStdDev * multiplier;
+    const hBandwidth = (hUpper - hLower) / hSma;
+    if (hBandwidth < minBandwidth) minBandwidth = hBandwidth;
+  }
+
+  // If current bandwidth is very close to or less than the 6-month low, it's a squeeze
+  const isSqueeze = bandwidth <= minBandwidth * 1.1;
+
+  return { upper, lower, bandwidth, isSqueeze };
+}
+
+// ========== NEW: ADX & DI (Directional Movement) ==========
+function calculateADX(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+  period: number = 14,
+): { adx: number; pdi: number; mdi: number; isTrending: boolean } {
+  if (highs.length < period * 2)
+    return { adx: 0, pdi: 0, mdi: 0, isTrending: false };
+
+  let trueRange = [];
+  let plusDM = [];
+  let minusDM = [];
+
+  for (let i = 1; i < highs.length; i++) {
+    const upMove = highs[i] - highs[i - 1];
+    const downMove = lows[i - 1] - lows[i];
+
+    let pDM = 0;
+    let mDM = 0;
+
+    if (upMove > downMove && upMove > 0) pDM = upMove;
+    if (downMove > upMove && downMove > 0) mDM = downMove;
+
+    plusDM.push(pDM);
+    minusDM.push(mDM);
+
+    const tr = Math.max(
+      highs[i] - lows[i],
+      Math.abs(highs[i] - closes[i - 1]),
+      Math.abs(lows[i] - closes[i - 1]),
+    );
+    trueRange.push(tr);
+  }
+
+  // Smooth TR, +DM, -DM (Wilder's Smoothing)
+  let smoothedTR = trueRange.slice(0, period).reduce((a, b) => a + b, 0);
+  let smoothedPDM = plusDM.slice(0, period).reduce((a, b) => a + b, 0);
+  let smoothedMDM = minusDM.slice(0, period).reduce((a, b) => a + b, 0);
+
+  let pDI = 0;
+  let mDI = 0;
+  let dx = [];
+
+  for (let i = period; i < trueRange.length; i++) {
+    smoothedTR = smoothedTR - smoothedTR / period + trueRange[i];
+    smoothedPDM = smoothedPDM - smoothedPDM / period + plusDM[i];
+    smoothedMDM = smoothedMDM - smoothedMDM / period + minusDM[i];
+
+    pDI = (smoothedPDM / smoothedTR) * 100;
+    mDI = (smoothedMDM / smoothedTR) * 100;
+
+    const currentDX = (Math.abs(pDI - mDI) / (pDI + mDI)) * 100;
+    dx.push(currentDX);
+  }
+
+  // Calculate ADX (Smoothed DX)
+  let adxValue = dx.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < dx.length; i++) {
+    adxValue = (adxValue * (period - 1) + dx[i]) / period;
+  }
+
+  return {
+    adx: adxValue,
+    pdi: pDI,
+    mdi: mDI,
+    isTrending: adxValue > 25 && pDI > mDI, // > 25 indicates strong trend, PDI > MDI = bullish
+  };
+}
+
+// ========== NEW: VOLUME PROFILE POC ==========
+// Simplified algorithm: Bucket prices into ranges and accumulate volume
+function calculateVolumeProfilePOC(
+  closes: number[],
+  volumes: number[],
+  lookback: number = 60,
+): { poc: number; isAbovePOC: boolean } {
+  if (closes.length < lookback)
+    return { poc: closes[closes.length - 1], isAbovePOC: true };
+
+  const recentCloses = closes.slice(-lookback);
+  const recentVolumes = volumes.slice(-lookback);
+
+  const minPrice = Math.min(...recentCloses);
+  const maxPrice = Math.max(...recentCloses);
+  const currentPrice = closes[closes.length - 1];
+
+  // Divide price range into 20 buckets
+  const numBuckets = 20;
+  const bucketSize = (maxPrice - minPrice) / numBuckets;
+  if (bucketSize === 0) return { poc: currentPrice, isAbovePOC: true };
+
+  const profile = new Array(numBuckets).fill(0);
+
+  for (let i = 0; i < recentCloses.length; i++) {
+    const price = recentCloses[i];
+    const volume = recentVolumes[i];
+    const bucketIndex = Math.min(
+      numBuckets - 1,
+      Math.floor((price - minPrice) / bucketSize),
+    );
+    profile[bucketIndex] += volume;
+  }
+
+  // Find bucket with max volume
+  let maxVolIndex = 0;
+  let maxVol = 0;
+  for (let i = 0; i < profile.length; i++) {
+    if (profile[i] > maxVol) {
+      maxVol = profile[i];
+      maxVolIndex = i;
+    }
+  }
+
+  // POC is the middle price of the winning bucket
+  const poc = minPrice + maxVolIndex * bucketSize + bucketSize / 2;
+
+  return { poc, isAbovePOC: currentPrice > poc };
 }
 
 export async function GET(request: Request) {
@@ -2091,6 +2819,11 @@ export async function GET(request: Request) {
       console.warn("Failed to fetch earnings for", symbol);
     }
 
+    // ========== ADVANCED TECHNICALS (Sniper Bot v3) ==========
+    const bollingerBands = calculateBollingerBands(closes);
+    const adxData = calculateADX(highs, lows, closes);
+    const volumeProfile = calculateVolumeProfilePOC(closes, volumes);
+
     const advancedIndicators: AdvancedIndicators = {
       macd,
       obv,
@@ -2103,6 +2836,9 @@ export async function GET(request: Request) {
       atr,
       marketContext,
       daysToEarnings,
+      bollingerBands,
+      adx: adxData,
+      volumeProfile,
       // Anti-Knife-Catching v3.2
       ema5,
       isPriceStabilized,
@@ -2203,6 +2939,16 @@ export async function GET(request: Request) {
     // Update SL/TP in advancedIndicators (need to cast or mutate)
     advancedIndicators.suggestedStopLoss = finalStopLoss;
     advancedIndicators.suggestedTakeProfit = finalTakeProfit;
+
+    // ========== FALSE BREAKOUT FILTER (Sniper Bot v3) ==========
+    // If a pattern is "ready" (breaking out) but volume is < 1.5x average, mark it as "forming" to avoid fakeouts
+    patterns.forEach((p) => {
+      if (p.status === "ready" && volChg < 50) {
+        p.status = "forming";
+        p.description += " ⚠️ (False Breakout Protection: Volume < 1.5x avg)";
+        p.confidence = Math.max(50, p.confidence - 10);
+      }
+    });
 
     return NextResponse.json({
       symbol,

@@ -60,13 +60,13 @@ export default function PortfolioTracker() {
   const [target, setTarget] = useState("");
   const [targetAlloc, setTargetAlloc] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
-  const [sellLoading, setSellLoading] = useState<number | null>(null);
-  const [sellQty, setSellQty] = useState<{ [key: number]: string }>({});
-  const [sellPrice, setSellPrice] = useState<{ [key: number]: string }>({});
+  const [sellLoading, setSellLoading] = useState<string | null>(null);
+  const [sellQty, setSellQty] = useState<{ [key: string]: string }>({});
+  const [sellPrice, setSellPrice] = useState<{ [key: string]: string }>({});
 
   // Rebalancing Simulator State
-  const [simPrice, setSimPrice] = useState<{ [key: number]: string }>({});
-  const [simAmount, setSimAmount] = useState<{ [key: number]: string }>({});
+  const [simPrice, setSimPrice] = useState<{ [key: string]: string }>({});
+  const [simAmount, setSimAmount] = useState<{ [key: string]: string }>({});
 
   const [sortBy, setSortBy] = useState<string>("date_desc");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -214,9 +214,11 @@ export default function PortfolioTracker() {
     rowIndex: number,
     ticker: string,
     buyQty: number,
+    portfolioType: string,
   ) => {
-    const sQty = Number(sellQty[rowIndex]);
-    const sPrice = Number(sellPrice[rowIndex]);
+    const itemKey = `${portfolioType}_${rowIndex}`;
+    const sQty = Number(sellQty[itemKey]);
+    const sPrice = Number(sellPrice[itemKey]);
 
     if (!sQty || !sPrice) {
       alert("กรุณากรอกจำนวนหุ้นและราคาที่ขายให้ครบถ้วน");
@@ -233,7 +235,7 @@ export default function PortfolioTracker() {
     );
     if (!confirmSale) return;
 
-    setSellLoading(rowIndex);
+    setSellLoading(itemKey);
     try {
       const dateStr = new Date().toISOString().split("T")[0];
       const res = await fetch("/api/sheets/portfolio", {
@@ -246,9 +248,7 @@ export default function PortfolioTracker() {
             soldDate: dateStr,
             soldQty: sQty,
             soldPrice: sPrice,
-            portfolioType:
-              portfolioData.find((r) => r.rowIndex === rowIndex)
-                ?.portfolioType || "main",
+            portfolioType: portfolioType,
           },
         }),
       });
@@ -256,12 +256,12 @@ export default function PortfolioTracker() {
       if (res.ok) {
         setSellQty((prev) => {
           const newState = { ...prev };
-          delete newState[rowIndex];
+          delete newState[itemKey];
           return newState;
         });
         setSellPrice((prev) => {
           const newState = { ...prev };
-          delete newState[rowIndex];
+          delete newState[itemKey];
           return newState;
         });
         await fetchPortfolioData();
@@ -279,6 +279,7 @@ export default function PortfolioTracker() {
   let actives = portfolioData.filter(
     (r) =>
       r.status !== "CLOSED" &&
+      r.quantity - (r.soldQty || 0) > 0 &&
       (viewFilter === "all" || r.portfolioType === viewFilter),
   );
   const histories = portfolioData.filter(
@@ -864,6 +865,7 @@ export default function PortfolioTracker() {
                 </div>
               )}
               {actives.map((item) => {
+                const itemKey = `${item.portfolioType || "main"}_${item.rowIndex}`;
                 const holdingQty = item.quantity - (item.soldQty || 0);
                 const currentPrice = item.livePrice || item.price;
                 const pnl = (currentPrice - item.price) * holdingQty;
@@ -1109,11 +1111,11 @@ export default function PortfolioTracker() {
                                 type="number"
                                 placeholder="ราคาเข้า ($)"
                                 className="w-24 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center focus:ring-1 focus:ring-blue-500 outline-none"
-                                value={simPrice[item.rowIndex] || ""}
+                                value={simPrice[itemKey] || ""}
                                 onChange={(e) =>
                                   setSimPrice({
                                     ...simPrice,
-                                    [item.rowIndex]: e.target.value,
+                                    [itemKey]: e.target.value,
                                   })
                                 }
                               />
@@ -1121,21 +1123,19 @@ export default function PortfolioTracker() {
                                 type="number"
                                 placeholder="จำนวนเงิน ($)"
                                 className="w-28 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center focus:ring-1 focus:ring-blue-500 outline-none"
-                                value={simAmount[item.rowIndex] || ""}
+                                value={simAmount[itemKey] || ""}
                                 onChange={(e) =>
                                   setSimAmount({
                                     ...simAmount,
-                                    [item.rowIndex]: e.target.value,
+                                    [itemKey]: e.target.value,
                                   })
                                 }
                               />
                               <div className="flex-1 text-right">
-                                {Number(simPrice[item.rowIndex]) > 0 &&
-                                Number(simAmount[item.rowIndex]) > 0 ? (
+                                {Number(simPrice[itemKey]) > 0 &&
+                                Number(simAmount[itemKey]) > 0 ? (
                                   (() => {
-                                    const addedVal = Number(
-                                      simAmount[item.rowIndex],
-                                    );
+                                    const addedVal = Number(simAmount[itemKey]);
                                     const simulatedTotalPort =
                                       totalCurrentValueUSD + addedVal;
                                     const simulatedItemVal = itemUSD + addedVal;
@@ -1171,16 +1171,31 @@ export default function PortfolioTracker() {
                       <span className="text-xs text-slate-500 uppercase tracking-widest font-bold">
                         ปิดโพชิชัน (ขาย)
                       </span>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 items-center">
+                        <button
+                          onClick={() => {
+                            setSellQty({
+                              ...sellQty,
+                              [itemKey]: holdingQty.toString(),
+                            });
+                            setSellPrice({
+                              ...sellPrice,
+                              [itemKey]: currentPrice.toString(),
+                            });
+                          }}
+                          className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 px-2 py-1 rounded border border-slate-700 transition-colors whitespace-nowrap"
+                        >
+                          ขายทั้งหมด
+                        </button>
                         <input
                           type="number"
                           placeholder="จำนวน"
                           className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-sm text-center focus:ring-1 focus:ring-amber-500 outline-none"
-                          value={sellQty[item.rowIndex] || ""}
+                          value={sellQty[itemKey] || ""}
                           onChange={(e) =>
                             setSellQty({
                               ...sellQty,
-                              [item.rowIndex]: e.target.value,
+                              [itemKey]: e.target.value,
                             })
                           }
                         />
@@ -1188,11 +1203,11 @@ export default function PortfolioTracker() {
                           type="number"
                           placeholder="ราคา($)"
                           className="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-sm text-center focus:ring-1 focus:ring-amber-500 outline-none"
-                          value={sellPrice[item.rowIndex] || ""}
+                          value={sellPrice[itemKey] || ""}
                           onChange={(e) =>
                             setSellPrice({
                               ...sellPrice,
-                              [item.rowIndex]: e.target.value,
+                              [itemKey]: e.target.value,
                             })
                           }
                         />
@@ -1202,12 +1217,13 @@ export default function PortfolioTracker() {
                               item.rowIndex,
                               item.ticker,
                               holdingQty,
+                              item.portfolioType || "main",
                             )
                           }
-                          disabled={sellLoading === item.rowIndex}
+                          disabled={sellLoading === itemKey}
                           className="bg-amber-600/20 hover:bg-amber-600/40 text-amber-500 px-3 py-1 rounded-lg text-sm font-bold transition-colors disabled:opacity-50 flex items-center gap-1"
                         >
-                          {sellLoading === item.rowIndex ? "..." : "บันทึกขาย"}
+                          {sellLoading === itemKey ? "..." : "บันทึกขาย"}
                         </button>
                       </div>
                     </div>

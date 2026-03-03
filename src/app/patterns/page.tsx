@@ -261,6 +261,9 @@ export default function PatternScreenerPage() {
   // NEW: Custom Tickers State
   const [customTickers, setCustomTickers] = useState<string[]>([]);
 
+  // NEW: Portfolio State
+  const [portfolioTickers, setPortfolioTickers] = useState<string[]>([]);
+
   const addCustomTicker = (ticker: string) => {
     const upper = ticker.toUpperCase();
     if (!customTickers.includes(upper) && !UNIQUE_SYMBOLS.includes(upper)) {
@@ -293,6 +296,43 @@ export default function PatternScreenerPage() {
       status: "pending",
     }));
     setScans(initialScans);
+
+    // Fetch user's active portfolio tickers
+    fetch("/api/sheets/portfolio")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json?.data) {
+          const actives = json.data.filter(
+            (r: any) =>
+              r.status !== "CLOSED" &&
+              r.ticker !== "CASH" &&
+              r.quantity - (r.soldQty || 0) > 0,
+          );
+          const pTickers = Array.from(
+            new Set(actives.map((r: any) => r.ticker)),
+          ) as string[];
+          setPortfolioTickers(pTickers);
+
+          // Auto-inject any unknown tickers from portfolio into the system so user can scan them
+          const newTickers = pTickers.filter(
+            (t) => !UNIQUE_SYMBOLS.includes(t),
+          );
+          if (newTickers.length > 0) {
+            setCustomTickers((prev) =>
+              Array.from(new Set([...prev, ...newTickers])),
+            );
+            setScans((prev) => {
+              const existingSymbols = prev.map((s) => s.symbol);
+              const itemsToAdd: StockScan[] = newTickers
+                .filter((t) => !existingSymbols.includes(t))
+                .map((t) => ({ symbol: t, data: null, status: "pending" }));
+              return [...prev, ...itemsToAdd];
+            });
+          }
+        }
+      })
+      .catch((e) => console.error("Failed to load portfolio for screener", e));
+
     // Set default selection to "7 Angels" only initially? Or All?
     // User said "ไม่อยากค้นหาเยอะๆ" -> Maybe default all but easy to uncheck?
     // Or default to 7 Angels? Let's default to ALL for backward compatibility,
@@ -766,6 +806,11 @@ export default function PatternScreenerPage() {
                     Quick Select:
                   </span>
                   {[
+                    {
+                      label: "My Portfolio 🌟",
+                      list: portfolioTickers,
+                      color: "bg-yellow-600",
+                    },
                     {
                       label: "ALL",
                       list: UNIQUE_SYMBOLS,

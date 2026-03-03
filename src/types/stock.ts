@@ -112,8 +112,10 @@ export interface PatternResult {
   description: string;
   entryZone?: { low: number; high: number };
   breakoutLevel?: number;
+  lowerBreakoutLevel?: number;
   distanceToBreakout?: number;
   targetPrice?: number;
+  lowerTargetPrice?: number;
   stopLoss?: number;
   debugData?: any; // For raw math/calculation display
 }
@@ -247,6 +249,27 @@ export interface AdvancedIndicators {
   suggestedStopLoss: number;
   suggestedTakeProfit: number;
   atrMultiplier: number;
+  chandelierExit?: {
+    long: number;
+    short: number;
+  };
+  // NEW: Sniper Bot v3 - Advanced Technicals
+  bollingerBands?: {
+    upper: number;
+    lower: number;
+    bandwidth: number;
+    isSqueeze: boolean;
+  };
+  adx?: {
+    adx: number;
+    pdi: number;
+    mdi: number;
+    isTrending: boolean;
+  };
+  volumeProfile?: {
+    poc: number;
+    isAbovePOC: boolean;
+  };
 }
 
 export interface PatternResponse {
