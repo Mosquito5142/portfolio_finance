@@ -13,6 +13,7 @@ import {
   TIER_2_SPECULATIVE,
   ALPHA_PICKS_WATCHLIST,
   FINVIZ_WATCHLIST,
+  AI_HIDDEN_GEMS,
   STOCK_DETAILS,
 } from "@/lib/stocks";
 import PatternCard from "@/components/PatternCard";
@@ -391,6 +392,11 @@ export default function TrianglePatternsPage() {
                       list: FINVIZ_WATCHLIST,
                       color: "bg-emerald-600",
                     },
+                    {
+                      label: "AI Hidden Gems 💎",
+                      list: AI_HIDDEN_GEMS,
+                      color: "bg-amber-500",
+                    },
                   ].map((group) => {
                     const isFullySelected =
                       group.list.length > 0 &&
@@ -563,6 +569,10 @@ export default function TrianglePatternsPage() {
                       {
                         title: "Finviz Watchlist 🟢",
                         list: FINVIZ_WATCHLIST,
+                      },
+                      {
+                        title: "AI Hidden Gems (Supply Chain) 💎",
+                        list: AI_HIDDEN_GEMS,
                       },
                       {
                         title: "Speculative & High Risk 🎢",

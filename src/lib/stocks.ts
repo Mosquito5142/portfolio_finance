@@ -96,6 +96,19 @@ export const TIER_2_SPECULATIVE = ["JMIA", "ONDS", "OSS"];
 
 export const FINVIZ_WATCHLIST = ["UUUU", "IMVT", "BTC-USD"];
 
+// 🎯 กองพลซุ่มยิง (AI Hidden Gems & Deep Tech Supply Chain)
+export const AI_HIDDEN_GEMS = [
+  "TPRO.MI", // 🔬 Testing & Metrology
+  "COHU", // 🔬 Testing
+  "LPK.DE", // 🪟 Glass Substrates
+  "4004.T", // 🪟 Glass (Resonac)
+  "011070.KS", // 🪟 Glass (LG Innotek)
+  "ROG", // ❄️ Thermal Management
+  "ASPN", // ❄️ Thermal Management
+  "CRDO", // 📶 Silicon Photonics
+  "AAOI", // 📶 Silicon Photonics
+];
+
 // ---------------------------------------
 // 2. SETTING: รวมลิสต์เพื่อส่งเข้าสแกน
 // ---------------------------------------
@@ -110,6 +123,7 @@ export const UNIQUE_SYMBOLS = Array.from(
     ...ALPHA_PICKS_WATCHLIST,
     ...TIER_2_SPECULATIVE,
     ...FINVIZ_WATCHLIST,
+    ...AI_HIDDEN_GEMS,
   ]),
 );
 
@@ -122,7 +136,8 @@ export const isTier1 = (symbol: string) =>
   TIER_1_ENERGY_RESOURCES.includes(symbol) ||
   ALPHA_PICKS_WATCHLIST.includes(symbol) ||
   TIER_2_SPECULATIVE.includes(symbol) ||
-  FINVIZ_WATCHLIST.includes(symbol);
+  FINVIZ_WATCHLIST.includes(symbol) ||
+  AI_HIDDEN_GEMS.includes(symbol);
 
 export const isTier2 = (symbol: string) => TIER_2_SPECULATIVE.includes(symbol);
 
@@ -174,7 +189,7 @@ export const STOCK_DETAILS: Record<string, string> = {
   MU: "Micron - ผู้ผลิตชิปหน่วยความจำ (Memory/DRAM) ที่จำเป็นสำหรับ AI Server",
   ARM: "Arm Holdings - เจ้าของสถาปัตยกรรมชิปที่ใช้ในสมาร์ทโฟนเกือบทุกเครื่องในโลก",
   HOOD: "Robinhood - แอปเทรดหุ้นและคริปโตยอดนิยมของรายย่อย (UX/UI ใช้งานง่าย)",
-  ONTO: "Onto Innovation - เครื่องมือขั้นสูงสำหรับวิเคราะห์และตรวจสอบคุณภาพแผ่นเวเฟอร์ (Semiconductor)",
+  ONTO: "Onto Innovation - เซ็นเซอร์ตรวจจับความลึกชิป 3D (TSV) ราคาเพิ่งปรับฐานรุนแรง มีช่องว่างมูลค่า (Valuation Gap) น่าเข้าช้อน",
   KTOS: "Kratos - ผู้ผลิตโดรนความเร็วสูง (Supersonic Drones) สำหรับซ้อมรบและการทหาร",
   JOBY: "Joby Aviation - แท็กซี่บินได้พลังงานไฟฟ้า (eVTOL) เตรียมเปิดให้บริการ",
   ACHR: "Archer Aviation - แท็กซี่บินได้ (eVTOL) คู่แข่ง Joby (ร่วมมือกับ United Airlines)",
@@ -214,4 +229,19 @@ export const STOCK_DETAILS: Record<string, string> = {
   PBW: "Pebblebrook Holdings - ผู้เช่าพื้นที่สำหรับ AI Server และ AI Data Center",
   SNDX: "Sanderson Farms - ผู้ผลิตเนื้อสัตว์สำหรับ AI Server และ AI Data Center",
   "BTC-USD": "Bitcoin (BTC/USD) - สกุลเงินดิจิทัลอันดับ 1 ของโลก",
+
+  // 🔥 AI HIDDEN GEMS (4 กองพลซุ่มยิง)
+  "TPRO.MI":
+    "Technoprobe - 🌟 S-Class ผูกขาดตลาดการ์ดทดสอบชิป AI (Probe Cards) ขั้นสูง 60% ของโลก (AEHR แห่งยุโรป)",
+  COHU: "Cohu, Inc. - มีเครื่องตรวจชิป HBM แบบ 6 มิติ แต่ตลาดยังตีราคาเป็นแค่หุ้นชิปทั่วไป เลยราคาถูกซ่อนอยู่",
+  "LPK.DE":
+    "LPKF Laser - 🌟 S-Class ถือสิทธิบัตรเจาะรูแก้วระดับไมครอนโดยไม่ร้าว (LIDE) นี่คือ ASML ยุคเริ่มต้น",
+  "4004.T":
+    "Resonac Holdings - ยักษ์ใหญ่เคมีภัณฑ์ญี่ปุ่นที่ทำสารเคมีและแผ่นแก้วบางที่ขาดไม่ได้ในชิป AI",
+  "011070.KS":
+    "LG Innotek - ยักษ์ใหญ่เกาหลีผู้ผลิตแผ่นรองรับชิป (Substrates) ที่เตรียมขยายตัวสู่ยุค AI",
+  ROG: "Rogers Corp - 🌟 S-Class ผู้ผลิตวัสดุจัดการความร้อนสำหรับระบบลิควิดคูลลิ่งใน Data Center AI",
+  ASPN: "Aspen Aerogels - ผลิตฉนวนแอโรเจลที่บางและกันความร้อนได้ดีที่สุด ป้องกันน้ำควบแน่นในเซิร์ฟเวอร์",
+  CRDO: "Credo Technology - สายทองแดงและอุปกรณ์เชื่อมต่อสำหรับเซิร์ฟเวอร์ AI (P/S แค่ 17 เท่า ถูกกว่าคู่แข่ง)",
+  AAOI: "Applied Optoelectronics - ซิลิคอนโฟโตนิกส์และตัวรับส่งแสง มีโรงงานในอเมริกา (Domestic U.S. Manufacturing) ได้เปรียบเวลาหนีจีน",
 };

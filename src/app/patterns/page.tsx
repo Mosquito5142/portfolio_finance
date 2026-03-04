@@ -13,6 +13,7 @@ import {
   TIER_2_SPECULATIVE,
   ALPHA_PICKS_WATCHLIST,
   FINVIZ_WATCHLIST,
+  AI_HIDDEN_GEMS,
   STOCK_DETAILS,
   isTier1,
   isTier2,
@@ -855,6 +856,11 @@ export default function PatternScreenerPage() {
                       color: "bg-emerald-600",
                     },
                     {
+                      label: "AI Hidden Gems 💎",
+                      list: AI_HIDDEN_GEMS,
+                      color: "bg-amber-500",
+                    },
+                    {
                       label: "Speculative",
                       list: TIER_2_SPECULATIVE,
                       color: "bg-red-600",
@@ -994,6 +1000,10 @@ export default function PatternScreenerPage() {
                       {
                         title: "Finviz Watchlist 🟢",
                         list: FINVIZ_WATCHLIST,
+                      },
+                      {
+                        title: "AI Hidden Gems (Supply Chain) 💎",
+                        list: AI_HIDDEN_GEMS,
                       },
                       {
                         title: "Speculative & High Risk 🎢",
