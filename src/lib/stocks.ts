@@ -22,7 +22,6 @@ export const TIER_1_MEGA_TECH = [
   "ASML", // Semi Equip
 ];
 
-// กลุ่ม AI, Cloud & Cybersecurity
 export const TIER_1_AI_CLOUD = [
   "PLTR",
   "CRWD",
@@ -40,6 +39,7 @@ export const TIER_1_AI_CLOUD = [
   "SHOP", // 4IR
   "MELI",
   "SMCI", // AI Server
+  "FN", // AI Optical Transceivers
 ];
 
 // กลุ่ม Growth & Deep Tech
@@ -159,6 +159,7 @@ export const STOCK_DETAILS: Record<string, string> = {
   IOT: "Samsara - เทคโนโลยี Internet of Things (IoT) สำหรับบริหารจัดการฟลีทรถ/เครื่องจักร",
   SHOP: "Shopify - แพลตฟอร์มอีคอมเมิร์ซสำหรับสร้างร้านค้าออนไลน์แบบครบวงจร",
   MELI: "MercadoLibre - แพลตฟอร์มอีคอมเมิร์ซและการชำระเงินที่ใหญ่ที่สุดในละตินอเมริกา",
+  FN: "Fabrinet - ผู้ผลิตอุปกรณ์เชื่อมต่อทางแสงความเร็วสูง (Optical Communication) ที่ต้องใช้ใน AI Data Center ชั้นนำ",
 
   // GROWTH TECH
   ASTS: "AST SpaceMobile - ยิงสัญญาณ 5G จากดาวเทียมเข้ามือถือโดยตรง (ไม่ต้องใช้จานรับ)",
