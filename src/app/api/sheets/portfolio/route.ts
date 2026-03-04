@@ -57,6 +57,18 @@ export async function GET() {
   }
 }
 
+// Mapper: Yahoo Finance / General Ticker -> Google Finance Ticker (For Sheets)
+function mapToGoogleFinanceTicker(ticker: string): string {
+  if (!ticker) return ticker;
+  const upperTicker = ticker.toUpperCase();
+
+  // General fallback rules for other common suffixes if needed
+  if (upperTicker.endsWith(".BK"))
+    return `BKK:${upperTicker.replace(".BK", "")}`;
+
+  return upperTicker; // Default return unmodified
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -78,10 +90,16 @@ export async function POST(request: Request) {
       );
     }
 
+    // Map Ticker to Google Finance format if adding a new trade
+    let payloadItem = { ...item };
+    if (actionType === "PORTFOLIO_BUY" && payloadItem.ticker) {
+      payloadItem.ticker = mapToGoogleFinanceTicker(payloadItem.ticker);
+    }
+
     const response = await fetch(scriptUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ actionType, item }),
+      body: JSON.stringify({ actionType, item: payloadItem }),
     });
 
     if (response.ok || response.status === 302) {

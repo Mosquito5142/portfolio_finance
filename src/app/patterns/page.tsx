@@ -582,8 +582,15 @@ export default function PatternScreenerPage() {
         cut = entry * 0.95;
       }
 
+      // 🛠️ USER REQUEST: Map Ticker to Google Finance format
+      const mapToGoogleFinanceTicker = (t: string) => {
+        const up = t.toUpperCase();
+        if (up.endsWith(".BK")) return `BKK:${up.replace(".BK", "")}`;
+        return up;
+      };
+
       return {
-        ticker: s.symbol,
+        ticker: mapToGoogleFinanceTicker(s.symbol),
         entry: Number(entry.toFixed(2)),
         currentPrice: Number(data.currentPrice.toFixed(2)),
         cut: Number(cut.toFixed(2)),

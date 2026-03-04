@@ -98,11 +98,7 @@ export const FINVIZ_WATCHLIST = ["UUUU", "IMVT", "BTC-USD"];
 
 // 🎯 กองพลซุ่มยิง (AI Hidden Gems & Deep Tech Supply Chain)
 export const AI_HIDDEN_GEMS = [
-  "TPRO.MI", // 🔬 Testing & Metrology
   "COHU", // 🔬 Testing
-  "LPK.DE", // 🪟 Glass Substrates
-  "4004.T", // 🪟 Glass (Resonac)
-  "011070.KS", // 🪟 Glass (LG Innotek)
   "ROG", // ❄️ Thermal Management
   "ASPN", // ❄️ Thermal Management
   "CRDO", // 📶 Silicon Photonics
@@ -231,15 +227,7 @@ export const STOCK_DETAILS: Record<string, string> = {
   "BTC-USD": "Bitcoin (BTC/USD) - สกุลเงินดิจิทัลอันดับ 1 ของโลก",
 
   // 🔥 AI HIDDEN GEMS (4 กองพลซุ่มยิง)
-  "TPRO.MI":
-    "Technoprobe - 🌟 S-Class ผูกขาดตลาดการ์ดทดสอบชิป AI (Probe Cards) ขั้นสูง 60% ของโลก (AEHR แห่งยุโรป)",
   COHU: "Cohu, Inc. - มีเครื่องตรวจชิป HBM แบบ 6 มิติ แต่ตลาดยังตีราคาเป็นแค่หุ้นชิปทั่วไป เลยราคาถูกซ่อนอยู่",
-  "LPK.DE":
-    "LPKF Laser - 🌟 S-Class ถือสิทธิบัตรเจาะรูแก้วระดับไมครอนโดยไม่ร้าว (LIDE) นี่คือ ASML ยุคเริ่มต้น",
-  "4004.T":
-    "Resonac Holdings - ยักษ์ใหญ่เคมีภัณฑ์ญี่ปุ่นที่ทำสารเคมีและแผ่นแก้วบางที่ขาดไม่ได้ในชิป AI",
-  "011070.KS":
-    "LG Innotek - ยักษ์ใหญ่เกาหลีผู้ผลิตแผ่นรองรับชิป (Substrates) ที่เตรียมขยายตัวสู่ยุค AI",
   ROG: "Rogers Corp - 🌟 S-Class ผู้ผลิตวัสดุจัดการความร้อนสำหรับระบบลิควิดคูลลิ่งใน Data Center AI",
   ASPN: "Aspen Aerogels - ผลิตฉนวนแอโรเจลที่บางและกันความร้อนได้ดีที่สุด ป้องกันน้ำควบแน่นในเซิร์ฟเวอร์",
   CRDO: "Credo Technology - สายทองแดงและอุปกรณ์เชื่อมต่อสำหรับเซิร์ฟเวอร์ AI (P/S แค่ 17 เท่า ถูกกว่าคู่แข่ง)",
