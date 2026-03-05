@@ -184,6 +184,22 @@ export default function PatternCard({
                 : "🔪 ใต้ EMA5 (ห้ามรับมีด!)"}
             </span>
           )}
+          {/* Squeeze & ADX & V-Shape Badges */}
+          {scan.data.advancedIndicators?.isEarlyMomentum && (
+            <span className="inline-block mt-1 ml-1 px-2 py-0.5 rounded text-xs font-bold border bg-pink-900/40 text-pink-300 border-pink-500/30 animate-pulse shadow-[0_0_10px_rgba(236,72,153,0.3)]">
+              🚀 V-Shape Rebound
+            </span>
+          )}
+          {scan.data.advancedIndicators?.bollingerBands?.isSqueeze && (
+            <span className="inline-block mt-1 ml-1 px-2 py-0.5 rounded text-xs font-bold border bg-purple-900/40 text-purple-300 border-purple-500/30 animate-pulse">
+              🌪️ Squeeze (เตรียมระเบิด)
+            </span>
+          )}
+          {scan.data.advancedIndicators?.adx?.isTrending && (
+            <span className="inline-block mt-1 ml-1 px-2 py-0.5 rounded text-xs font-bold border bg-orange-900/40 text-orange-400 border-orange-500/30">
+              🔥 ADX Trending
+            </span>
+          )}
         </div>
       </div>
 

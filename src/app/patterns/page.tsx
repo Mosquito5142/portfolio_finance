@@ -248,7 +248,7 @@ export default function PatternScreenerPage() {
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [filterSignal, setFilterSignal] = useState<
-    "ALL" | "BUY" | "SELL" | "HOLD"
+    "ALL" | "BUY" | "SELL" | "HOLD" | "SQUEEZE" | "ADX" | "V-SHAPE"
   >("ALL");
   const [mounted, setMounted] = useState(false);
   // NEW: Scan Mode - Trend Following vs Value Hunting vs Sniper Trading
@@ -420,9 +420,19 @@ export default function PatternScreenerPage() {
   // Filter and sort results based on mode
   const filteredScans = scans
     .filter((s) => s.status === "done" && s.data)
-    .filter(
-      (s) => filterSignal === "ALL" || s.data?.overallSignal === filterSignal,
-    )
+    .filter((s) => {
+      if (filterSignal === "ALL") return true;
+      if (filterSignal === "SQUEEZE") {
+        return s.data?.advancedIndicators?.bollingerBands?.isSqueeze === true;
+      }
+      if (filterSignal === "ADX") {
+        return s.data?.advancedIndicators?.adx?.isTrending === true;
+      }
+      if (filterSignal === "V-SHAPE") {
+        return s.data?.advancedIndicators?.isEarlyMomentum === true;
+      }
+      return s.data?.overallSignal === filterSignal;
+    })
     .sort((a, b) => {
       if (scanMode === "value") {
         // VALUE HUNTING: Prioritize low RSI (oversold) = buying opportunity
@@ -1210,6 +1220,46 @@ export default function PatternScreenerPage() {
                   </div>
                 ))}
               </div>
+              {/* Filter Signals */}
+              <div className="flex gap-2">
+                {[
+                  "ALL",
+                  "BUY",
+                  "SELL",
+                  "HOLD",
+                  "SQUEEZE",
+                  "ADX",
+                  "V-SHAPE",
+                ].map((sig) => (
+                  <button
+                    key={sig}
+                    onClick={() => setFilterSignal(sig as any)}
+                    className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                      filterSignal === sig
+                        ? sig === "BUY"
+                          ? "bg-green-600 text-white"
+                          : sig === "SELL"
+                            ? "bg-red-600 text-white"
+                            : sig === "SQUEEZE"
+                              ? "bg-purple-600 text-white animate-pulse"
+                              : sig === "ADX"
+                                ? "bg-orange-600 text-white"
+                                : sig === "V-SHAPE"
+                                  ? "bg-pink-600 text-white animate-pulse shadow-lg"
+                                  : "bg-blue-600 text-white"
+                        : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                    }`}
+                  >
+                    {sig === "SQUEEZE"
+                      ? "🌪️ SQUEEZE"
+                      : sig === "ADX"
+                        ? "🔥 ADX"
+                        : sig === "V-SHAPE"
+                          ? "🚀 V-SHAPE"
+                          : sig}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -1494,6 +1544,74 @@ export default function PatternScreenerPage() {
             >
               <p className="text-gray-500 text-xs">🟡 รอดู</p>
               <p className="text-2xl font-bold text-yellow-400">{holdCount}</p>
+            </button>
+
+            {/* NEW EXTENDED FILTERS: Squeeze and ADX (always shown for now, or only in trend/sniper) */}
+            <button
+              onClick={() => setFilterSignal("SQUEEZE")}
+              className={`p-4 rounded-xl border transition-all ${
+                filterSignal === "SQUEEZE"
+                  ? "bg-purple-900/50 border-purple-500 animate-pulse"
+                  : "bg-gray-800/50 border-gray-700/50 hover:border-purple-500/50"
+              }`}
+            >
+              <p className="text-gray-500 text-xs text-purple-300">
+                🌪️ SQUEEZE
+              </p>
+              <p className="text-2xl font-bold text-purple-400">
+                {
+                  scans.filter(
+                    (s) =>
+                      s.status === "done" &&
+                      s.data?.advancedIndicators?.bollingerBands?.isSqueeze ===
+                        true,
+                  ).length
+                }
+              </p>
+            </button>
+
+            <button
+              onClick={() => setFilterSignal("ADX")}
+              className={`p-4 rounded-xl border transition-all ${
+                filterSignal === "ADX"
+                  ? "bg-orange-900/50 border-orange-500"
+                  : "bg-gray-800/50 border-gray-700/50 hover:border-orange-500/50"
+              }`}
+            >
+              <p className="text-gray-500 text-xs text-orange-300">
+                🔥 ADX Trend
+              </p>
+              <p className="text-2xl font-bold text-orange-400">
+                {
+                  scans.filter(
+                    (s) =>
+                      s.status === "done" &&
+                      s.data?.advancedIndicators?.adx?.isTrending === true,
+                  ).length
+                }
+              </p>
+            </button>
+
+            <button
+              onClick={() => setFilterSignal("V-SHAPE")}
+              className={`p-4 rounded-xl border transition-all ${
+                filterSignal === "V-SHAPE"
+                  ? "bg-pink-900/50 border-pink-500 animate-pulse shadow-[0_0_15px_rgba(236,72,153,0.3)]"
+                  : "bg-gray-800/50 border-gray-700/50 hover:border-pink-500/50"
+              }`}
+            >
+              <p className="text-gray-500 text-xs text-pink-300">
+                🚀 V-SHAPE Break
+              </p>
+              <p className="text-2xl font-bold text-pink-400">
+                {
+                  scans.filter(
+                    (s) =>
+                      s.status === "done" &&
+                      s.data?.advancedIndicators?.isEarlyMomentum === true,
+                  ).length
+                }
+              </p>
             </button>
           </div>
         )}

@@ -242,9 +242,10 @@ export interface AdvancedIndicators {
     marketTemperature: "hot" | "normal" | "cold";
   };
   daysToEarnings?: number;
-  // Anti-Knife-Catching v3.2
+  // Anti-Knife-Catching v3.2 & ASTS V-Shape
   ema5: number;
   isPriceStabilized: boolean;
+  isEarlyMomentum: boolean; // ASTS breakout pattern
   isMomentumReturning: boolean;
   suggestedStopLoss: number;
   suggestedTakeProfit: number;

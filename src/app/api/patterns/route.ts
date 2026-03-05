@@ -2597,8 +2597,15 @@ export async function GET(request: Request) {
     const distanceFrom52High = ((week52High - currentPrice) / week52High) * 100;
     const distanceFrom52Low = ((currentPrice - week52Low) / week52Low) * 100;
 
+    const ema5 = calculateEMA(closes, 5);
+
     // 3 Pillars Check
-    const pillarTrend = trend.shortTerm === "up" && trend.longTerm !== "down";
+    // Early breakout detection: If short-term is UP and price is strong (above EMA5 and RSI > 50), it's considered BULLISH trend pillar
+    const isAggressiveBreakout =
+      trend.shortTerm === "up" && currentPrice > ema5 && rsi > 50;
+    const pillarTrend =
+      (trend.shortTerm === "up" && trend.longTerm !== "down") ||
+      isAggressiveBreakout;
     const pillarValue = rsi >= 30 && rsi <= 70; // Not oversold or overbought
     const pillarMomentum = volumeChange > -20; // Volume not too weak
     const score3Pillars = [pillarTrend, pillarValue, pillarMomentum].filter(
@@ -2723,7 +2730,7 @@ export async function GET(request: Request) {
     );
 
     // ========== ANTI-KNIFE-CATCHING: EMA5 Safety Filter (v3.2) ==========
-    const ema5 = calculateEMA(closes, 5);
+    // ema5 was calculated earlier for the Trend Pillar
     const isPriceStabilized = currentPrice > ema5;
     // MACD histogram improving = momentum returning
     const isMomentumReturning =
@@ -2824,6 +2831,12 @@ export async function GET(request: Request) {
     const adxData = calculateADX(highs, lows, closes);
     const volumeProfile = calculateVolumeProfilePOC(closes, volumes);
 
+    const isEarlyMomentum =
+      currentPrice > ema5 &&
+      rsi > 50 &&
+      currentPrice > trend.sma20 &&
+      macd.histogram > -1;
+
     const advancedIndicators: AdvancedIndicators = {
       macd,
       obv,
@@ -2839,9 +2852,10 @@ export async function GET(request: Request) {
       bollingerBands,
       adx: adxData,
       volumeProfile,
-      // Anti-Knife-Catching v3.2
+      // Anti-Knife-Catching v3.2 & V-Shape
       ema5,
       isPriceStabilized,
+      isEarlyMomentum,
       isMomentumReturning,
       suggestedStopLoss,
       suggestedTakeProfit,
@@ -2880,6 +2894,8 @@ export async function GET(request: Request) {
       confluenceZones.length,
       currentPrice > pivotLevels.pivot ? "above" : "below",
       isPriceStabilized,
+      bollingerBands.isSqueeze,
+      isEarlyMomentum,
       rrRatio,
       warningCount,
     );
@@ -2997,6 +3013,8 @@ function calculateFusionScore(
   confluenceCount: number,
   priceVsPivot: "above" | "below",
   isPriceStabilized: boolean,
+  isSqueeze: boolean,
+  isEarlyMomentum: boolean,
   rrRatio?: number,
   warningCount: number = 0,
 ): { score: number; reason: string } {
@@ -3035,21 +3053,38 @@ function calculateFusionScore(
     reasons.push("Price > Pivot Point (+10)");
   }
 
-  // 5. Volume Strength (+10)
+  // 5. Volume Strength (+10) (Forgive if Squeezing)
   if (volumeStatus === "strong") {
     score += 10;
     reasons.push("Strong Volume (+10)");
   }
 
-  // 6. Penalties (Override)
+  // 6. Squeeze Bonus (+20)
+  if (isSqueeze) {
+    score += 20;
+    reasons.push("Volatility Squeeze (+20)");
+  }
+
+  // 6.5 ASTS V-Shape / Early Momentum Bonus (+20)
+  if (isEarlyMomentum && !isSqueeze) {
+    score += 20;
+    reasons.push("🚀 V-Shape Breakout (+20)");
+  }
+
+  // 7. Penalties (Override)
   if (obvDivergence === "bearish") {
     score -= 30;
     reasons.push("Bearish OBV Divergence (-30)");
   }
 
   if (!isPriceStabilized) {
-    score -= 40;
-    reasons.push("Price < EMA5 (-40)");
+    if (isSqueeze) {
+      score -= 15; // Soften penalty during squeeze consolidation
+      reasons.push("Price < EMA5 (Squeeze Buffer) (-15)");
+    } else {
+      score -= 40;
+      reasons.push("Price < EMA5 (-40)");
+    }
   }
 
   if (rrRatio !== undefined && rrRatio < 1.5) {
