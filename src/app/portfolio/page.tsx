@@ -465,8 +465,16 @@ export default function PortfolioTracker() {
           totalCurrentValueUSD > 0 ? (itemUSD / totalCurrentValueUSD) * 100 : 0;
 
         let allocText = ` | สัดส่วน: ${currentAllocPct.toFixed(1)}%`;
+
+        // Target Allocation Logic for "All" vs "Main/Growth"
         if (item.targetAlloc && item.targetAlloc > 0) {
-          allocText += ` (เป้า: ${item.targetAlloc.toFixed(1)}%)`;
+          let displayedTargetAlloc = item.targetAlloc;
+          if (viewFilter === "all") {
+            // If viewing all, calculate relative to global target weights (Main = 70%, Growth = 30%)
+            const portfolioWeight = item.portfolioType === "growth" ? 0.3 : 0.7; // default to main 0.7 if undefined
+            displayedTargetAlloc = item.targetAlloc * portfolioWeight;
+          }
+          allocText += ` (เป้า: ${displayedTargetAlloc.toFixed(1)}%)`;
         }
 
         summaryText += `${index + 1}. ${item.ticker}: ${qty} หุ้น | ทุน: $${formatUSD(item.price)} | ปัจจุบัน: $${formatUSD(currPrice)} | PnL: ${iSign}$${formatUSD(Math.abs(pnlUSD))} (${iSign}${Math.abs(pnlPct).toFixed(2)}%)${allocText}\n`;
