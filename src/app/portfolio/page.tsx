@@ -350,6 +350,10 @@ export default function PortfolioTracker() {
   const winRate =
     totalClosedTrades > 0 ? (winCount / totalClosedTrades) * 100 : 0;
 
+  const netPnLUSD = unrealizedPnLUSD + realizedPnLUSD;
+  const netPnLPct =
+    totalInvestedUSD > 0 ? (netPnLUSD / totalInvestedUSD) * 100 : 0;
+
   // Currency Converter Formatter (For PnL & Global Summaries)
   const formatCurrency = (valUSD: number) => {
     const converted = currency === "THB" ? valUSD * usdtRate : valUSD;
@@ -633,6 +637,17 @@ export default function PortfolioTracker() {
               {getSymbol()}
               {formatCurrency(totalInvestedUSD)}
             </p>
+            <div className="mt-2 text-xs font-bold bg-slate-800/50 inline-block px-2 py-1 rounded-md">
+              <span className="text-slate-400 mr-2">Net ROI:</span>
+              <span
+                className={netPnLUSD >= 0 ? "text-emerald-400" : "text-red-400"}
+              >
+                {netPnLUSD >= 0 ? "+" : ""}
+                {getSymbol()}
+                {formatCurrency(netPnLUSD)} ({netPnLUSD >= 0 ? "+" : ""}
+                {netPnLPct.toFixed(2)}%)
+              </span>
+            </div>
           </div>
 
           <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-2xl relative overflow-hidden">
