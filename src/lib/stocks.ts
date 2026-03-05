@@ -98,6 +98,7 @@ export const FINVIZ_WATCHLIST = ["UUUU", "IMVT", "BTC-USD"];
 
 // 🎯 กองพลซุ่มยิง (AI Hidden Gems & Deep Tech Supply Chain)
 export const AI_HIDDEN_GEMS = [
+  "SNPS", // 🎨 Electronic Design Automation (EDA)
   "COHU", // 🔬 Testing
   "ROG", // ❄️ Thermal Management
   "ASPN", // ❄️ Thermal Management
@@ -227,6 +228,7 @@ export const STOCK_DETAILS: Record<string, string> = {
   "BTC-USD": "Bitcoin (BTC/USD) - สกุลเงินดิจิทัลอันดับ 1 ของโลก",
 
   // 🔥 AI HIDDEN GEMS (4 กองพลซุ่มยิง)
+  SNPS: "Synopsys - 🌟 ผูกขาดซอฟต์แวร์ออกแบบชิป (EDA) ระดับโลก AI ชิปทุกตัวต้องใช้โปรแกรมของ SNPS สร้าง",
   COHU: "Cohu, Inc. - มีเครื่องตรวจชิป HBM แบบ 6 มิติ แต่ตลาดยังตีราคาเป็นแค่หุ้นชิปทั่วไป เลยราคาถูกซ่อนอยู่",
   ROG: "Rogers Corp - 🌟 S-Class ผู้ผลิตวัสดุจัดการความร้อนสำหรับระบบลิควิดคูลลิ่งใน Data Center AI",
   ASPN: "Aspen Aerogels - ผลิตฉนวนแอโรเจลที่บางและกันความร้อนได้ดีที่สุด ป้องกันน้ำควบแน่นในเซิร์ฟเวอร์",
