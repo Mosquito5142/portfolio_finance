@@ -6,7 +6,9 @@ import {
   UNIQUE_SYMBOLS,
   MAGNIFICENT_SEVEN,
   TIER_1_MEGA_TECH,
-  TIER_1_AI_CLOUD,
+  TIER_1_AI_HARDWARE,
+  TIER_1_AI_INFRASTRUCTURE,
+  TIER_1_AI_SOFTWARE,
   TIER_1_GROWTH_TECH,
   TIER_1_ENERGY_RESOURCES,
   TIER_1_HEALTH_BIO,
@@ -833,9 +835,19 @@ export default function PatternScreenerPage() {
                       color: "bg-blue-600",
                     },
                     {
-                      label: "AI & Cloud",
-                      list: TIER_1_AI_CLOUD,
+                      label: "AI Hardware & Chips",
+                      list: TIER_1_AI_HARDWARE,
                       color: "bg-purple-600",
+                    },
+                    {
+                      label: "AI Infrastructure",
+                      list: TIER_1_AI_INFRASTRUCTURE,
+                      color: "bg-indigo-600",
+                    },
+                    {
+                      label: "AI Software & Cloud",
+                      list: TIER_1_AI_SOFTWARE,
+                      color: "bg-blue-600",
                     },
                     {
                       label: "Growth Tech",
@@ -874,7 +886,7 @@ export default function PatternScreenerPage() {
                     },
                   ].map((group) => {
                     // Check if all in group are selected
-                    const isFullySelected = group.list.every((t) =>
+                    const isFullySelected = group.list.every((t: string) =>
                       selectedTickers.includes(t),
                     );
 
@@ -886,7 +898,7 @@ export default function PatternScreenerPage() {
                             // Deselect Group
                             setSelectedTickers(
                               selectedTickers.filter(
-                                (t) => !group.list.includes(t),
+                                (t: string) => !group.list.includes(t),
                               ),
                             );
                           } else {
@@ -985,8 +997,16 @@ export default function PatternScreenerPage() {
                         list: TIER_1_MEGA_TECH,
                       },
                       {
-                        title: "AI, Cloud & Cyber Security 🤖",
-                        list: TIER_1_AI_CLOUD,
+                        title: "AI Hardware & Semiconductors 🛠️",
+                        list: TIER_1_AI_HARDWARE,
+                      },
+                      {
+                        title: "AI Infrastructure & Data Center 🌐",
+                        list: TIER_1_AI_INFRASTRUCTURE,
+                      },
+                      {
+                        title: "AI Software, Cloud & Security ☁️",
+                        list: TIER_1_AI_SOFTWARE,
                       },
                       {
                         title: "Growth Tech (Chips/Space/EV) 🚀",

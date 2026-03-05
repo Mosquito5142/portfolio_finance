@@ -6,7 +6,9 @@ import {
   UNIQUE_SYMBOLS,
   MAGNIFICENT_SEVEN,
   TIER_1_MEGA_TECH,
-  TIER_1_AI_CLOUD,
+  TIER_1_AI_HARDWARE,
+  TIER_1_AI_INFRASTRUCTURE,
+  TIER_1_AI_SOFTWARE,
   TIER_1_GROWTH_TECH,
   TIER_1_ENERGY_RESOURCES,
   TIER_1_HEALTH_BIO,
@@ -368,14 +370,24 @@ export default function TrianglePatternsPage() {
                       color: "bg-gray-500",
                     },
                     {
-                      label: "Magnificent 7",
-                      list: MAGNIFICENT_SEVEN,
-                      color: "bg-blue-600",
+                      label: "Tech & Leaders",
+                      list: TIER_1_MEGA_TECH,
+                      color: "bg-purple-800",
                     },
                     {
-                      label: "Tech & AI",
-                      list: [...TIER_1_MEGA_TECH, ...TIER_1_AI_CLOUD],
+                      label: "AI Hardware & Chips",
+                      list: TIER_1_AI_HARDWARE,
                       color: "bg-purple-600",
+                    },
+                    {
+                      label: "AI Infrastructure",
+                      list: TIER_1_AI_INFRASTRUCTURE,
+                      color: "bg-indigo-600",
+                    },
+                    {
+                      label: "AI Software & Cloud",
+                      list: TIER_1_AI_SOFTWARE,
+                      color: "bg-blue-600",
                     },
                     {
                       label: "Growth",
@@ -547,8 +559,16 @@ export default function TrianglePatternsPage() {
                         list: TIER_1_MEGA_TECH,
                       },
                       {
-                        title: "AI, Cloud & Cyber Security 🤖",
-                        list: TIER_1_AI_CLOUD,
+                        title: "AI Hardware & Semiconductors 🛠️",
+                        list: TIER_1_AI_HARDWARE,
+                      },
+                      {
+                        title: "AI Infrastructure & Data Center 🌐",
+                        list: TIER_1_AI_INFRASTRUCTURE,
+                      },
+                      {
+                        title: "AI Software, Cloud & Security ☁️",
+                        list: TIER_1_AI_SOFTWARE,
                       },
                       {
                         title: "Growth Tech (Chips/Space/EV) 🚀",

@@ -12,17 +12,35 @@ export const MAGNIFICENT_SEVEN = [
   "META",
 ];
 
-// กลุ่ม Mega Tech & Leader
+// กลุ่ม Mega Tech & Leader (อิงจาก Magnificent 7 แต่ขยายผล)
 export const TIER_1_MEGA_TECH = [
   "NFLX", // 4IR
   "ORCL", // 4IR
-  "AMD", // 4IR
-  "INTC", // 4IR
-  "TSM", // Semi
-  "ASML", // Semi Equip
 ];
 
-export const TIER_1_AI_CLOUD = [
+// 🛠️ หมวดหมู่ใหม่: AI Hardware, Semiconductors & Infrastructure
+export const TIER_1_AI_HARDWARE = [
+  "AVGO", // Broadcom - Networking chips for AI (Tier 1)
+  "AMD", // 4IR - CPU/GPU
+  "TSM", // Semi - Foundry
+  "ASML", // Semi Equip - EUV
+  "QCOM", // Qualcomm - Edge AI/Mobile AI
+  "INTC", // 4IR - CPU
+  "ARM", // 4IR - ชิปสถาปัตยกรรม (ย้ายมาจาก Growth)
+];
+
+// 🌐 หมวดหมู่ใหม่: AI Data Center & Equipment
+export const TIER_1_AI_INFRASTRUCTURE = [
+  "ANET", // Arista Networks - AI Networking (Tier 1)
+  "DELL", // AI Servers (Tier 1)
+  "SMCI", // AI Server
+  "HPE", // Hewlett Packard Enterprise - AI Servers / Liquid Cooling
+  "VRT", // Vertiv - AI Data Center Power & Cooling (Tier 1)
+  "FN", // AI Optical Transceivers
+];
+
+// ☁️ หมวดหมู่ AI Software, Cloud & Cybersecurity
+export const TIER_1_AI_SOFTWARE = [
   "PLTR",
   "CRWD",
   "PANW",
@@ -38,11 +56,9 @@ export const TIER_1_AI_CLOUD = [
   "IOT", // 4IR
   "SHOP", // 4IR
   "MELI",
-  "SMCI", // AI Server
-  "FN", // AI Optical Transceivers
 ];
 
-// กลุ่ม Growth & Deep Tech
+// 🚀 กลุ่ม Growth & Deep Tech
 export const TIER_1_GROWTH_TECH = [
   "ASTS",
   "IONQ",
@@ -54,7 +70,6 @@ export const TIER_1_GROWTH_TECH = [
   "ALAB",
   "AXON",
   "MU", // 4IR
-  "ARM", // 4IR
   "HOOD", // 4IR
   "ONTO", // Semi Equip
   "KTOS", // Growth
@@ -113,7 +128,9 @@ export const UNIQUE_SYMBOLS = Array.from(
   new Set([
     ...MAGNIFICENT_SEVEN,
     ...TIER_1_MEGA_TECH,
-    ...TIER_1_AI_CLOUD,
+    ...TIER_1_AI_HARDWARE,
+    ...TIER_1_AI_INFRASTRUCTURE,
+    ...TIER_1_AI_SOFTWARE,
     ...TIER_1_GROWTH_TECH,
     ...TIER_1_HEALTH_BIO,
     ...TIER_1_ENERGY_RESOURCES,
@@ -127,7 +144,9 @@ export const UNIQUE_SYMBOLS = Array.from(
 export const isTier1 = (symbol: string) =>
   MAGNIFICENT_SEVEN.includes(symbol) ||
   TIER_1_MEGA_TECH.includes(symbol) ||
-  TIER_1_AI_CLOUD.includes(symbol) ||
+  TIER_1_AI_HARDWARE.includes(symbol) ||
+  TIER_1_AI_INFRASTRUCTURE.includes(symbol) ||
+  TIER_1_AI_SOFTWARE.includes(symbol) ||
   TIER_1_GROWTH_TECH.includes(symbol) ||
   TIER_1_HEALTH_BIO.includes(symbol) ||
   TIER_1_ENERGY_RESOURCES.includes(symbol) ||
@@ -152,10 +171,25 @@ export const STOCK_DETAILS: Record<string, string> = {
   // MEGA TECH
   NFLX: "Netflix - ผู้นำบริการสตรีมมิ่งหนังและซีรีส์ระดับโลก",
   ORCL: "Oracle - ผู้นำด้านฐานข้อมูล (Database) และระบบ Cloud Infrastructure",
+
+  // 🛠️ AI HARDWARE & SEMICONDUCTORS
+  AVGO: "Broadcom - ชิป Networking และ Custom AI Chips พื้นฐานสำคัญของ Data Center (คู่หู Nvidia)",
   AMD: "AMD - ผู้ผลิตชิป CPU/GPU และ AI (คู่แข่งสำคัญของ Nvidia & Intel)",
   INTC: "Intel - ผู้ผลิตชิปรายใหญ่ (กำลังสร้างโรงงานใหม่เพื่อทวงคืนความยิ่งใหญ่)",
+  TSM: "TSMC - โรงงานรับผลิตชิป (Foundry) อันดับ 1 ของโลก (ผลิตให้ Apple, Nvidia, AMD)",
+  ASML: "ASML - ผู้ผลิตเครื่องพิมพ์ลายวงจรชิป EUV เจ้าเดียวในโลก (ผูกขาดเทคโนโลยีต้นน้ำ)",
+  QCOM: "Qualcomm - ผู้นำชิปมือถือและการนำ AI ลงสู่ Edge Devices (AI PC & AI Phones)",
+  ARM: "Arm Holdings - เจ้าของสถาปัตยกรรมชิปที่ใช้ในสมาร์ทโฟนเกือบทุกเครื่องในโลก และ AI Servers",
 
-  // AI & CLOUD
+  // 🌐 AI INFRASTRUCTURE & DATA CENTER
+  ANET: "Arista Networks - อุปกรณ์เครือข่ายสวิตช์ความเร็วสูง (Ethernet) ที่ใช้ใน AI Data Center",
+  DELL: "Dell - ผู้ผลิต AI Servers โซลูชั่นระดับองค์กรครบวงจรรายใหญ่",
+  SMCI: "Super Micro Computer - ผู้ผลิต AI Servers ระดับ High-End พร้อมระบบระบายความร้อน (Liquid Cooling)",
+  HPE: "Hewlett Packard Ent - ระบบ Cloud แบบ Hybrid และ Enterprise AI Servers",
+  VRT: "Vertiv - ระบบจัดการพลังงานและระบายความร้อนอันดับ 1 สำหรับ AI Data Center",
+  FN: "Fabrinet - ผู้ผลิตอุปกรณ์เชื่อมต่อทางแสงความเร็วสูง (Optical Communication) รับจ้างผลิตให้ Nvidia",
+
+  // ☁️ AI SOFTWARE, CLOUD & CYBERSECURITY
   PLTR: "Palantir - ซอฟต์แวร์วิเคราะห์ข้อมูลขั้นสูง (ใช้ในกองทัพสหรัฐฯ & องค์กรต่างๆ)",
   CRWD: "CrowdStrike - ผู้นำด้าน Cybersecurity ป้องกันการแฮกที่เครื่องลูกข่าย (Endpoint)",
   PANW: "Palo Alto Networks - ผู้นำด้าน Cybersecurity ครบวงจร ทั้ง Cloud & Network",
@@ -171,7 +205,6 @@ export const STOCK_DETAILS: Record<string, string> = {
   IOT: "Samsara - เทคโนโลยี Internet of Things (IoT) สำหรับบริหารจัดการฟลีทรถ/เครื่องจักร",
   SHOP: "Shopify - แพลตฟอร์มอีคอมเมิร์ซสำหรับสร้างร้านค้าออนไลน์แบบครบวงจร",
   MELI: "MercadoLibre - แพลตฟอร์มอีคอมเมิร์ซและการชำระเงินที่ใหญ่ที่สุดในละตินอเมริกา",
-  FN: "Fabrinet - ผู้ผลิตอุปกรณ์เชื่อมต่อทางแสงความเร็วสูง (Optical Communication) ที่ต้องใช้ใน AI Data Center ชั้นนำ",
 
   // GROWTH TECH
   ASTS: "AST SpaceMobile - ยิงสัญญาณ 5G จากดาวเทียมเข้ามือถือโดยตรง (ไม่ต้องใช้จานรับ)",
@@ -183,8 +216,7 @@ export const STOCK_DETAILS: Record<string, string> = {
   AEHR: "Aehr Test Systems - เครื่องทดสอบชิป Silicon Carbide (สำคัญมากสำหรับ EV)",
   ALAB: "Astera Labs - ชิปช่วยส่งข้อมูลความเร็วสูงให้ AI Server (แก้คอขวดข้อมูล)",
   AXON: "Axon - ผู้ผลิตปืนไฟฟ้า Taser, กล้องติดตัวตำรวจ และซอฟต์แวร์ AI งานศาล",
-  MU: "Micron - ผู้ผลิตชิปหน่วยความจำ (Memory/DRAM) ที่จำเป็นสำหรับ AI Server",
-  ARM: "Arm Holdings - เจ้าของสถาปัตยกรรมชิปที่ใช้ในสมาร์ทโฟนเกือบทุกเครื่องในโลก",
+  MU: "Micron - ผู้ผลิตชิปหน่วยความจำ (Memory/HBM) ที่จำเป็นสำหรับ AI Server",
   HOOD: "Robinhood - แอปเทรดหุ้นและคริปโตยอดนิยมของรายย่อย (UX/UI ใช้งานง่าย)",
   ONTO: "Onto Innovation - เซ็นเซอร์ตรวจจับความลึกชิป 3D (TSV) ราคาเพิ่งปรับฐานรุนแรง มีช่องว่างมูลค่า (Valuation Gap) น่าเข้าช้อน",
   KTOS: "Kratos - ผู้ผลิตโดรนความเร็วสูง (Supersonic Drones) สำหรับซ้อมรบและการทหาร",

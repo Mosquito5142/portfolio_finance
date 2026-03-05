@@ -451,6 +451,8 @@ export default function PortfolioTracker() {
     summaryText += `กำไร/ขาดทุน ยังไม่รับรู้: ${sign}${getSymbol()}${formatCurrency(unrealizedPnLUSD)} (${sign}${unrealizedPnLPct.toFixed(2)}%)\n`;
     const rSign = realizedPnLUSD >= 0 ? "+" : "";
     summaryText += `กำไร/ขาดทุน รับรู้แล้ว (Realized): ${rSign}${getSymbol()}${formatCurrency(realizedPnLUSD)}\n`;
+    const nSign = netPnLUSD >= 0 ? "+" : "";
+    summaryText += `Net ROI (รวมรับรู้แล้ว): ${nSign}${getSymbol()}${formatCurrency(netPnLUSD)} (${nSign}${netPnLPct.toFixed(2)}%)\n`;
     summaryText += `Win Rate: ${winRate.toFixed(1)}% (${winCount} ชนะ - ${lossCount} แพ้)\n\n`;
 
     summaryText += `[รายการหุ้นที่ถืออยู่]\n`;
