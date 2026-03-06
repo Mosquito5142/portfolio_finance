@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Target,
   Activity,
@@ -14,6 +14,7 @@ import {
   Check,
   Bomb,
   TrendingUp,
+  ClipboardList,
 } from "lucide-react";
 
 interface SniperResult {
@@ -89,6 +90,75 @@ export default function SniperScanner() {
     {},
   );
   const [copiedSymbol, setCopiedSymbol] = useState<string | null>(null);
+  const [bulkCopyLoading, setBulkCopyLoading] = useState(false);
+  const [bulkCopyDone, setBulkCopyDone] = useState(false);
+  const [bulkCopyProgress, setBulkCopyProgress] = useState("");
+
+  // Sort state
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const toggleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(key === "symbol" || key === "playbook" ? "asc" : "desc");
+    }
+  };
+
+  const sortedData = useMemo(() => {
+    if (!sortKey) return data;
+    const sorted = [...data].sort((a, b) => {
+      let valA: any, valB: any;
+      switch (sortKey) {
+        case "symbol":
+          valA = a.symbol;
+          valB = b.symbol;
+          break;
+        case "playbook":
+          valA = a.playbook;
+          valB = b.playbook;
+          break;
+        case "close":
+          valA = a.currentPrice;
+          valB = b.currentPrice;
+          break;
+        case "pctChange":
+          valA = a.pctChange;
+          valB = b.pctChange;
+          break;
+        case "ema5":
+          valA = a.ema5;
+          valB = b.ema5;
+          break;
+        case "sma20":
+          valA = a.sma20;
+          valB = b.sma20;
+          break;
+        case "bbWidthPct":
+          valA = a.bbWidthPct;
+          valB = b.bbWidthPct;
+          break;
+        case "rsi":
+          valA = a.rsi;
+          valB = b.rsi;
+          break;
+        case "volM":
+          valA = parseFloat(a.volM);
+          valB = parseFloat(b.volM);
+          break;
+        default:
+          return 0;
+      }
+      if (typeof valA === "string")
+        return sortDir === "asc"
+          ? valA.localeCompare(valB)
+          : valB.localeCompare(valA);
+      return sortDir === "asc" ? valA - valB : valB - valA;
+    });
+    return sorted;
+  }, [data, sortKey, sortDir]);
 
   const fetchScanner = async (currentFilter: string) => {
     setLoading(true);
@@ -150,6 +220,68 @@ export default function SniperScanner() {
     });
   };
 
+  const copyAllHistory = async () => {
+    if (data.length === 0 || bulkCopyLoading) return;
+    setBulkCopyLoading(true);
+    setBulkCopyDone(false);
+    const allText: string[] = [
+      "SNIPER RADAR - BULK HISTORY EXPORT",
+      `Date: ${new Date().toISOString().split("T")[0]}`,
+      `Stocks: ${data.length}`,
+      "=".repeat(50),
+    ];
+
+    for (let i = 0; i < data.length; i++) {
+      const sym = data[i].symbol;
+      setBulkCopyProgress(`${i + 1}/${data.length} (${sym})`);
+      try {
+        let rows = historyData[sym];
+        if (!rows) {
+          const res = await fetch(`/api/sniper/history?symbol=${sym}`);
+          const json = await res.json();
+          if (json.success) {
+            rows = json.data;
+            setHistoryData((prev) => ({ ...prev, [sym]: rows }));
+          }
+        }
+        if (rows && rows.length > 0) {
+          allText.push(
+            `\n--- [${sym}] Pre-Breakout Analysis (Sniper Radar) ---`,
+          );
+          allText.push(
+            `Playbook: ${data[i].playbookEmoji} ${data[i].playbookLabel}`,
+          );
+          allText.push(
+            "Date\t\tClose\t%Chg\tEMA5\tSMA20\tBB_W(%)\tRSI\tVol(M)",
+          );
+          for (const r of rows) {
+            const signals = [
+              r.isSqueeze ? "(SQUEEZE)" : "",
+              r.crossSMA20 ? "(CROSS SMA20)" : "",
+              r.momentumIgnition ? "(MOM CATCHER)" : "",
+              r.isTrend && !r.crossSMA20 ? "(TREND)" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            allText.push(
+              `${r.date}\t${r.close.toFixed(2)}\t${r.pctChange >= 0 ? "+" : ""}${r.pctChange.toFixed(2)}%\t${r.ema5.toFixed(2)}\t${r.sma20.toFixed(2)}\t${r.bbWidthPct.toFixed(1)}%\t${r.rsi.toFixed(1)}\t${r.volM}\t ${signals}`,
+            );
+          }
+        }
+      } catch {
+        allText.push(`\n[${sym}] Error: Failed to fetch`);
+      }
+      // Small delay to avoid rate limits
+      if (i < data.length - 1) await new Promise((r) => setTimeout(r, 200));
+    }
+
+    await navigator.clipboard.writeText(allText.join("\n"));
+    setBulkCopyLoading(false);
+    setBulkCopyDone(true);
+    setBulkCopyProgress("");
+    setTimeout(() => setBulkCopyDone(false), 3000);
+  };
+
   // Count by playbook
   const countByPlaybook = (pb: string) =>
     data.filter((d) => d.playbook === pb).length;
@@ -189,6 +321,32 @@ export default function SniperScanner() {
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
               รีเฟรช
+            </button>
+            <button
+              onClick={copyAllHistory}
+              disabled={loading || bulkCopyLoading || data.length === 0}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all disabled:opacity-50 ${
+                bulkCopyDone
+                  ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-400"
+                  : bulkCopyLoading
+                    ? "bg-cyan-500/10 border border-cyan-500/30 text-cyan-400"
+                    : "bg-slate-800 hover:bg-slate-700 text-slate-300"
+              }`}
+            >
+              {bulkCopyDone ? (
+                <>
+                  <Check size={16} /> Copied All!
+                </>
+              ) : bulkCopyLoading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />{" "}
+                  {bulkCopyProgress}
+                </>
+              ) : (
+                <>
+                  <ClipboardList size={16} /> Copy All History
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -303,16 +461,33 @@ export default function SniperScanner() {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-slate-400 bg-slate-800/50 border-b border-slate-800">
                 <tr>
-                  <th className="px-4 py-4 font-medium">Symbol</th>
-                  <th className="px-4 py-4 font-medium">Playbook</th>
-                  <th className="px-4 py-4 font-medium">Close</th>
-                  <th className="px-4 py-4 font-medium">%Chg</th>
-                  <th className="px-4 py-4 font-medium">EMA5</th>
-                  <th className="px-4 py-4 font-medium">SMA20</th>
-                  <th className="px-4 py-4 font-medium">BB_W(%)</th>
-                  <th className="px-4 py-4 font-medium">RSI</th>
-                  <th className="px-4 py-4 font-medium">Vol(M)</th>
-                  <th className="px-4 py-4 font-medium">Triggers</th>
+                  {[
+                    { key: "symbol", label: "Symbol" },
+                    { key: "playbook", label: "Playbook" },
+                    { key: "close", label: "Close" },
+                    { key: "pctChange", label: "%Chg" },
+                    { key: "ema5", label: "EMA5" },
+                    { key: "sma20", label: "SMA20" },
+                    { key: "bbWidthPct", label: "BB_W(%)" },
+                    { key: "rsi", label: "RSI" },
+                    { key: "volM", label: "Vol(M)" },
+                    { key: null, label: "Triggers" },
+                  ].map((col) => (
+                    <th
+                      key={col.label}
+                      onClick={() => col.key && toggleSort(col.key)}
+                      className={`px-4 py-4 font-medium ${col.key ? "cursor-pointer hover:text-slate-200 select-none transition-colors" : ""}`}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {col.label}
+                        {col.key && sortKey === col.key && (
+                          <span className="text-blue-400 text-[10px]">
+                            {sortDir === "asc" ? "▲" : "▼"}
+                          </span>
+                        )}
+                      </span>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -339,7 +514,7 @@ export default function SniperScanner() {
                     </td>
                   </tr>
                 ) : (
-                  data.map((row, idx) => {
+                  sortedData.map((row, idx) => {
                     const style =
                       PLAYBOOK_STYLES[row.playbook] || PLAYBOOK_STYLES.neutral;
                     return (
