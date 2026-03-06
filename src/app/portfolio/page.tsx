@@ -279,7 +279,9 @@ export default function PortfolioTracker() {
   let actives = portfolioData.filter(
     (r) =>
       r.status !== "CLOSED" &&
-      r.quantity - (r.soldQty || 0) > 0 &&
+      // Fix: If status is explicitly ACTIVE, always show it
+      // (soldQty from a previous CLOSED trade on the same ticker can be inherited)
+      (r.status === "ACTIVE" || r.quantity - (r.soldQty || 0) > 0) &&
       (viewFilter === "all" || r.portfolioType === viewFilter),
   );
   const histories = portfolioData.filter(
@@ -320,7 +322,10 @@ export default function PortfolioTracker() {
   let totalCurrentValueUSD = 0;
 
   actives.forEach((item) => {
-    const holdingQty = item.quantity - (item.soldQty || 0); // Remaining
+    const holdingQty =
+      item.status === "ACTIVE"
+        ? item.quantity
+        : item.quantity - (item.soldQty || 0); // Fix: ACTIVE = use own qty
     totalInvestedUSD += holdingQty * item.price;
     if (item.livePrice) {
       totalCurrentValueUSD += holdingQty * item.livePrice;
@@ -375,7 +380,10 @@ export default function PortfolioTracker() {
   // --- Portfolio Composition Data ---
   const compositionData = actives
     .map((item) => {
-      const holdingQty = item.quantity - (item.soldQty || 0);
+      const holdingQty =
+        item.status === "ACTIVE"
+          ? item.quantity
+          : item.quantity - (item.soldQty || 0);
       const currentPrice = item.livePrice || item.price;
       const usdValue = currentPrice * holdingQty;
       const pnlUSD = (currentPrice - item.price) * holdingQty;
@@ -403,7 +411,10 @@ export default function PortfolioTracker() {
   portfolioData
     .filter((r) => r.status !== "CLOSED")
     .forEach((item) => {
-      const holdingQty = item.quantity - (item.soldQty || 0);
+      const holdingQty =
+        item.status === "ACTIVE"
+          ? item.quantity
+          : item.quantity - (item.soldQty || 0);
       const currentPrice = item.livePrice || item.price;
       const usdValue = currentPrice * holdingQty;
       const usdCost = item.price * holdingQty;
@@ -460,7 +471,10 @@ export default function PortfolioTracker() {
       summaryText += `- ไม่มีหุ้นในพอร์ต -\n`;
     } else {
       actives.forEach((item, index) => {
-        const qty = item.quantity - (item.soldQty || 0);
+        const qty =
+          item.status === "ACTIVE"
+            ? item.quantity
+            : item.quantity - (item.soldQty || 0);
         const currPrice = item.livePrice || item.price;
         const pnlUSD = (currPrice - item.price) * qty;
         const pnlPct = ((currPrice - item.price) / item.price) * 100;
@@ -896,7 +910,10 @@ export default function PortfolioTracker() {
               )}
               {actives.map((item) => {
                 const itemKey = `${item.portfolioType || "main"}_${item.rowIndex}`;
-                const holdingQty = item.quantity - (item.soldQty || 0);
+                const holdingQty =
+                  item.status === "ACTIVE"
+                    ? item.quantity
+                    : item.quantity - (item.soldQty || 0);
                 const currentPrice = item.livePrice || item.price;
                 const pnl = (currentPrice - item.price) * holdingQty;
                 const pnlPct = ((currentPrice - item.price) / item.price) * 100;
