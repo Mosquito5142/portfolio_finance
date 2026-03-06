@@ -946,7 +946,9 @@ export default function SniperScanner() {
             </div>
 
             {/* Price Inputs */}
-            <div className="grid grid-cols-2 gap-4 mb-5">
+            <div
+              className={`grid ${alertForm.alertType === "SMART_ENTRY" ? "grid-cols-1" : "grid-cols-2"} gap-4 mb-5`}
+            >
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">
                   💰 ราคาเป้าหมาย (Entry)
@@ -955,36 +957,77 @@ export default function SniperScanner() {
                   type="number"
                   step="0.01"
                   value={alertForm.entry}
-                  onChange={(e) =>
-                    setAlertForm((f) => ({ ...f, entry: e.target.value }))
-                  }
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono text-sm focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">
-                  ⚡ Trigger Price
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={alertForm.triggerPrice}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const val = e.target.value;
                     setAlertForm((f) => ({
                       ...f,
-                      triggerPrice: e.target.value,
-                    }))
-                  }
+                      entry: val,
+                      ...(f.alertType === "SMART_ENTRY"
+                        ? { triggerPrice: val }
+                        : {}),
+                    }));
+                  }}
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono text-sm focus:outline-none focus:border-blue-500"
                 />
-                <p className="text-[10px] text-slate-500 mt-1">
-                  {alertForm.alertType === "SMART_ENTRY"
-                    ? "ราคาซื้อ (=Entry)"
-                    : alertForm.alertType === "EMA5_CROSS"
-                      ? "EMA5 Level"
-                      : "แนวต้านที่ต้องทะลุ"}
-                </p>
+                {alertForm.alertType === "SMART_ENTRY" && (
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    ระบบจะแจ้งเตือนเมื่อราคาตลาด ≤ ค่านี้ (±0.5%)
+                  </p>
+                )}
               </div>
+              {alertForm.alertType !== "SMART_ENTRY" && (
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">
+                    ⚡ Trigger Price
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={alertForm.triggerPrice}
+                    onChange={(e) =>
+                      setAlertForm((f) => ({
+                        ...f,
+                        triggerPrice: e.target.value,
+                      }))
+                    }
+                    className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white font-mono text-sm focus:outline-none ${
+                      alertForm.triggerPrice &&
+                      alertModal &&
+                      parseFloat(alertForm.triggerPrice) <=
+                        alertModal.currentPrice
+                        ? "border-rose-500/50 focus:border-rose-500"
+                        : "border-slate-700 focus:border-blue-500"
+                    }`}
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    {alertForm.alertType === "EMA5_CROSS"
+                      ? "ราคาที่ต้องทะลุขึ้นไป (EMA5 Level)"
+                      : "แนวต้านที่ต้องทะลุ"}
+                  </p>
+                  {alertForm.triggerPrice &&
+                    alertModal &&
+                    parseFloat(alertForm.triggerPrice) <=
+                      alertModal.currentPrice && (
+                      <div className="mt-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-start gap-2">
+                        <AlertTriangle
+                          size={14}
+                          className="text-rose-400 mt-0.5 shrink-0"
+                        />
+                        <div>
+                          <p className="text-[11px] text-rose-400 font-bold">
+                            ⚠️ แจ้งเตือนจะดังทันที!
+                          </p>
+                          <p className="text-[10px] text-rose-500 mt-0.5">
+                            Trigger ($
+                            {parseFloat(alertForm.triggerPrice).toFixed(2)}) ≤
+                            ราคาตลาด (${alertModal.currentPrice.toFixed(2)}) —
+                            ควรตั้ง Trigger สูงกว่าราคาปัจจุบัน
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4 mb-5">
