@@ -15,6 +15,9 @@ import {
   Bomb,
   TrendingUp,
   ClipboardList,
+  Bell,
+  X,
+  Send,
 } from "lucide-react";
 
 interface SniperResult {
@@ -93,6 +96,66 @@ export default function SniperScanner() {
   const [bulkCopyLoading, setBulkCopyLoading] = useState(false);
   const [bulkCopyDone, setBulkCopyDone] = useState(false);
   const [bulkCopyProgress, setBulkCopyProgress] = useState("");
+
+  // Alert Modal state
+  const [alertModal, setAlertModal] = useState<SniperResult | null>(null);
+  const [alertForm, setAlertForm] = useState({
+    entry: "",
+    cutLoss: "",
+    target: "",
+    alertType: "SMART_ENTRY" as "SMART_ENTRY" | "EMA5_CROSS" | "BREAKOUT",
+    triggerPrice: "",
+  });
+  const [alertSending, setAlertSending] = useState(false);
+  const [alertSent, setAlertSent] = useState(false);
+
+  const openAlertModal = (row: SniperResult) => {
+    setAlertModal(row);
+    setAlertSent(false);
+    setAlertForm({
+      entry: row.currentPrice.toFixed(2),
+      cutLoss: (row.currentPrice * 0.95).toFixed(2),
+      target: (row.currentPrice * 1.1).toFixed(2),
+      alertType:
+        row.playbook === "squeeze"
+          ? "SMART_ENTRY"
+          : row.playbook === "high_vol"
+            ? "EMA5_CROSS"
+            : "SMART_ENTRY",
+      triggerPrice: row.ema5.toFixed(2),
+    });
+  };
+
+  const submitAlert = async () => {
+    if (!alertModal) return;
+    setAlertSending(true);
+    try {
+      const res = await fetch("/api/alerts/watchlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticker: alertModal.symbol,
+          entry: alertForm.entry,
+          cut: alertForm.cutLoss,
+          target: alertForm.target,
+          alertType: alertForm.alertType,
+          triggerPrice: alertForm.triggerPrice,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setAlertSent(true);
+        setTimeout(() => {
+          setAlertModal(null);
+          setAlertSent(false);
+        }, 2000);
+      }
+    } catch (e) {
+      console.error("Alert error:", e);
+    } finally {
+      setAlertSending(false);
+    }
+  };
 
   // Sort state
   const [sortKey, setSortKey] = useState<string | null>(null);
@@ -472,6 +535,7 @@ export default function SniperScanner() {
                     { key: "rsi", label: "RSI" },
                     { key: "volM", label: "Vol(M)" },
                     { key: null, label: "Triggers" },
+                    { key: null, label: "" },
                   ].map((col) => (
                     <th
                       key={col.label}
@@ -494,7 +558,7 @@ export default function SniperScanner() {
                 {loading ? (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={11}
                       className="px-6 py-12 text-center text-slate-500"
                     >
                       <RefreshCw
@@ -507,7 +571,7 @@ export default function SniperScanner() {
                 ) : data.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={11}
                       className="px-6 py-12 text-center text-slate-500"
                     >
                       ไม่มีหุ้นที่เข้าเงื่อนไข
@@ -608,12 +672,24 @@ export default function SniperScanner() {
                               )}
                             </div>
                           </td>
+                          <td className="px-2 py-3">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openAlertModal(row);
+                              }}
+                              className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 transition-all"
+                              title="ตั้งแจ้งเตือน"
+                            >
+                              <Bell size={14} />
+                            </button>
+                          </td>
                         </tr>
 
                         {/* Expandable History Detail Row */}
                         {expandedRows[row.symbol] && (
                           <tr className="bg-slate-900/80 border-b border-slate-800">
-                            <td colSpan={10} className="p-0">
+                            <td colSpan={11} className="p-0">
                               <div className="p-4 pl-10 border-l-4 border-blue-500/50">
                                 {/* Playbook Tip */}
                                 <div
@@ -790,6 +866,250 @@ export default function SniperScanner() {
           </div>
         </div>
       </div>
+      {/* Alert Modal */}
+      {alertModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => !alertSending && setAlertModal(null)}
+        >
+          <div
+            className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg mx-4 p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                  <Bell size={20} className="text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">
+                    {alertModal.symbol}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    ตั้งแจ้งเตือนราคา • ${alertModal.currentPrice.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => !alertSending && setAlertModal(null)}
+                className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors text-slate-400"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Alert Type Selector */}
+            <div className="mb-5">
+              <label className="text-xs text-slate-400 mb-2 block font-medium">
+                Alert Type
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  {
+                    type: "SMART_ENTRY" as const,
+                    emoji: "🎯",
+                    label: "Smart Entry",
+                    desc: "รอราคาลงมาซื้อ",
+                  },
+                  {
+                    type: "EMA5_CROSS" as const,
+                    emoji: "🚀",
+                    label: "EMA5 Cross",
+                    desc: "ทะลุเส้น EMA5",
+                  },
+                  {
+                    type: "BREAKOUT" as const,
+                    emoji: "💥",
+                    label: "Breakout",
+                    desc: "ทะลุแนวต้าน",
+                  },
+                ].map((opt) => (
+                  <button
+                    key={opt.type}
+                    onClick={() =>
+                      setAlertForm((f) => ({ ...f, alertType: opt.type }))
+                    }
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      alertForm.alertType === opt.type
+                        ? "bg-amber-500/10 border-amber-500/40 text-amber-300"
+                        : "bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600"
+                    }`}
+                  >
+                    <p className="text-sm font-bold">
+                      {opt.emoji} {opt.label}
+                    </p>
+                    <p className="text-[10px] mt-0.5 opacity-70">{opt.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Price Inputs */}
+            <div className="grid grid-cols-2 gap-4 mb-5">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">
+                  💰 ราคาเป้าหมาย (Entry)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={alertForm.entry}
+                  onChange={(e) =>
+                    setAlertForm((f) => ({ ...f, entry: e.target.value }))
+                  }
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">
+                  ⚡ Trigger Price
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={alertForm.triggerPrice}
+                  onChange={(e) =>
+                    setAlertForm((f) => ({
+                      ...f,
+                      triggerPrice: e.target.value,
+                    }))
+                  }
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono text-sm focus:outline-none focus:border-blue-500"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  {alertForm.alertType === "SMART_ENTRY"
+                    ? "ราคาซื้อ (=Entry)"
+                    : alertForm.alertType === "EMA5_CROSS"
+                      ? "EMA5 Level"
+                      : "แนวต้านที่ต้องทะลุ"}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-5">
+              {/* Cut Loss */}
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">
+                  🛑 จุดตัดขาดทุน (Cut Loss)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={alertForm.cutLoss}
+                  onChange={(e) =>
+                    setAlertForm((f) => ({ ...f, cutLoss: e.target.value }))
+                  }
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono text-sm focus:outline-none focus:border-rose-500"
+                />
+                {alertForm.entry && alertForm.cutLoss && (
+                  <div className="mt-1.5 p-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
+                    <p className="text-[11px] text-rose-400 font-mono">
+                      ขาดทุน: $
+                      {(
+                        parseFloat(alertForm.entry) -
+                        parseFloat(alertForm.cutLoss)
+                      ).toFixed(2)}
+                      <span className="ml-1 text-rose-500">
+                        (
+                        {(
+                          ((parseFloat(alertForm.cutLoss) -
+                            parseFloat(alertForm.entry)) /
+                            parseFloat(alertForm.entry)) *
+                          100
+                        ).toFixed(2)}
+                        %)
+                      </span>
+                    </p>
+                  </div>
+                )}
+              </div>
+              {/* Take Profit */}
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">
+                  🎯 จุดทำกำไร (Target)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={alertForm.target}
+                  onChange={(e) =>
+                    setAlertForm((f) => ({ ...f, target: e.target.value }))
+                  }
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono text-sm focus:outline-none focus:border-emerald-500"
+                />
+                {alertForm.entry && alertForm.target && (
+                  <div className="mt-1.5 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                    <p className="text-[11px] text-emerald-400 font-mono">
+                      กำไร: +$
+                      {(
+                        parseFloat(alertForm.target) -
+                        parseFloat(alertForm.entry)
+                      ).toFixed(2)}
+                      <span className="ml-1 text-emerald-500">
+                        (+
+                        {(
+                          ((parseFloat(alertForm.target) -
+                            parseFloat(alertForm.entry)) /
+                            parseFloat(alertForm.entry)) *
+                          100
+                        ).toFixed(2)}
+                        %)
+                      </span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Risk/Reward Summary */}
+            {alertForm.entry && alertForm.cutLoss && alertForm.target && (
+              <div className="mb-5 p-3 rounded-xl bg-slate-800/50 border border-slate-700">
+                <p className="text-xs text-slate-400 mb-1">Risk/Reward Ratio</p>
+                <p className="text-lg font-bold text-white font-mono">
+                  1 :{" "}
+                  {(
+                    (parseFloat(alertForm.target) -
+                      parseFloat(alertForm.entry)) /
+                    Math.max(
+                      parseFloat(alertForm.entry) -
+                        parseFloat(alertForm.cutLoss),
+                      0.01,
+                    )
+                  ).toFixed(2)}
+                </p>
+              </div>
+            )}
+
+            {/* Submit Button */}
+            <button
+              onClick={submitAlert}
+              disabled={alertSending || alertSent}
+              className={`w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+                alertSent
+                  ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-400"
+                  : alertSending
+                    ? "bg-amber-500/10 border border-amber-500/30 text-amber-400"
+                    : "bg-amber-500 hover:bg-amber-400 text-black"
+              }`}
+            >
+              {alertSent ? (
+                <>
+                  <Check size={18} /> ส่งแจ้งเตือนสำเร็จ!
+                </>
+              ) : alertSending ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" /> กำลังส่ง...
+                </>
+              ) : (
+                <>
+                  <Send size={18} /> ส่งเข้ารอแจ้งเตือน
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
