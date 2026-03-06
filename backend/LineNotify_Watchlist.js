@@ -7,23 +7,25 @@ var SHEET_PORTFOLIO_MAIN = "Portfolio_main";
 var SHEET_PORTFOLIO_GROWTH = "Portfolio_growth";
 
 // ========================================
-// 🕒 ฟังก์ชันเช็คเวลาตลาด (Master's Timezone Fix)
+// 🕒 ฟังก์ชันเช็คเวลาตลาด (Master's Timezone Fix - Updated)
 // ========================================
 function isMarketOpen() {
-  // 🔥 THE MASTER'S TIMEZONE FIX 🔥
-  // สั่งให้บอทแปลงเวลาปัจจุบันเป็นโซนเวลาของ "นิวยอร์ก" (แก้ปัญหาเวลาคร่อมวันและ Daylight Saving ถาวร)
   var now = new Date();
-  var nyTimeString = now.toLocaleString("en-US", {
-    timeZone: "America/New_York",
-  });
-  var nyTime = new Date(nyTimeString);
 
-  var nyDay = nyTime.getDay(); // 0 = อาทิตย์, 1 = จันทร์, ..., 6 = เสาร์
-  var nyHour = nyTime.getHours();
-  var nyMinute = nyTime.getMinutes();
+  // ใช้ Utilities.formatDate ดึงค่าเวลาของนิวยอร์กออกมาตรงๆ (ชัวร์ 100%)
+  // "u" = วันในสัปดาห์ (1=จันทร์, ..., 6=เสาร์, 7=อาทิตย์)
+  var nyDay = parseInt(Utilities.formatDate(now, "America/New_York", "u"), 10);
+  var nyHour = parseInt(
+    Utilities.formatDate(now, "America/New_York", "HH"),
+    10,
+  );
+  var nyMinute = parseInt(
+    Utilities.formatDate(now, "America/New_York", "mm"),
+    10,
+  );
 
-  // 1. เช็ควันหยุด (อิงตามปฏิทินอเมริกา)
-  if (nyDay === 0 || nyDay === 6) {
+  // 1. เช็ควันหยุด (เสาร์ = 6, อาทิตย์ = 7)
+  if (nyDay === 6 || nyDay === 7) {
     Logger.log("😴 วันหยุด Wall Street ตลาดปิด (Weekend)");
     return false;
   }
@@ -62,6 +64,12 @@ function checkAllAndNotify() {
 // 🟢 1. ระบบเฝ้าจุดซื้อ (Watchlist)
 // ========================================
 function checkPriceAndNotify() {
+  // 🔥 เพิ่มตัวล็อกตรงนี้! ถ้าตลาดปิด ให้เด้งออกทันที 🔥
+  if (!isMarketOpen()) {
+    Logger.log("💼 นอกเวลาทำการ - ข้ามการตรวจ Watchlist");
+    return;
+  }
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(SHEET_WATCHLIST);
   if (!sheet) return;
@@ -69,7 +77,7 @@ function checkPriceAndNotify() {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return;
 
-  var dataRange = sheet.getRange(2, 1, lastRow - 1, 7);
+  var dataRange = sheet.getRange(2, 1, lastRow - 1, 9); // Updated to 9 columns to include H and I
   var data = dataRange.getValues();
   var pendingAlerts = [];
 
@@ -80,6 +88,8 @@ function checkPriceAndNotify() {
     var status = row[4];
     var cutLossPrice = row[5];
     var targetPrice = row[6];
+    var alertType = row[7] || "SMART_ENTRY"; // Column H, default to SMART_ENTRY
+    var triggerPrice = row[8] || entryPrice; // Column I, default to entryPrice
 
     if (
       currentPrice === "#N/A" ||
@@ -89,34 +99,78 @@ function checkPriceAndNotify() {
       return;
 
     var rowNum = index + 2;
-    var buyBuffer = entryPrice * 1.005; // Buffer 0.5%
     var diffPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
 
-    if (
-      currentPrice <= buyBuffer &&
-      currentPrice > cutLossPrice &&
-      status !== "SENT_ENTRY"
-    ) {
-      var message =
-        "🟢 BUY: " +
-        symbol +
-        "\n💰 ราคาลงมาที่: $" +
-        currentPrice +
-        " (เป้ารับ: $" +
-        entryPrice +
-        ")\n🛑 คัทลอส: $" +
-        cutLossPrice +
-        " | 🎯 ทำกำไร: $" +
-        targetPrice +
-        "\n⏱️ (Diff: " +
-        diffPercent.toFixed(2) +
-        "%)";
+    // We only alert if it hasn't been sent yet
+    if (status === "SENT_ENTRY") return;
 
+    var isTriggered = false;
+    var message = "";
+
+    // 1. 🎯 SMART ENTRY (รอรับของ) - Buy when price drops to/near Entry Support
+    if (alertType === "SMART_ENTRY") {
+      var buyBuffer = entryPrice * 1.005; // Buffer 0.5% higher than entry
+      if (currentPrice <= buyBuffer && currentPrice > cutLossPrice) {
+        isTriggered = true;
+        message =
+          "🟢 SMART ENTRY: " +
+          symbol +
+          "\n" +
+          "💰 ราคาลงมาที่โซนซื้อ: $" +
+          currentPrice +
+          " (เป้ารับ: $" +
+          entryPrice +
+          ")\n" +
+          "🛑 คัทลอส: $" +
+          cutLossPrice +
+          " | 🎯 ทำกำไร: $" +
+          targetPrice;
+      }
+    }
+    // 2. 🛡️ EMA5 CROSS (ทะลุเส้น 5 วัน) - Buy when price crosses ABOVE EMA5 (Trigger Price)
+    else if (alertType === "EMA5_CROSS") {
+      if (currentPrice > triggerPrice) {
+        isTriggered = true;
+        message =
+          "🚀 MOMENTUM BITE: " +
+          symbol +
+          "\n" +
+          "📈 ราคาทะลุยืนเหนือ EMA5 ได้แล้วที่ $" +
+          currentPrice +
+          "\n" +
+          "🔥 EMA5 Level: $" +
+          triggerPrice +
+          "\n" +
+          "🛑 คัทลอส: $" +
+          cutLossPrice +
+          " | 🎯 แนวต้านถัดไป: $" +
+          targetPrice;
+      }
+    }
+    // 3. 💥 BREAKOUT (ทะลุต้าน) - Alert when price breaks above Resistance (Trigger Price)
+    else if (alertType === "BREAKOUT") {
+      if (currentPrice >= triggerPrice) {
+        isTriggered = true;
+        message =
+          "💥 BREAKOUT ALERT: " +
+          symbol +
+          "\n" +
+          "🔥 ดันทะลุแนวต้านสำคัญ! ราคา: $" +
+          currentPrice +
+          "\n" +
+          "🚧 แนวต้านที่ทะลุ (Trigger): $" +
+          triggerPrice +
+          "\n" +
+          "🚨 โวลุ่มเข้า? จับตาดูให้ดี!";
+      }
+    }
+
+    if (isTriggered) {
       pendingAlerts.push({
         rowNum: rowNum,
         status: "SENT_ENTRY",
         text: message,
-        diff: diffPercent,
+        diff: diffPercent, // We still sort by diff mostly for SMART_ENTRY order
       });
     }
   });
@@ -322,6 +376,14 @@ function doPost(e) {
         sheet.getRange(rowToUpdate, 2).setValue(item.entry);
         sheet.getRange(rowToUpdate, 6).setValue(item.cut);
         sheet.getRange(rowToUpdate, 7).setValue(item.target);
+
+        // NEW: Save Alert Settings
+        if (item.alertType) {
+          sheet.getRange(rowToUpdate, 8).setValue(item.alertType); // H: Alert Type
+        }
+        if (item.triggerPrice !== undefined) {
+          sheet.getRange(rowToUpdate, 9).setValue(item.triggerPrice); // I: Trigger Price
+        }
       });
 
       return ContentService.createTextOutput(

@@ -38,6 +38,18 @@ const MENU_ITEMS = [
     glowColor: "shadow-blue-500/20",
   },
   {
+    href: "/sniper",
+    icon: "🎯",
+    title: "Sniper Radar",
+    subtitle: "ดักยิงหุ้น Squeeze ก่อนระเบิด",
+    description:
+      "สแกนหาหุ้นที่ Bollinger Bands บีบตัวแน่นสุดขีด (<15%) และมีโมเมนตัมกำลังงัดหัวขึ้น",
+    gradient: "from-red-600 to-orange-600",
+    hoverGradient: "hover:from-red-500 hover:to-orange-500",
+    borderColor: "border-red-500/30",
+    glowColor: "shadow-red-500/20",
+  },
+  {
     href: "/compare",
     icon: "⚖️",
     title: "เปรียบเทียบหุ้น",

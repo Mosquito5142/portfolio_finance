@@ -123,7 +123,7 @@ function calculateMACD(closes) {
 }
 
 async function analyze() {
-  const data = await fetchHistory("SMCI");
+  const data = await fetchHistory("JMIA");
   const result = data.chart.result[0];
   const timestamps = result.timestamp;
   const closes = result.indicators.quote[0].close;
@@ -169,7 +169,7 @@ async function analyze() {
 
   // Analyze the 15 days BEFORE the breakout (and the breakout day)
   const startIdx = Math.max(0, breakoutIdx - 15);
-  console.log(`\n--- SMCI Pre-Breakout Analysis ---`);
+  console.log(`\n--- JMIA Pre-Breakout Analysis ---`);
   console.log(
     `Analyzing 15 days leading up to Major Breakout (+${maxChange.toFixed(2)}%) on ${new Date(timestamps[breakoutIdx] * 1000).toISOString().split("T")[0]}`,
   );

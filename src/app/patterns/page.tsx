@@ -146,10 +146,13 @@ const calculateSmartTrade = (s: StockScan) => {
   const ema5 = s.data?.advancedIndicators?.ema5 || 0;
 
   if (signal === "BUY") {
-    // Active BUY: Wait for 0.5% dip OR EMA5
-    let smartEntry = price * 0.995;
-    if (ema5 > 0 && ema5 < price && ema5 > price * 0.98) {
-      smartEntry = Math.max(smartEntry, ema5);
+    // 🎯 Smart Entry: Wait for a dip to a Confluence Support (Fib, Pivot, SMA), not EMA5.
+    const sup = getConfluenceLevel("support");
+    let smartEntry = price * 0.985; // Default to 1.5% pullback in strong trend
+
+    // If a strong confluence support is nearby (within 5% max drop), use it
+    if (sup > 0 && sup < price && sup >= price * 0.95) {
+      smartEntry = sup;
     }
     idealEntry = smartEntry;
   } else if (signal === "SELL") {
@@ -177,10 +180,13 @@ const calculateSmartTrade = (s: StockScan) => {
         cut = price * 0.9;
       }
     } else {
-      // Standard SELL (Short)
-      let smartEntry = price * 1.005;
-      if (ema5 > 0 && ema5 > price && ema5 < price * 1.02) {
-        smartEntry = Math.min(smartEntry, ema5);
+      // Standard SELL (Short): Wait for a bounce to a Confluence Resistance
+      const res = getConfluenceLevel("resistance");
+      let smartEntry = price * 1.015; // Default to 1.5% bounce in strong trend
+
+      // If a strong confluence resistance is nearby (within 5% max bounce), use it
+      if (res > 0 && res > price && res <= price * 1.05) {
+        smartEntry = res;
       }
       idealEntry = smartEntry;
     }
@@ -541,113 +547,59 @@ export default function PatternScreenerPage() {
     .slice(0, 5); // Pick Top 5 per mode logic (but scanned all)
 
   // ========== SEND TO GOOGLE SHEET ==========
-  const [sendingToSheet, setSendingToSheet] = useState(false);
-  const [sheetMessage, setSheetMessage] = useState("");
-  const [entryType, setEntryType] = useState<
-    "smart" | "fib382" | "fib500" | "fib618"
-  >("smart");
+  const handleQuickAlert = async (
+    symbol: string,
+    inlineAlertType: "SMART_ENTRY" | "EMA5_CROSS" | "BREAKOUT",
+  ) => {
+    const s = scans.find((x) => x.symbol === symbol);
+    if (!s || !s.data || s.status !== "done") return false;
 
-  const sendToGoogleSheet = async () => {
-    // 🔥 ส่งเฉพาะตัวที่ผ่านเกณฑ์ของโหมดปัจจุบัน
-    const modeLabel =
-      scanMode === "value"
-        ? "Value Hunting"
-        : scanMode === "sniper"
-          ? "Sniper Trading"
-          : "Trend Following";
+    const smartScan = calculateSmartTrade(s);
+    const data = smartScan.data!;
 
-    const candidates = scans.filter((s) => {
-      // Send ALL valid scans that have a signal and price
-      if (!s.data || s.status !== "done") return false;
-      return s.data.currentPrice > 0;
-    });
+    let entry = data.metrics?.supportLevel || 0;
+    let target = data.metrics?.resistanceLevel || 0;
+    let cut = data.advancedIndicators?.suggestedStopLoss || 0;
 
-    // Format items using the Smart Data (Force Re-calculate to ensure latest logic)
-    const allItems = candidates.map((s) => {
-      // Apply the latest Smart Trade logic on the fly
-      const smartScan = calculateSmartTrade(s);
-      const data = smartScan.data!;
+    let triggerPrice = entry;
+    if (inlineAlertType === "EMA5_CROSS")
+      triggerPrice = data.advancedIndicators?.ema5 || entry;
+    else if (inlineAlertType === "BREAKOUT")
+      triggerPrice = data.metrics?.resistanceLevel || target;
 
-      let entry = data.metrics?.supportLevel || 0;
-      let target = data.metrics?.resistanceLevel || 0;
-      let cut = data.advancedIndicators?.suggestedStopLoss || 0;
+    // 🛠️ CRITICAL FIX: The Google Sheet "Entry" column should visually reflect the selected Trigger Price.
+    entry = triggerPrice;
 
-      // Override entry based on user selection
-      if (entryType === "fib382" && data.metrics?.fibLevels?.fib382) {
-        entry = data.metrics.fibLevels.fib382;
-      } else if (entryType === "fib500" && data.metrics?.fibLevels?.fib500) {
-        entry = data.metrics.fibLevels.fib500;
-      } else if (entryType === "fib618" && data.metrics?.fibLevels?.fib618) {
-        entry = data.metrics.fibLevels.fib618;
-      }
-
-      // 🛠️ USER REQUEST: Always send "Support" as Entry and "Resistance" as Target
-      // Ensure Entry < Target (Long Logic) for the Sheet, regardless of Signal.
-      if (entry > target) {
-        // Swap Entry & Target
-        const temp = entry;
-        entry = target;
-        target = temp;
-
-        // Recalculate Cut Price for Long (Below Entry)
-        // Default to 5% risk or specific calculation
-        cut = entry * 0.95;
-      }
-
-      // 🛠️ USER REQUEST: Map Ticker to Google Finance format
-      const mapToGoogleFinanceTicker = (t: string) => {
-        const up = t.toUpperCase();
-        if (up.endsWith(".BK")) return `BKK:${up.replace(".BK", "")}`;
-        return up;
-      };
-
-      return {
-        ticker: mapToGoogleFinanceTicker(s.symbol),
-        entry: Number(entry.toFixed(2)),
-        currentPrice: Number(data.currentPrice.toFixed(2)),
-        cut: Number(cut.toFixed(2)),
-        target: Number(target.toFixed(2)),
-        status: "",
-      };
-    });
-    if (allItems.length === 0) {
-      setSheetMessage(`❌ ไม่มีข้อมูลจากการสแกนรอบนี้`);
-      setTimeout(() => setSheetMessage(""), 3000);
-      return;
+    if (entry > target) {
+      const temp = entry;
+      entry = target;
+      target = temp;
+      cut = entry * 0.95;
     }
 
-    setSendingToSheet(true);
-    setSheetMessage("");
-
-    console.log(
-      "📤 [PAYLOAD DEBUG] allItems:",
-      JSON.stringify(
-        allItems.filter((i) => i.ticker === "ARM" || i.ticker === "AEHR"),
-        null,
-        2,
-      ),
-    );
+    const payload = {
+      ticker: s.symbol.toUpperCase().endsWith(".BK")
+        ? `BKK:${s.symbol.replace(".BK", "")}`
+        : s.symbol.toUpperCase(),
+      entry: Number(entry.toFixed(2)),
+      currentPrice: Number(data.currentPrice.toFixed(2)),
+      cut: Number(cut.toFixed(2)),
+      target: Number(target.toFixed(2)),
+      status: "",
+      alertType: inlineAlertType,
+      triggerPrice: Number(triggerPrice.toFixed(2)),
+    };
 
     try {
       const res = await fetch("/api/sheets/watchlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: allItems }),
+        body: JSON.stringify({ items: [payload] }),
       });
-
-      const result = await res.json();
-
-      if (res.ok) {
-        setSheetMessage(`✅ ส่งข้อมูล ${allItems.length} ตัว เรียบร้อย!`);
-      } else {
-        setSheetMessage(`❌ ${result.error || "เกิดข้อผิดพลาด"}`);
-      }
+      return res.ok;
     } catch {
-      setSheetMessage("❌ ไม่สามารถเชื่อมต่อกับ Google Sheet ได้");
+      return false;
     }
-
-    setSendingToSheet(false);
-    setTimeout(() => setSheetMessage(""), 5000);
   };
 
   const buyCount = scans.filter((s) => s.data?.overallSignal === "BUY").length;
@@ -686,6 +638,8 @@ export default function PatternScreenerPage() {
   const filteredSymbols = [...UNIQUE_SYMBOLS, ...customTickers].filter((s) =>
     s.toLowerCase().includes(searchTerm.toLowerCase()),
   );
+
+  // Toggle single stock removed due to inline 1-click Watchlist approach
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-800">
@@ -1294,44 +1248,7 @@ export default function PatternScreenerPage() {
                   หุ้นที่คะแนนดีที่สุด 5 อันดับแรก พร้อมแผนการเล่นรายวัน
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-2 bg-gray-900/50 p-1.5 rounded-xl border border-purple-500/30 w-full md:w-auto">
-                <select
-                  value={entryType}
-                  onChange={(e) => setEntryType(e.target.value as any)}
-                  className="bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none border border-gray-700 focus:border-purple-500 transition-colors cursor-pointer"
-                  title="เลือกจุดรอซื้อที่จะส่งไป Google Sheet"
-                >
-                  <option value="smart">🎯 Smart Entry (สายโมเมนตัม)</option>
-                  <option value="fib382">📉 Fib 0.382 (แนวรับสายแข็ง)</option>
-                  <option value="fib500">⚖️ Fib 0.500 (จุดสมดุล)</option>
-                  <option value="fib618">
-                    🌟 Fib 0.618 (The Golden Pocket)
-                  </option>
-                </select>
-                <button
-                  onClick={sendToGoogleSheet}
-                  disabled={sendingToSheet}
-                  className={`px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-all active:scale-95 shadow-lg ${
-                    sendingToSheet
-                      ? "bg-gray-500 text-gray-300 cursor-not-allowed"
-                      : "bg-green-500 hover:bg-green-400 text-white"
-                  }`}
-                >
-                  {sendingToSheet ? "⏳ กำลังส่ง..." : "📤 ส่งเข้า Sheet"}
-                </button>
-              </div>
             </div>
-            {sheetMessage && (
-              <div
-                className={`mt-2 px-4 py-2 rounded-lg text-sm font-medium ${
-                  sheetMessage.startsWith("✅")
-                    ? "bg-green-900/40 text-green-300 border border-green-500/30"
-                    : "bg-red-900/40 text-red-300 border border-red-500/30"
-                }`}
-              >
-                {sheetMessage}
-              </div>
-            )}
 
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 relative z-10">
               {topPicks.map((pick, idx) => {
@@ -1619,12 +1536,21 @@ export default function PatternScreenerPage() {
         {/* Stock List */}
         {filteredScans.length > 0 && (
           <div className="space-y-4">
-            <h2 className="text-white font-bold text-lg">
-              📋 รายการหุ้น ({filteredScans.length})
-            </h2>
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between bg-gray-900/40 p-4 rounded-xl border border-gray-700/50 gap-4 mb-6">
+              <div className="flex items-center gap-3">
+                <h2 className="text-white font-bold text-lg flex items-center gap-2">
+                  📋 รายการหุ้น ({filteredScans.length})
+                </h2>
+              </div>
+            </div>
 
             {filteredScans.map((scan) => (
-              <PatternCard key={scan.symbol} scan={scan} scanMode={scanMode} />
+              <PatternCard
+                key={scan.symbol}
+                scan={scan}
+                scanMode={scanMode}
+                onQuickAlert={handleQuickAlert}
+              />
             ))}
           </div>
         )}

@@ -44,7 +44,18 @@ export default function Navigation() {
                 }`}
               >
                 <AlertTriangle size={16} />
-                Triangle Breakout
+                Triangle
+              </Link>
+              <Link
+                href="/sniper"
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  pathname === "/sniper"
+                    ? "bg-red-500/10 text-red-400"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                }`}
+              >
+                <Target size={16} />
+                Sniper
               </Link>
               <Link
                 href="/dashboard"

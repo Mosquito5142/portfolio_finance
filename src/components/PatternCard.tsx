@@ -7,13 +7,24 @@ import { StockScan } from "@/types/stock";
 interface PatternCardProps {
   scan: StockScan;
   scanMode?: "trend" | "value" | "sniper";
+  isSelected?: boolean;
+  onToggleSelect?: (symbol: string) => void;
+  onQuickAlert?: (
+    symbol: string,
+    inlineAlertType: "SMART_ENTRY" | "EMA5_CROSS" | "BREAKOUT",
+  ) => Promise<boolean>;
 }
 
 export default function PatternCard({
   scan,
   scanMode = "value",
+  onQuickAlert,
 }: PatternCardProps) {
   const [showDebug, setShowDebug] = useState(false);
+  const [quickAlertStatus, setQuickAlertStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
+  const [activeAlert, setActiveAlert] = useState<string | null>(null);
 
   if (!scan.data) return null;
 
@@ -670,6 +681,95 @@ export default function PatternCard({
                     : "NONE"}
                 </p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========== QUICK WATCHLIST ACTIONS ========== */}
+        {onQuickAlert && (
+          <div className="mt-4 pt-3 border-t border-gray-700/50 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-400 font-bold uppercase">
+                ⚡ Quick Alerts
+              </span>
+              {quickAlertStatus !== "idle" && (
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    quickAlertStatus === "success"
+                      ? "bg-green-900/50 text-green-400"
+                      : quickAlertStatus === "error"
+                        ? "bg-red-900/50 text-red-400"
+                        : "bg-yellow-900/50 text-yellow-500 animate-pulse"
+                  }`}
+                >
+                  {quickAlertStatus === "loading"
+                    ? "⏳ Sending..."
+                    : quickAlertStatus === "success"
+                      ? "✅ Sent!"
+                      : "❌ Error"}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                disabled={quickAlertStatus === "loading"}
+                onClick={async () => {
+                  if (!onQuickAlert) return;
+                  setQuickAlertStatus("loading");
+                  setActiveAlert("SMART_ENTRY");
+                  const ok = await onQuickAlert(scan.symbol, "SMART_ENTRY");
+                  setQuickAlertStatus(ok ? "success" : "error");
+                  setTimeout(() => setQuickAlertStatus("idle"), 3000);
+                }}
+                className={`py-1.5 px-1 rounded text-[10px] sm:text-xs font-bold border transition-all active:scale-95 ${
+                  activeAlert === "SMART_ENTRY" &&
+                  quickAlertStatus === "loading"
+                    ? "bg-purple-900/50 border-purple-500 text-purple-300"
+                    : "bg-gray-800 hover:bg-gray-700 border-gray-600 text-gray-300"
+                }`}
+                title="🎯 รอย่อเข้าซื้อ (Smart Entry)"
+              >
+                🎯 Smart
+              </button>
+              <button
+                disabled={quickAlertStatus === "loading"}
+                onClick={async () => {
+                  if (!onQuickAlert) return;
+                  setQuickAlertStatus("loading");
+                  setActiveAlert("EMA5_CROSS");
+                  const ok = await onQuickAlert(scan.symbol, "EMA5_CROSS");
+                  setQuickAlertStatus(ok ? "success" : "error");
+                  setTimeout(() => setQuickAlertStatus("idle"), 3000);
+                }}
+                className={`py-1.5 px-1 rounded text-[10px] sm:text-xs font-bold border transition-all active:scale-95 ${
+                  activeAlert === "EMA5_CROSS" && quickAlertStatus === "loading"
+                    ? "bg-purple-900/50 border-purple-500 text-purple-300"
+                    : "bg-gray-800 hover:bg-gray-700 border-gray-600 text-gray-300"
+                }`}
+                title="🛡️ รอสัญญาณกลับตัว (ทะลุ EMA5)"
+              >
+                🛡️ EMA5
+              </button>
+              <button
+                disabled={quickAlertStatus === "loading"}
+                onClick={async () => {
+                  if (!onQuickAlert) return;
+                  setQuickAlertStatus("loading");
+                  setActiveAlert("BREAKOUT");
+                  const ok = await onQuickAlert(scan.symbol, "BREAKOUT");
+                  setQuickAlertStatus(ok ? "success" : "error");
+                  setTimeout(() => setQuickAlertStatus("idle"), 3000);
+                }}
+                className={`py-1.5 px-1 rounded text-[10px] sm:text-xs font-bold border transition-all active:scale-95 ${
+                  activeAlert === "BREAKOUT" && quickAlertStatus === "loading"
+                    ? "bg-purple-900/50 border-purple-500 text-purple-300"
+                    : "bg-gray-800 hover:bg-gray-700 border-gray-600 text-gray-300"
+                }`}
+                title="💥 รอเบรกกรอบ (Breakout)"
+              >
+                💥 Break
+              </button>
             </div>
           </div>
         )}
