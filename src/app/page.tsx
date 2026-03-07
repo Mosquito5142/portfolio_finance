@@ -38,6 +38,18 @@ const MENU_ITEMS = [
     glowColor: "shadow-blue-500/20",
   },
   {
+    href: "/deepvalue",
+    icon: "🎯",
+    title: "Deep Value Radar",
+    subtitle: "Holy Trinity Scanner",
+    description:
+      "สแกนหุ้นจุดกลับตัวที่ RSI เลือดสาด, ราคาถูกกว่ามูลค่าพื้นฐาน (DCF), และ Insider แอบเก็บ",
+    gradient: "from-indigo-600 to-purple-800",
+    hoverGradient: "hover:from-indigo-500 hover:to-purple-700",
+    borderColor: "border-indigo-500/30",
+    glowColor: "shadow-indigo-500/20",
+  },
+  {
     href: "/sniper",
     icon: "🎯",
     title: "Sniper Radar",
