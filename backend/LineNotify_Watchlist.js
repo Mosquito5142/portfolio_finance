@@ -459,6 +459,7 @@ function doPost(e) {
       var buyQty = sheet.getRange(targetRow, 4).getValue();
       if (item.soldQty >= buyQty) {
         sheet.getRange(targetRow, 11).setValue("CLOSED"); // K: Status -> ปิดโพสิชัน
+        sheet.getRange(targetRow, 13).setValue(0); // M: TargetAlloc -> เคลียร์สัดส่วนเป้าหมายเป็น 0 เมื่อปิดโพสิชันหมดแล้ว
       } else {
         sheet.getRange(targetRow, 11).setValue("PARTIAL_SOLD"); // ขายไปบางส่วน
       }

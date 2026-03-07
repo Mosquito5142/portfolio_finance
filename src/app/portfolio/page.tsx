@@ -20,6 +20,8 @@ import {
   Copy,
   CheckCheck,
   BrainCircuit,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 interface PortfolioRow {
@@ -75,6 +77,13 @@ export default function PortfolioTracker() {
   );
   const [tradeType, setTradeType] = useState<"main" | "growth">("main");
   const [isCopied, setIsCopied] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<{
+    [key: string]: boolean;
+  }>({});
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   useEffect(() => {
     fetchExchangeRate();
@@ -290,16 +299,52 @@ export default function PortfolioTracker() {
       (viewFilter === "all" || r.portfolioType === viewFilter),
   );
 
-  // Apply sorting
-  actives.sort((a, b) => {
-    const aQty = a.quantity - (a.soldQty || 0);
-    const bQty = b.quantity - (b.soldQty || 0);
-    const aPrice = a.livePrice || a.price;
-    const bPrice = b.livePrice || b.price;
-    const aValue = aPrice * aQty;
-    const bValue = bPrice * bQty;
-    const aPnlPct = ((aPrice - a.price) / a.price) * 100;
-    const bPnlPct = ((bPrice - b.price) / b.price) * 100;
+  // Grouping Actives by Ticker & PortfolioType
+  const groupedObj = actives.reduce(
+    (acc, item) => {
+      const key = `${item.portfolioType || "main"}_${item.ticker}`;
+      const holdingQty =
+        item.status === "ACTIVE"
+          ? item.quantity
+          : item.quantity - (item.soldQty || 0);
+      const price = item.price;
+      const currentPrice = item.livePrice || item.price;
+
+      if (!acc[key]) {
+        acc[key] = {
+          ticker: item.ticker,
+          portfolioType: item.portfolioType || "main",
+          items: [],
+          totalQty: 0,
+          totalCostUSD: 0,
+          currentPrice: currentPrice,
+          liveChangePercent: item.liveChangePercent,
+          targetAlloc: item.targetAlloc || 0,
+        };
+      }
+      acc[key].items.push({ ...item, holdingQty });
+      acc[key].totalQty += holdingQty;
+      acc[key].totalCostUSD += holdingQty * price;
+      acc[key].targetAlloc = Math.max(
+        acc[key].targetAlloc,
+        item.targetAlloc || 0,
+      );
+
+      return acc;
+    },
+    {} as Record<string, any>,
+  );
+
+  let groupedActives = Object.values(groupedObj);
+
+  // Apply sorting on groups
+  groupedActives.sort((a: any, b: any) => {
+    const aValue = a.currentPrice * a.totalQty;
+    const bValue = b.currentPrice * b.totalQty;
+    const aAvgPrice = a.totalCostUSD / a.totalQty;
+    const bAvgPrice = b.totalCostUSD / b.totalQty;
+    const aPnlPct = ((a.currentPrice - aAvgPrice) / aAvgPrice) * 100;
+    const bPnlPct = ((b.currentPrice - bAvgPrice) / bAvgPrice) * 100;
 
     switch (sortBy) {
       case "value_desc":
@@ -314,7 +359,9 @@ export default function PortfolioTracker() {
         return a.ticker.localeCompare(b.ticker);
       case "date_desc":
       default:
-        return b.rowIndex - a.rowIndex;
+        const aMaxRow = Math.max(...a.items.map((i: any) => i.rowIndex));
+        const bMaxRow = Math.max(...b.items.map((i: any) => i.rowIndex));
+        return bMaxRow - aMaxRow;
     }
   });
 
@@ -378,25 +425,21 @@ export default function PortfolioTracker() {
   };
 
   // --- Portfolio Composition Data ---
-  const compositionData = actives
-    .map((item) => {
-      const holdingQty =
-        item.status === "ACTIVE"
-          ? item.quantity
-          : item.quantity - (item.soldQty || 0);
-      const currentPrice = item.livePrice || item.price;
-      const usdValue = currentPrice * holdingQty;
-      const pnlUSD = (currentPrice - item.price) * holdingQty;
-      const pnlPct = ((currentPrice - item.price) / item.price) * 100;
+  const compositionData = groupedActives
+    .map((group: any) => {
+      const { ticker, totalQty, currentPrice, totalCostUSD } = group;
+      const usdValue = currentPrice * totalQty;
+      const pnlUSD = usdValue - totalCostUSD;
+      const pnlPct = totalCostUSD > 0 ? (pnlUSD / totalCostUSD) * 100 : 0;
       return {
-        name: item.ticker,
+        name: ticker,
         value: usdValue,
         pnl: pnlUSD,
         pnlPct: pnlPct,
       };
     })
     .filter((item) => item.value > 0)
-    .sort((a, b) => b.value - a.value);
+    .sort((a: any, b: any) => b.value - a.value);
 
   // --- Global Portfolio Split Metrics (for Filter Buttons) ---
   let mainVal = 0;
@@ -467,37 +510,41 @@ export default function PortfolioTracker() {
     summaryText += `Win Rate: ${winRate.toFixed(1)}% (${winCount} ชนะ - ${lossCount} แพ้)\n\n`;
 
     summaryText += `[รายการหุ้นที่ถืออยู่]\n`;
-    if (actives.length === 0) {
+    if (groupedActives.length === 0) {
       summaryText += `- ไม่มีหุ้นในพอร์ต -\n`;
     } else {
-      actives.forEach((item, index) => {
-        const qty =
-          item.status === "ACTIVE"
-            ? item.quantity
-            : item.quantity - (item.soldQty || 0);
-        const currPrice = item.livePrice || item.price;
-        const pnlUSD = (currPrice - item.price) * qty;
-        const pnlPct = ((currPrice - item.price) / item.price) * 100;
+      groupedActives.forEach((group: any, index: number) => {
+        const {
+          ticker,
+          totalQty,
+          currentPrice,
+          totalCostUSD,
+          portfolioType,
+          targetAlloc,
+        } = group;
+        const avgPrice = totalCostUSD / totalQty;
+        const pnlUSD = (currentPrice - avgPrice) * totalQty;
+        const pnlPct = ((currentPrice - avgPrice) / avgPrice) * 100;
         const iSign = pnlUSD >= 0 ? "+" : "";
 
-        const itemUSD = currPrice * qty;
+        const itemUSD = currentPrice * totalQty;
         const currentAllocPct =
           totalCurrentValueUSD > 0 ? (itemUSD / totalCurrentValueUSD) * 100 : 0;
 
         let allocText = ` | สัดส่วน: ${currentAllocPct.toFixed(1)}%`;
 
         // Target Allocation Logic for "All" vs "Main/Growth"
-        if (item.targetAlloc && item.targetAlloc > 0) {
-          let displayedTargetAlloc = item.targetAlloc;
+        if (targetAlloc && targetAlloc > 0) {
+          let displayedTargetAlloc = targetAlloc;
           if (viewFilter === "all") {
             // If viewing all, calculate relative to global target weights (Main = 70%, Growth = 30%)
-            const portfolioWeight = item.portfolioType === "growth" ? 0.3 : 0.7; // default to main 0.7 if undefined
-            displayedTargetAlloc = item.targetAlloc * portfolioWeight;
+            const portfolioWeight = portfolioType === "growth" ? 0.3 : 0.7; // default to main 0.7 if undefined
+            displayedTargetAlloc = targetAlloc * portfolioWeight;
           }
           allocText += ` (เป้า: ${displayedTargetAlloc.toFixed(1)}%)`;
         }
 
-        summaryText += `${index + 1}. ${item.ticker}: ${qty} หุ้น | ทุน: $${formatUSD(item.price)} | ปัจจุบัน: $${formatUSD(currPrice)} | PnL: ${iSign}$${formatUSD(Math.abs(pnlUSD))} (${iSign}${Math.abs(pnlPct).toFixed(2)}%)${allocText}\n`;
+        summaryText += `${index + 1}. ${ticker}: ${totalQty} หุ้น | ทุน: $${formatUSD(avgPrice)} | ปัจจุบัน: $${formatUSD(currentPrice)} | PnL: ${iSign}$${formatUSD(Math.abs(pnlUSD))} (${iSign}${Math.abs(pnlPct).toFixed(2)}%)${allocText}\n`;
       });
     }
 
@@ -903,74 +950,78 @@ export default function PortfolioTracker() {
             </div>
           ) : activeTab === "ACTIVE" ? (
             <div className="space-y-4">
-              {actives.length === 0 && (
+              {groupedActives.length === 0 && (
                 <div className="text-center py-16 text-slate-500 bg-slate-900/30 rounded-2xl border border-slate-800/50 border-dashed">
                   ไม่พบข้อมูลหุ้นที่ถือครอง ลองบันทึกประวัติการซื้อสิ!
                 </div>
               )}
-              {actives.map((item) => {
-                const itemKey = `${item.portfolioType || "main"}_${item.rowIndex}`;
-                const holdingQty =
-                  item.status === "ACTIVE"
-                    ? item.quantity
-                    : item.quantity - (item.soldQty || 0);
-                const currentPrice = item.livePrice || item.price;
-                const pnl = (currentPrice - item.price) * holdingQty;
-                const pnlPct = ((currentPrice - item.price) / item.price) * 100;
+              {groupedActives.map((group: any) => {
+                const {
+                  ticker,
+                  portfolioType,
+                  items,
+                  totalQty,
+                  totalCostUSD,
+                  currentPrice,
+                  targetAlloc: targetAllocPct,
+                } = group;
+                const groupKey = `${portfolioType}_${ticker}`;
+                const avgPrice = totalCostUSD / totalQty;
+                const pnl = (currentPrice - avgPrice) * totalQty;
+                const pnlPct = ((currentPrice - avgPrice) / avgPrice) * 100;
                 const isProfit = pnl >= 0;
 
-                // Distance calculations
-                const toTarget =
-                  ((item.target - currentPrice) / currentPrice) * 100;
-                const toCutloss =
-                  ((currentPrice - item.cutLoss) / currentPrice) * 100; // positive means still buffer left
-
-                // Allocation calculations
-                const itemUSD = currentPrice * holdingQty;
+                const itemUSD = currentPrice * totalQty;
                 const currentAllocPct =
                   totalCurrentValueUSD > 0
                     ? (itemUSD / totalCurrentValueUSD) * 100
                     : 0;
-                const targetAllocPct = Number(item.targetAlloc) || 0;
                 const targetValueUSD =
                   (totalCurrentValueUSD * targetAllocPct) / 100;
                 const diffUSD = targetValueUSD - itemUSD;
 
+                const isExpanded = expandedGroups[groupKey] || false; // Initially collapsed by default
+
                 return (
                   <div
-                    key={`${item.portfolioType}-${item.rowIndex}`}
+                    key={groupKey}
                     className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition-colors"
                   >
+                    {/* Header: Aggregated view */}
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <div className="flex items-center gap-3">
                           <h3 className="text-xl font-black tracking-tight text-white">
-                            {item.ticker}
-                            {viewFilter === "all" && item.portfolioType && (
+                            {ticker}
+                            {viewFilter === "all" && portfolioType && (
                               <span
                                 className={`ml-2 text-[10px] px-1.5 py-0.5 rounded ${
-                                  item.portfolioType === "main"
+                                  portfolioType === "main"
                                     ? "bg-blue-900/50 text-blue-400"
                                     : "bg-amber-900/50 text-amber-400"
                                 }`}
                               >
-                                {item.portfolioType.toUpperCase()}
+                                {portfolioType.toUpperCase()}
                               </span>
                             )}
                           </h3>
-                          <span className="bg-slate-800 text-slate-300 text-xs px-2 py-1 rounded-md">
-                            {holdingQty} หุ้น
+                          <span
+                            className="bg-slate-800 text-slate-300 text-xs px-2 py-1 rounded-md cursor-pointer"
+                            onClick={() => toggleGroup(groupKey)}
+                          >
+                            {totalQty} หุ้น{" "}
+                            {items.length > 1 && `(${items.length} ไม้)`}
                           </span>
                         </div>
                         <p className="text-xs text-slate-400 mt-2">
-                          ราคาเข้า:{" "}
+                          ต้นทุนเฉลี่ย:{" "}
                           <span className="text-slate-300 font-bold">
-                            ${formatUSD(item.price)}
+                            ${formatUSD(avgPrice)}
                           </span>
                         </p>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          มูลค่าตอนซื้อ: {getSymbol()}
-                          {formatCurrency(item.price * holdingQty)}
+                          มูลค่ารวมตอนเข้า: {getSymbol()}
+                          {formatCurrency(totalCostUSD)}
                         </p>
                       </div>
                       <div className="text-right">
@@ -981,13 +1032,13 @@ export default function PortfolioTracker() {
                           ${formatUSD(currentPrice)}
                         </p>
                         <p className="text-xs text-slate-400 mt-1 mb-2">
-                          มูลค่าตอนนี้:{" "}
+                          มูลค่ารวมตอนนี้:{" "}
                           <span className="text-slate-200">
                             {getSymbol()}
-                            {formatCurrency(currentPrice * holdingQty)}
+                            {formatCurrency(itemUSD)}
                           </span>
                         </p>
-                        {item.ticker !== "CASH" && (
+                        {ticker !== "CASH" && (
                           <p
                             className={`text-sm font-bold flex items-center justify-end gap-1 ${
                               isProfit ? "text-emerald-400" : "text-red-400"
@@ -1006,78 +1057,8 @@ export default function PortfolioTracker() {
                       </div>
                     </div>
 
-                    {/* Thermometer / Risk Bar */}
-                    {item.ticker !== "CASH" && (
-                      <div className="mt-4 mb-3">
-                        <div className="flex justify-between text-xs font-medium mb-1">
-                          <span className="text-red-400 flex items-center gap-1">
-                            <span>จุดคัท</span> ${formatUSD(item.cutLoss)} (-
-                            {(
-                              ((item.price - item.cutLoss) / item.price) *
-                              100
-                            ).toFixed(1)}
-                            %)
-                          </span>
-                          <span className="text-emerald-400 flex items-center gap-1">
-                            <span>เป้าหมาย</span> ${formatUSD(item.target)} (+
-                            {(
-                              ((item.target - item.price) / item.price) *
-                              100
-                            ).toFixed(1)}
-                            %)
-                          </span>
-                        </div>
-                        <div className="relative w-full h-2 rounded-full bg-slate-800 overflow-hidden flex">
-                          {/* We try to map current price visually between Cut and Target */}
-                          {(() => {
-                            const range = item.target - item.cutLoss;
-                            let currentPos =
-                              ((currentPrice - item.cutLoss) / range) * 100;
-                            let entryPos =
-                              ((item.price - item.cutLoss) / range) * 100;
-                            currentPos = Math.max(0, Math.min(100, currentPos));
-                            entryPos = Math.max(0, Math.min(100, entryPos));
-                            return (
-                              <>
-                                {/* Background Red to Green */}
-                                <div className="absolute top-0 bottom-0 left-0 w-1/3 bg-gradient-to-r from-red-600/20 to-transparent"></div>
-                                <div className="absolute top-0 bottom-0 right-0 w-1/3 bg-gradient-to-l from-emerald-600/20 to-transparent"></div>
-                                {/* Entry Marker */}
-                                <div
-                                  className="absolute top-0 bottom-0 w-[2px] bg-slate-500 z-10"
-                                  style={{ left: `${entryPos}%` }}
-                                ></div>
-                                {/* Current Price Dot */}
-                                <div
-                                  className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full z-20 shadow-[0_0_10px_rgba(0,255,100,0.8)]"
-                                  style={{
-                                    left: `calc(${currentPos}% - 6px)`,
-                                    backgroundColor: isProfit
-                                      ? "#34d399"
-                                      : "#f87171",
-                                  }}
-                                ></div>
-                              </>
-                            );
-                          })()}
-                        </div>
-                        <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                          <span>
-                            {toCutloss > 0
-                              ? `เหลืออีก ${toCutloss.toFixed(1)}% ถึงจุดคัท`
-                              : `🚨 ทะลุจุด Cut Loss!`}
-                          </span>
-                          <span>
-                            {toTarget > 0
-                              ? `ขาดอีก ${toTarget.toFixed(1)}% ถึงเป้า`
-                              : `🎯 ถึงเป้าทำกำไร!`}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Target Allocation & Rebalancing */}
-                    {viewFilter !== "all" && (
+                    {/* Target Allocation & Rebalancing - Show globally for group */}
+                    {viewFilter !== "all" && ticker !== "CASH" && (
                       <div className="mt-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
@@ -1085,7 +1066,11 @@ export default function PortfolioTracker() {
                           </span>
                           {targetAllocPct > 0 && (
                             <span
-                              className={`text-xs font-bold px-2 py-0.5 rounded-full ${Math.abs(currentAllocPct - targetAllocPct) <= 2 ? "bg-emerald-900/50 text-emerald-400" : "bg-amber-900/50 text-amber-400"}`}
+                              className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                Math.abs(currentAllocPct - targetAllocPct) <= 2
+                                  ? "bg-emerald-900/50 text-emerald-400"
+                                  : "bg-amber-900/50 text-amber-400"
+                              }`}
                             >
                               เป้าหมาย: {targetAllocPct.toFixed(1)}%
                             </span>
@@ -1095,7 +1080,12 @@ export default function PortfolioTracker() {
                         <div className="flex justify-between items-end">
                           <div>
                             <p
-                              className={`text-xl font-bold ${currentAllocPct > targetAllocPct + 2 && targetAllocPct > 0 ? "text-amber-400" : "text-white"}`}
+                              className={`text-xl font-bold ${
+                                currentAllocPct > targetAllocPct + 2 &&
+                                targetAllocPct > 0
+                                  ? "text-amber-400"
+                                  : "text-white"
+                              }`}
                             >
                               {currentAllocPct.toFixed(1)}%
                             </p>
@@ -1118,7 +1108,7 @@ export default function PortfolioTracker() {
                                 </p>
                               )}
                               <p className="text-[10px] text-slate-500 mt-0.5">
-                                เพื่อให้ได้ {getSymbol()}
+                                เพื่อให้เป๊ะ {getSymbol()}
                                 {formatCurrency(targetValueUSD)}
                               </p>
                             </div>
@@ -1126,7 +1116,7 @@ export default function PortfolioTracker() {
                             <div className="text-right text-xs text-slate-500 flex flex-col items-end">
                               <span>ไม่ได้ตั้งเป้าหมาย</span>
                               <span className="text-[9px]">
-                                (ใส่ % ในคอลัมน์ M ของ Sheet)
+                                (ใส่ % ใน Sheet กล่อง M)
                               </span>
                             </div>
                           )}
@@ -1134,7 +1124,12 @@ export default function PortfolioTracker() {
                         {/* Progress Bar for Allocation */}
                         <div className="mt-3 w-full h-1.5 bg-slate-800 rounded-full overflow-hidden flex relative">
                           <div
-                            className={`h-full ${currentAllocPct > targetAllocPct && targetAllocPct > 0 ? "bg-amber-500" : "bg-blue-500"}`}
+                            className={`h-full ${
+                              currentAllocPct > targetAllocPct &&
+                              targetAllocPct > 0
+                                ? "bg-amber-500"
+                                : "bg-blue-500"
+                            }`}
                             style={{
                               width: `${Math.min(currentAllocPct, 100)}%`,
                             }}
@@ -1147,133 +1142,276 @@ export default function PortfolioTracker() {
                           )}
                         </div>
 
-                        {/* --- Inline Allocation Simulator --- */}
-                        {item.ticker !== "CASH" && (
-                          <div className="mt-4 pt-3 border-t border-slate-700/50">
-                            <p className="text-xs text-slate-400 font-bold mb-2">
-                              จำลองแผนการซื้อเพิ่ม (What-If)
-                            </p>
-                            <div className="flex flex-wrap gap-2 items-center">
-                              <input
-                                type="number"
-                                placeholder="ราคาเข้า ($)"
-                                className="w-24 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center focus:ring-1 focus:ring-blue-500 outline-none"
-                                value={simPrice[itemKey] || ""}
-                                onChange={(e) =>
-                                  setSimPrice({
-                                    ...simPrice,
-                                    [itemKey]: e.target.value,
-                                  })
-                                }
-                              />
-                              <input
-                                type="number"
-                                placeholder="จำนวนเงิน ($)"
-                                className="w-28 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center focus:ring-1 focus:ring-blue-500 outline-none"
-                                value={simAmount[itemKey] || ""}
-                                onChange={(e) =>
-                                  setSimAmount({
-                                    ...simAmount,
-                                    [itemKey]: e.target.value,
-                                  })
-                                }
-                              />
-                              <div className="flex-1 text-right">
-                                {Number(simPrice[itemKey]) > 0 &&
-                                Number(simAmount[itemKey]) > 0 ? (
-                                  (() => {
-                                    const addedVal = Number(simAmount[itemKey]);
-                                    const simulatedTotalPort =
-                                      totalCurrentValueUSD + addedVal;
-                                    const simulatedItemVal = itemUSD + addedVal;
-                                    const simAlloc =
-                                      (simulatedItemVal / simulatedTotalPort) *
-                                      100;
+                        {/* Inline Simulator */}
+                        <div className="mt-4 pt-3 border-t border-slate-700/50">
+                          <p className="text-xs text-slate-400 font-bold mb-2 cursor-pointer select-none">
+                            จำลองเพิ่มจำนวน (What-If)
+                          </p>
+                          <div className="flex flex-wrap gap-2 items-center">
+                            <input
+                              type="number"
+                              placeholder="ราคาเข้า ($)"
+                              className="w-24 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center focus:ring-1 focus:ring-blue-500 outline-none"
+                              value={simPrice[groupKey] || ""}
+                              onChange={(e) =>
+                                setSimPrice({
+                                  ...simPrice,
+                                  [groupKey]: e.target.value,
+                                })
+                              }
+                            />
+                            <input
+                              type="number"
+                              placeholder="จำนวนเงิน ($)"
+                              className="w-28 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center focus:ring-1 focus:ring-blue-500 outline-none"
+                              value={simAmount[groupKey] || ""}
+                              onChange={(e) =>
+                                setSimAmount({
+                                  ...simAmount,
+                                  [groupKey]: e.target.value,
+                                })
+                              }
+                            />
+                            <div className="flex-1 text-right">
+                              {Number(simPrice[groupKey]) > 0 &&
+                              Number(simAmount[groupKey]) > 0 ? (
+                                (() => {
+                                  const addedVal = Number(simAmount[groupKey]);
+                                  const simulatedTotalPort =
+                                    totalCurrentValueUSD + addedVal;
+                                  const simulatedItemVal = itemUSD + addedVal;
+                                  const simAlloc =
+                                    (simulatedItemVal / simulatedTotalPort) *
+                                    100;
 
-                                    return (
-                                      <div className="text-[10px] leading-tight flex flex-col items-end">
-                                        <span className="text-slate-400">
-                                          สัดส่วนใหม่:
-                                        </span>
-                                        <span className="text-blue-400 font-bold text-sm">
-                                          {simAlloc.toFixed(1)}%
-                                        </span>
-                                      </div>
-                                    );
-                                  })()
-                                ) : (
-                                  <span className="text-[10px] text-slate-500 italic">
-                                    รอข้อมูลจำลอง...
-                                  </span>
-                                )}
-                              </div>
+                                  return (
+                                    <div className="text-[10px] leading-tight flex flex-col items-end">
+                                      <span className="text-slate-400">
+                                        สัดส่วนใหม่:
+                                      </span>
+                                      <span className="text-blue-400 font-bold text-sm">
+                                        {simAlloc.toFixed(1)}%
+                                      </span>
+                                    </div>
+                                  );
+                                })()
+                              ) : (
+                                <span className="text-[10px] text-slate-500 italic"></span>
+                              )}
                             </div>
                           </div>
-                        )}
+                        </div>
                       </div>
                     )}
 
-                    {/* Sell Actions */}
-                    <div className="mt-4 pt-4 border-t border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <span className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1 sm:mb-0">
-                        ปิดโพชิชัน (ขาย)
-                      </span>
-                      <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
-                        <button
-                          onClick={() => {
-                            setSellQty({
-                              ...sellQty,
-                              [itemKey]: holdingQty.toString(),
-                            });
-                            setSellPrice({
-                              ...sellPrice,
-                              [itemKey]: currentPrice.toString(),
-                            });
-                          }}
-                          className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 px-2 py-1 rounded border border-slate-700 transition-colors whitespace-nowrap"
-                        >
-                          ขายทั้งหมด
-                        </button>
-                        <input
-                          type="number"
-                          placeholder="จำนวน"
-                          className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-sm text-center focus:ring-1 focus:ring-amber-500 outline-none"
-                          value={sellQty[itemKey] || ""}
-                          onChange={(e) =>
-                            setSellQty({
-                              ...sellQty,
-                              [itemKey]: e.target.value,
-                            })
-                          }
-                        />
-                        <input
-                          type="number"
-                          placeholder="ราคา($)"
-                          className="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-sm text-center focus:ring-1 focus:ring-amber-500 outline-none"
-                          value={sellPrice[itemKey] || ""}
-                          onChange={(e) =>
-                            setSellPrice({
-                              ...sellPrice,
-                              [itemKey]: e.target.value,
-                            })
-                          }
-                        />
-                        <button
-                          onClick={() =>
-                            handleSellTrade(
-                              item.rowIndex,
-                              item.ticker,
-                              holdingQty,
-                              item.portfolioType || "main",
-                            )
-                          }
-                          disabled={sellLoading === itemKey}
-                          className="bg-amber-600/20 hover:bg-amber-600/40 text-amber-500 px-3 py-1 rounded-lg text-sm font-bold transition-colors disabled:opacity-50 flex items-center gap-1"
-                        >
-                          {sellLoading === itemKey ? "..." : "บันทึกขาย"}
-                        </button>
+                    {/* Expand/Collapse Toggle */}
+                    {ticker !== "CASH" && (
+                      <button
+                        onClick={() => toggleGroup(groupKey)}
+                        className={`w-full mt-4 flex items-center justify-center gap-1 text-xs font-bold py-2 rounded-lg border transition-colors ${
+                          isExpanded
+                            ? "bg-slate-800 border-slate-700 text-slate-300"
+                            : "bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-400 hover:bg-slate-800"
+                        }`}
+                      >
+                        {isExpanded ? (
+                          <>
+                            ซ่อนรายละเอียดไม้ขยับ (Lots) <ChevronUp size={14} />
+                          </>
+                        ) : (
+                          <>
+                            แสดงรายละเอียดทั้ง {items.length} ไม้{" "}
+                            <ChevronDown size={14} />
+                          </>
+                        )}
+                      </button>
+                    )}
+
+                    {/* Lot Details View */}
+                    {isExpanded && ticker !== "CASH" && (
+                      <div className="mt-4 space-y-4">
+                        {items.map((item: any, idx: number) => {
+                          const itemLotKey = `${item.portfolioType || "main"}_${item.rowIndex}`;
+                          const lotPnlUSD =
+                            (currentPrice - item.price) * item.holdingQty;
+                          const lotPnlPct =
+                            ((currentPrice - item.price) / item.price) * 100;
+                          const lotIsProfit = lotPnlUSD >= 0;
+
+                          const toTarget =
+                            ((item.target - currentPrice) / currentPrice) * 100;
+                          const toCutloss =
+                            ((currentPrice - item.cutLoss) / currentPrice) *
+                            100;
+
+                          return (
+                            <div
+                              key={itemLotKey}
+                              className="pt-4 border-t border-slate-700"
+                            >
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm font-bold text-slate-200">
+                                  ไม้ที่ {idx + 1}
+                                  <span className="text-[10px] text-slate-500 ml-2 font-normal">
+                                    ({item.date.split("T")[0]})
+                                  </span>
+                                </span>
+                                <span className="bg-slate-800 text-slate-300 text-xs px-2 py-0.5 rounded-md">
+                                  {item.holdingQty} หุ้น
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-xs text-slate-400 mb-3">
+                                <span>ทุน: ${formatUSD(item.price)}</span>
+                                <span
+                                  className={`font-bold ${lotIsProfit ? "text-emerald-400" : "text-red-400"}`}
+                                >
+                                  {lotIsProfit ? "+" : ""}
+                                  {lotPnlPct.toFixed(2)}% ({getSymbol()}
+                                  {formatCurrency(lotPnlUSD)})
+                                </span>
+                              </div>
+
+                              {/* Thermometer / Risk Bar for specific lot */}
+                              <div className="mb-3">
+                                <div className="flex justify-between text-[10px] font-medium mb-1">
+                                  <span className="text-red-400 flex items-center gap-1">
+                                    <span>Cut</span> ${formatUSD(item.cutLoss)}{" "}
+                                    (-
+                                    {(
+                                      ((item.price - item.cutLoss) /
+                                        item.price) *
+                                      100
+                                    ).toFixed(1)}
+                                    %)
+                                  </span>
+                                  <span className="text-emerald-400 flex items-center gap-1">
+                                    <span>Target</span> $
+                                    {formatUSD(item.target)} (+
+                                    {(
+                                      ((item.target - item.price) /
+                                        item.price) *
+                                      100
+                                    ).toFixed(1)}
+                                    %)
+                                  </span>
+                                </div>
+                                <div className="relative w-full h-1.5 rounded-full bg-slate-800 overflow-hidden flex">
+                                  {(() => {
+                                    const range = item.target - item.cutLoss;
+                                    let currentPos =
+                                      ((currentPrice - item.cutLoss) / range) *
+                                      100;
+                                    let entryPos =
+                                      ((item.price - item.cutLoss) / range) *
+                                      100;
+                                    currentPos = Math.max(
+                                      0,
+                                      Math.min(100, currentPos),
+                                    );
+                                    entryPos = Math.max(
+                                      0,
+                                      Math.min(100, entryPos),
+                                    );
+                                    return (
+                                      <>
+                                        <div className="absolute top-0 bottom-0 left-0 w-1/3 bg-gradient-to-r from-red-600/20 to-transparent"></div>
+                                        <div className="absolute top-0 bottom-0 right-0 w-1/3 bg-gradient-to-l from-emerald-600/20 to-transparent"></div>
+                                        <div
+                                          className="absolute top-0 bottom-0 w-[2px] bg-slate-500 z-10"
+                                          style={{ left: `${entryPos}%` }}
+                                        ></div>
+                                        <div
+                                          className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full z-20 shadow-[0_0_10px_rgba(0,255,100,0.8)]"
+                                          style={{
+                                            left: `calc(${currentPos}% - 4px)`,
+                                            backgroundColor: lotIsProfit
+                                              ? "#34d399"
+                                              : "#f87171",
+                                          }}
+                                        ></div>
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+                                <div className="flex justify-between text-[9px] text-slate-500 mt-1">
+                                  <span>
+                                    {toCutloss > 0
+                                      ? `เหลือ ${toCutloss.toFixed(1)}% ถึง Cut`
+                                      : `🚨 ทะลุ Cut!`}
+                                  </span>
+                                  <span>
+                                    {toTarget > 0
+                                      ? `ขาด ${toTarget.toFixed(1)}% ถึงเป้า`
+                                      : `🎯 ทะลุเป้า!`}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Sell Actions for this Lot */}
+                              <div className="flex bg-slate-900/50 p-2 rounded items-center justify-between gap-2 mt-2">
+                                <button
+                                  onClick={() => {
+                                    setSellQty({
+                                      ...sellQty,
+                                      [itemLotKey]: item.holdingQty.toString(),
+                                    });
+                                    setSellPrice({
+                                      ...sellPrice,
+                                      [itemLotKey]: currentPrice.toString(),
+                                    });
+                                  }}
+                                  className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition-colors whitespace-nowrap"
+                                >
+                                  ขายไม้นี้ทั้งหมด
+                                </button>
+                                <div className="flex gap-1 items-center">
+                                  <input
+                                    type="number"
+                                    placeholder="Qty"
+                                    className="w-14 bg-slate-800 border border-slate-700 rounded px-1 py-1 text-[10px] text-center focus:ring-1 focus:ring-amber-500 outline-none"
+                                    value={sellQty[itemLotKey] || ""}
+                                    onChange={(e) =>
+                                      setSellQty({
+                                        ...sellQty,
+                                        [itemLotKey]: e.target.value,
+                                      })
+                                    }
+                                  />
+                                  <input
+                                    type="number"
+                                    placeholder="Price"
+                                    className="w-16 bg-slate-800 border border-slate-700 rounded px-1 py-1 text-[10px] text-center focus:ring-1 focus:ring-amber-500 outline-none"
+                                    value={sellPrice[itemLotKey] || ""}
+                                    onChange={(e) =>
+                                      setSellPrice({
+                                        ...sellPrice,
+                                        [itemLotKey]: e.target.value,
+                                      })
+                                    }
+                                  />
+                                  <button
+                                    onClick={() =>
+                                      handleSellTrade(
+                                        item.rowIndex,
+                                        item.ticker,
+                                        item.holdingQty,
+                                        item.portfolioType || "main",
+                                      )
+                                    }
+                                    disabled={sellLoading === itemLotKey}
+                                    className="bg-amber-600/20 hover:bg-amber-600/40 text-amber-500 px-2 py-1 rounded text-[10px] font-bold transition-colors disabled:opacity-50"
+                                  >
+                                    {sellLoading === itemLotKey
+                                      ? "..."
+                                      : "บันทึก"}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    </div>
+                    )}
                   </div>
                 );
               })}
