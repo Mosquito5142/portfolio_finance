@@ -60,6 +60,7 @@ export const TIER_1_AI_SOFTWARE = [
 
 // 🚀 กลุ่ม Growth & Deep Tech
 export const TIER_1_GROWTH_TECH = [
+  "PYPL",
   "ASTS",
   "IONQ",
   "RKLB",
@@ -83,6 +84,9 @@ export const TIER_1_GROWTH_TECH = [
 
 // กลุ่ม Healthcare & Biotech
 export const TIER_1_HEALTH_BIO = [
+  "ISRG",
+  "INMD",
+  "UTHR",
   "LLY",
   "TMDX",
   "VKTX",
@@ -93,6 +97,7 @@ export const TIER_1_HEALTH_BIO = [
 
 // กลุ่มพลังงานแห่งอนาคต & ทรัพยากร
 export const TIER_1_ENERGY_RESOURCES = [
+  "FLNC",
   "EOSE",
   "IREN",
   "OKLO", // 4IR & Growth
@@ -190,8 +195,8 @@ export const STOCK_DETAILS: Record<string, string> = {
   FN: "Fabrinet - ผู้ผลิตอุปกรณ์เชื่อมต่อทางแสงความเร็วสูง (Optical Communication) รับจ้างผลิตให้ Nvidia",
 
   // ☁️ AI SOFTWARE, CLOUD & CYBERSECURITY
-  PLTR: "Palantir - ซอฟต์แวร์วิเคราะห์ข้อมูลขั้นสูง (ใช้ในกองทัพสหรัฐฯ & องค์กรต่างๆ)",
-  CRWD: "CrowdStrike - ผู้นำด้าน Cybersecurity ป้องกันการแฮกที่เครื่องลูกข่าย (Endpoint)",
+  PLTR: "Palantir - ซอฟต์แวร์วิเคราะห์ข้อมูลเชิงลึกใช้ในระดับองค์กรใหญ่และกองทัพสหรัฐฯ",
+  CRWD: "CrowdStrike - ผู้นำด้าน Cybersecurity ระดับองค์กร (ระบบ Subscription โตยาวๆ)",
   PANW: "Palo Alto Networks - ผู้นำด้าน Cybersecurity ครบวงจร ทั้ง Cloud & Network",
   NET: "Cloudflare - ผู้ให้บริการระบบความปลอดภัยเว็บไซต์ & CDN (ทำให้เว็บเร็วและปลอดภัย)",
   SNOW: "Snowflake - ระบบจัดการข้อมูลบน Cloud (Data Cloud & Warehousing)",
@@ -207,7 +212,8 @@ export const STOCK_DETAILS: Record<string, string> = {
   MELI: "MercadoLibre - แพลตฟอร์มอีคอมเมิร์ซและการชำระเงินที่ใหญ่ที่สุดในละตินอเมริกา",
 
   // GROWTH TECH
-  ASTS: "AST SpaceMobile - ยิงสัญญาณ 5G จากดาวเทียมเข้ามือถือโดยตรง (ไม่ต้องใช้จานรับ)",
+  PYPL: "PayPal - หุ้นสาย Value พื้นฐานเงินสดมหาศาล (ราชาแห่งความ Oversold)",
+  ASTS: "AST SpaceMobile - โครงการแพร่ภาพเน็ตจากดาวเทียมตรงเข้ามือถือ (จับมือ AT&T)",
   IONQ: "IonQ - ผู้พัฒนาควอนตัมคอมพิวเตอร์ (Quantum Computing) ชั้นนำ",
   RKLB: "Rocket Lab - บริษัทปล่อยจรวดและดาวเทียม (คู่แข่งคนสำคัญของ SpaceX)",
   SOFI: "SoFi - ธนาคารดิจิทัลครบวงจร (กู้ยืม, ลงทุน, ฝากเงิน) สำหรับคนรุ่นใหม่",
@@ -228,6 +234,9 @@ export const STOCK_DETAILS: Record<string, string> = {
   NOK: "Nokia - ผู้ผลิตอุปกรณ์เครือข่าย 5G และเทคโนโลยีโทรคมนาคม",
 
   // HEALTHCARE
+  ISRG: "Intuitive Surgical - ราชาแห่งหุ่นยนต์ผ่าตัด (Da Vinci) ผูกขาดโรงพยาบาลทั่วโลก",
+  INMD: "InMode - อุปกรณ์การแพทย์เสริมความงาม (Margin สูง และ ปลอดหนี้)",
+  UTHR: "United Therapeutics - ไบโอเทค PE ต่ำ พื้นฐานแน่น กำไรเติบโตสม่ำเสมอ",
   LLY: "Lilly - ผู้ผลิตยาลดความอ้วน (GLP-1) คู่แข่งรายใหม่ที่น่าจับตา",
   TMDX: "TransMedics - เครื่องเก็บรักษาอวัยวะเพื่อการปลูกถ่าย (หัวใจ/ปอด/ตับ) ให้เหมือนอยู่ในร่างกาย",
   VKTX: "Viking Therapeutics - พัฒนายาลดความอ้วน (GLP-1) คู่แข่งรายใหม่ที่น่าจับตา",
@@ -236,6 +245,7 @@ export const STOCK_DETAILS: Record<string, string> = {
   RXRX: "Recursion Pharmaceuticals - Techbio ใช้ AI ค้นพบยาใหม่ (Nvidia ลงทุน)",
 
   // ENERGY & RESOURCES
+  FLNC: "Fluence - ระบบกักเก็บพลังงานสเกลใหญ่ระดับ Grid แบ็กอัปโดย Siemens / AES",
   EOSE: "EOS Energy - แบตเตอรี่ Zinc-based สำหรับเก็บพลังงานระดับ Grid (ปลอดภัยกว่า Lithium)",
   IREN: "Iris Energy - เหมือง Bitcoin และศูนย์ข้อมูล AI ที่ใช้พลังงานหมุนเวียน 100%",
   OKLO: "Oklo - โรงไฟฟ้านิวเคลียร์ขนาดเล็ก (Micro Reactor) ดีไซน์ล้ำ (Sam Altman ลงทุน)",
