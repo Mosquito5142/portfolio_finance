@@ -8,7 +8,6 @@ const FMP_KEY = process.env.FMP_API_KEY?.trim() || "";
 const FINNHUB_KEY = process.env.FINNHUB_API_KEY?.trim() || "";
 
 // ─── Calculate RSI locally (same logic as patterns/route.ts) ──────────
-// No external API needed! Just closing prices.
 function calculateRSI(prices: number[], period: number = 14): number {
   if (prices.length < period + 1) return 50;
 
@@ -29,8 +28,7 @@ function calculateRSI(prices: number[], period: number = 14): number {
   return 100 - 100 / (1 + rs);
 }
 
-// ─── Fetch closing prices from Yahoo Finance chart API ────────────────
-// Same endpoint used by patterns/route.ts — FREE, no API key needed!
+// ─── Yahoo Finance chart (FREE, no API key) ───────────────────────────
 async function getYahooClosingPrices(symbol: string): Promise<number[] | null> {
   try {
     const res = await fetch(
@@ -44,14 +42,13 @@ async function getYahooClosingPrices(symbol: string): Promise<number[] | null> {
     const data = await res.json();
     const closes =
       data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || [];
-    // Filter out null/undefined values
     return closes.filter((c: number | null) => c !== null && c !== undefined);
   } catch {
     return null;
   }
 }
 
-// ─── FMP Stable API: Company Profile (Price, MarketCap, Beta) ─────────
+// ─── FMP: Company Profile ─────────────────────────────────────────────
 async function getFMPProfile(symbol: string) {
   if (!FMP_KEY) return null;
   try {
@@ -62,13 +59,12 @@ async function getFMPProfile(symbol: string) {
     if (!res.ok) return null;
     const data = await res.json();
     return Array.isArray(data) && data.length > 0 ? data[0] : null;
-  } catch (e) {
-    console.error("FMP Profile Error:", e);
+  } catch {
     return null;
   }
 }
 
-// ─── FMP Stable API: Discounted Cash Flow ─────────────────────────────
+// ─── FMP: Discounted Cash Flow ────────────────────────────────────────
 async function getFMPDcf(symbol: string) {
   if (!FMP_KEY) return null;
   try {
@@ -79,13 +75,12 @@ async function getFMPDcf(symbol: string) {
     if (!res.ok) return null;
     const data = await res.json();
     return Array.isArray(data) && data.length > 0 ? data[0] : null;
-  } catch (e) {
-    console.error("FMP DCF Error:", e);
+  } catch {
     return null;
   }
 }
 
-// ─── FMP Stable API: Financial Ratios TTM ─────────────────────────────
+// ─── FMP: Financial Ratios TTM ────────────────────────────────────────
 async function getFMPRatios(symbol: string) {
   if (!FMP_KEY) return null;
   try {
@@ -96,13 +91,12 @@ async function getFMPRatios(symbol: string) {
     if (!res.ok) return null;
     const data = await res.json();
     return Array.isArray(data) && data.length > 0 ? data[0] : null;
-  } catch (e) {
-    console.error("FMP Ratios Error:", e);
+  } catch {
     return null;
   }
 }
 
-// ─── Finnhub Insider Sentiment ────────────────────────────────────────
+// ─── Finnhub: Insider Sentiment ───────────────────────────────────────
 async function getInsiderSentiment(symbol: string) {
   if (!FINNHUB_KEY) return null;
   try {
@@ -131,13 +125,69 @@ async function getInsiderSentiment(symbol: string) {
   }
 }
 
+// ─── Finnhub: Analyst Recommendation (FREE!) ──────────────────────────
+// Returns: { buy, hold, sell, strongBuy, strongSell, period }
+// This is used as FALLBACK when FMP DCF is unavailable.
+async function getAnalystRecommendation(symbol: string) {
+  if (!FINNHUB_KEY) return null;
+  try {
+    const res = await fetch(
+      `https://finnhub.io/api/v1/stock/recommendation?symbol=${symbol}&token=${FINNHUB_KEY}`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    // Use latest month's data
+    if (Array.isArray(data) && data.length > 0) {
+      const latest = data[0];
+      const total =
+        (latest.strongBuy || 0) +
+        (latest.buy || 0) +
+        (latest.hold || 0) +
+        (latest.sell || 0) +
+        (latest.strongSell || 0);
+      if (total === 0) return null;
+
+      // Calculate consensus percentage (0-100, higher = more bullish)
+      // strongBuy=100, buy=75, hold=50, sell=25, strongSell=0
+      const weightedScore =
+        ((latest.strongBuy || 0) * 100 +
+          (latest.buy || 0) * 75 +
+          (latest.hold || 0) * 50 +
+          (latest.sell || 0) * 25 +
+          (latest.strongSell || 0) * 0) /
+        total;
+
+      return {
+        strongBuy: latest.strongBuy || 0,
+        buy: latest.buy || 0,
+        hold: latest.hold || 0,
+        sell: latest.sell || 0,
+        strongSell: latest.strongSell || 0,
+        totalAnalysts: total,
+        consensusScore: Number(weightedScore.toFixed(1)),
+        // Derive a consensus label
+        consensus:
+          weightedScore >= 75
+            ? "Strong Buy"
+            : weightedScore >= 62.5
+              ? "Buy"
+              : weightedScore >= 45
+                ? "Hold"
+                : weightedScore >= 25
+                  ? "Sell"
+                  : "Strong Sell",
+        period: latest.period,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════
-// Main handler – supports Fail-Fast mode
-// Query params:
-//   symbol  = stock ticker (required)
-//   strict  = "true" | "false" (default "false")
-//             When strict=true, RSI is checked FIRST.
-//             If RSI >= 35 (not oversold), skip FMP/Finnhub entirely.
+// Main handler – Fail-Fast + Fallback Logic
 // ═══════════════════════════════════════════════════════════════════════
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -152,12 +202,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    // ── Phase 1: Technical Pre-Screen ─────────────────────────────────
-    // Fetch Yahoo chart data → calculate RSI locally (FREE, no API key!)
+    // ── Phase 1: Technical Pre-Screen (RSI from Yahoo — FREE) ─────────
     const closes = await getYahooClosingPrices(symbol);
     const rsi = closes && closes.length > 15 ? calculateRSI(closes) : null;
 
-    // ── Fail-Fast: If strict mode AND not oversold, STOP immediately ─
+    // ── Fail-Fast ─────────────────────────────────────────────────────
     if (strict && (rsi === null || rsi >= 35)) {
       return NextResponse.json({
         symbol: symbol.toUpperCase(),
@@ -171,11 +220,11 @@ export async function GET(request: Request) {
         fundamental: null,
         catalyst: null,
         sniperScore: 0,
-        apiCallsSaved: 4, // profile + dcf + ratios + insider
+        apiCallsSaved: 4,
       });
     }
 
-    // ── Phase 2+3: Only reached if RSI < 35 (or strict=false) ─────────
+    // ── Phase 2+3: Full data fetch (FMP + Finnhub) ────────────────────
     const [profile, dcf, ratios, insider] = await Promise.all([
       getFMPProfile(symbol),
       getFMPDcf(symbol),
@@ -185,13 +234,40 @@ export async function GET(request: Request) {
 
     const currentPrice = profile?.price ?? dcf?.["Stock Price"] ?? null;
     const dcfValue = dcf?.dcf ?? null;
-    const upsidePotential =
-      dcfValue !== null && currentPrice !== null && currentPrice > 0
-        ? ((dcfValue - currentPrice) / currentPrice) * 100
-        : null;
+
+    // ── FALLBACK LOGIC ────────────────────────────────────────────────
+    // If DCF is null → fetch Analyst Recommendation from Finnhub (FREE!)
+    // This gives us consensus buy/sell/hold data to replace DCF upside.
+    let analystData = null;
+    let valuationSource: "DCF" | "Analyst" | null = null;
+    let upsidePotential: number | null = null;
+
+    if (dcfValue !== null && currentPrice !== null && currentPrice > 0) {
+      // ✅ DCF is available — use it directly
+      upsidePotential = ((dcfValue - currentPrice) / currentPrice) * 100;
+      valuationSource = "DCF";
+    } else {
+      // 🔄 FALLBACK: DCF unavailable → fetch analyst recommendation
+      analystData = await getAnalystRecommendation(symbol);
+      if (analystData) {
+        valuationSource = "Analyst";
+        // Map consensus score (0-100) to a pseudo-upside:
+        // consensusScore 75+ (Strong Buy) → upside ~+30%
+        // consensusScore 62.5+ (Buy) → upside ~+15%
+        // consensusScore 50 (Hold) → upside 0%
+        // consensusScore <45 (Sell) → upside negative
+        upsidePotential = (analystData.consensusScore - 50) * 1.2;
+      }
+    }
 
     const peRatio = ratios?.priceToEarningsRatioTTM ?? null;
     const debtToEquity = ratios?.debtToEquityRatioTTM ?? null;
+
+    // Build analyst rating label
+    let analystRating: string | null = null;
+    if (analystData) {
+      analystRating = `${analystData.consensus} (${analystData.totalAnalysts} analysts)`;
+    }
 
     const deepValueData = {
       symbol: symbol.toUpperCase(),
@@ -208,12 +284,26 @@ export async function GET(request: Request) {
         debtToEquity:
           debtToEquity !== null ? Number(debtToEquity.toFixed(4)) : null,
         peRatio: peRatio !== null ? Number(peRatio.toFixed(2)) : null,
-        analystRating: null as string | null,
+        analystRating,
         marketCap: profile?.marketCap ?? null,
         beta: profile?.beta ?? null,
         companyName: profile?.companyName ?? null,
         sector: profile?.sector ?? null,
         industry: profile?.industry ?? null,
+        // NEW: Fallback metadata
+        valuationSource,
+        analystConsensus: analystData
+          ? {
+              strongBuy: analystData.strongBuy,
+              buy: analystData.buy,
+              hold: analystData.hold,
+              sell: analystData.sell,
+              strongSell: analystData.strongSell,
+              totalAnalysts: analystData.totalAnalysts,
+              consensusScore: analystData.consensusScore,
+              consensus: analystData.consensus,
+            }
+          : null,
       },
       catalyst: {
         insiderSentiment: insider,
@@ -229,7 +319,7 @@ export async function GET(request: Request) {
     if (deepValueData.technical.isOversold) score += 30;
     else if (rsi !== null && rsi < 45) score += 10;
 
-    // Fundamental – DCF upside (max 40 pts)
+    // Fundamental – DCF upside OR Analyst consensus (max 40 pts)
     if (upsidePotential !== null && upsidePotential > 20) score += 40;
     else if (upsidePotential !== null && upsidePotential > 0) score += 20;
 

@@ -38,6 +38,17 @@ interface DeepValueData {
     companyName: string | null;
     sector: string | null;
     industry: string | null;
+    valuationSource: "DCF" | "Analyst" | null;
+    analystConsensus: {
+      strongBuy: number;
+      buy: number;
+      hold: number;
+      sell: number;
+      strongSell: number;
+      totalAnalysts: number;
+      consensusScore: number;
+      consensus: string;
+    } | null;
   };
   catalyst: {
     insiderSentiment: {
@@ -679,10 +690,15 @@ export default function DeepValueRadarPage() {
                     {/* Fundamental */}
                     <div
                       className={`p-3 rounded-xl border ${data.fundamental.upsidePotential && data.fundamental.upsidePotential > 20 ? "bg-emerald-900/20 border-emerald-500/30" : "bg-slate-800/50 border-slate-700"} flex flex-col items-center justify-center text-center`}
+                      title={
+                        data.fundamental.valuationSource === "Analyst"
+                          ? "Fallback to Analyst Consensus because DCF is unavailable"
+                          : "Discounted Cash Flow Model"
+                      }
                     >
                       <span className="text-xl mb-1">🧠</span>
                       <span className="text-[10px] text-slate-400 block mb-1">
-                        DCF Upside
+                        Upside ({data.fundamental.valuationSource || "N/A"})
                       </span>
                       <span
                         className={`font-bold ${data.fundamental.upsidePotential && data.fundamental.upsidePotential > 20 ? "text-emerald-400" : "text-white"}`}
@@ -714,37 +730,88 @@ export default function DeepValueRadarPage() {
                   </div>
 
                   {/* Details block */}
-                  <div className="mt-4 pt-4 border-t border-slate-800/50 grid grid-cols-2 gap-y-2 text-xs">
+                  <div className="mt-4 pt-4 border-t border-slate-800/50 grid grid-cols-2 gap-y-2 text-xs items-center">
                     <div className="text-slate-500">Current Price:</div>
                     <div className="text-right text-slate-300 font-medium">
                       {formatNumber(data.fundamental.currentPrice, "$")}
                     </div>
 
-                    <div className="text-slate-500">Intrinsic (DCF):</div>
-                    <div
-                      className={`text-right font-medium ${data.fundamental.dcfValue && data.fundamental.currentPrice && data.fundamental.dcfValue > data.fundamental.currentPrice ? "text-emerald-400" : "text-red-400"}`}
-                    >
-                      {formatNumber(data.fundamental.dcfValue, "$")}
+                    {/* Intrinsic Value / Fallback logic */}
+                    <div className="text-slate-500 flex items-center gap-1">
+                      Intrinsic{" "}
+                      <span className="text-[9px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">
+                        {data.fundamental.valuationSource || "DCF"}
+                      </span>
+                      :
+                    </div>
+                    <div className="text-right">
+                      {data.fundamental.valuationSource === "Analyst" &&
+                      data.fundamental.analystConsensus ? (
+                        <div className="flex flex-col items-end">
+                          <span
+                            className={`font-medium ${data.fundamental.analystConsensus.consensusScore >= 60 ? "text-emerald-400" : "text-amber-400"}`}
+                          >
+                            {data.fundamental.analystConsensus.consensus}
+                          </span>
+                          <span className="text-[9px] text-slate-500">
+                            Score:{" "}
+                            {data.fundamental.analystConsensus.consensusScore}
+                            /100 (
+                            {data.fundamental.analystConsensus.totalAnalysts}{" "}
+                            Analysts)
+                          </span>
+                        </div>
+                      ) : (
+                        <span
+                          className={`font-medium ${data.fundamental.dcfValue && data.fundamental.currentPrice && data.fundamental.dcfValue > data.fundamental.currentPrice ? "text-emerald-400" : "text-red-400"}`}
+                        >
+                          {data.fundamental.dcfValue ? (
+                            formatNumber(data.fundamental.dcfValue, "$")
+                          ) : (
+                            <span className="text-slate-600">
+                              N/A (No model)
+                            </span>
+                          )}
+                        </span>
+                      )}
                     </div>
 
                     <div className="text-slate-500">P/E Ratio:</div>
                     <div className="text-right text-slate-300">
-                      {formatNumber(data.fundamental.peRatio)}
+                      {data.fundamental.peRatio ? (
+                        formatNumber(data.fundamental.peRatio)
+                      ) : (
+                        <span className="text-slate-600 text-[10px]">
+                          N/A (No earnings)
+                        </span>
+                      )}
                     </div>
 
                     <div className="text-slate-500">Debt/Equity:</div>
                     <div className="text-right text-slate-300">
-                      {formatNumber(data.fundamental.debtToEquity)}
+                      {data.fundamental.debtToEquity !== null ? (
+                        formatNumber(data.fundamental.debtToEquity)
+                      ) : (
+                        <span className="text-slate-600 text-[10px]">N/A</span>
+                      )}
                     </div>
 
                     <div className="text-slate-500">Market Cap:</div>
                     <div className="text-right text-slate-300">
-                      {formatMarketCap(data.fundamental.marketCap)}
+                      {data.fundamental.marketCap ? (
+                        formatMarketCap(data.fundamental.marketCap)
+                      ) : (
+                        <span className="text-slate-600 text-[10px]">
+                          N/A (Small Cap)
+                        </span>
+                      )}
                     </div>
 
                     <div className="text-slate-500">Beta:</div>
                     <div className="text-right text-slate-300">
-                      {formatNumber(data.fundamental.beta)}
+                      {data.fundamental.beta !== null
+                        ? formatNumber(data.fundamental.beta)
+                        : "-"}
                     </div>
                   </div>
                 </div>
