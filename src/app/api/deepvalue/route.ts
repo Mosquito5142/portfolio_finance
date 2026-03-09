@@ -305,6 +305,21 @@ export async function GET(request: Request) {
             }
           : null,
       },
+      extendedData: {
+        description: profile?.description ?? null,
+        website: profile?.website ?? null,
+        ceo: profile?.ceo ?? null,
+        fullTimeEmployees: profile?.fullTimeEmployees ?? null,
+        lastDiv: profile?.lastDiv ?? null,
+        exchange: profile?.exchangeShortName ?? null,
+        // Ratios
+        returnOnEquity: ratios?.returnOnEquityTTM ?? null,
+        returnOnAssets: ratios?.returnOnAssetsTTM ?? null,
+        priceToBook: ratios?.priceToBookRatioTTM ?? null,
+        netProfitMargin: ratios?.netProfitMarginTTM ?? null,
+        operatingMargin: ratios?.operatingProfitMarginTTM ?? null,
+        currentRatio: ratios?.currentRatioTTM ?? null,
+      },
       catalyst: {
         insiderSentiment: insider,
         hasStrongInsiderBuy: insider ? insider.overallChange > 0 : null,

@@ -58,6 +58,20 @@ interface DeepValueData {
     } | null;
     hasStrongInsiderBuy: boolean | null;
   };
+  extendedData?: {
+    description: string | null;
+    website: string | null;
+    ceo: string | null;
+    fullTimeEmployees: number | null;
+    lastDiv: number | null;
+    exchange: string | null;
+    returnOnEquity: number | null;
+    returnOnAssets: number | null;
+    priceToBook: number | null;
+    netProfitMargin: number | null;
+    operatingMargin: number | null;
+    currentRatio: number | null;
+  };
   sniperScore: number;
 }
 
@@ -75,6 +89,7 @@ export default function DeepValueRadarPage() {
   const [mounted, setMounted] = useState(false);
   const [apiSaved, setApiSaved] = useState(0);
   const [showPicker, setShowPicker] = useState(false);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
 
   // Pipeline filter strictly enabled by default to save API calls
   const [strictMode, setStrictMode] = useState(true);
@@ -626,6 +641,17 @@ export default function DeepValueRadarPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             {displayScans.map((scan) => {
               const data = scan.data!;
+              const isExpanded = expandedCards.has(data.symbol);
+
+              const toggleExpand = () => {
+                setExpandedCards((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(data.symbol)) next.delete(data.symbol);
+                  else next.add(data.symbol);
+                  return next;
+                });
+              };
+
               return (
                 <div
                   key={data.symbol}
@@ -757,7 +783,9 @@ export default function DeepValueRadarPage() {
                             Score:{" "}
                             {data.fundamental.analystConsensus.consensusScore}
                             /100 (
-                            {data.fundamental.analystConsensus.totalAnalysts}{" "}
+                            {
+                              data.fundamental.analystConsensus.totalAnalysts
+                            }{" "}
                             Analysts)
                           </span>
                         </div>
@@ -814,6 +842,185 @@ export default function DeepValueRadarPage() {
                         : "-"}
                     </div>
                   </div>
+
+                  {/* View More Button */}
+                  <button
+                    onClick={toggleExpand}
+                    className="mt-4 pt-3 w-full border-t border-slate-800/50 text-indigo-400 hover:text-indigo-300 text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1 transition-colors"
+                  >
+                    {isExpanded ? "Hide Details 🔼" : "View More Data 🔽"}
+                  </button>
+
+                  {/* Expanded Data Panel */}
+                  {isExpanded && data.extendedData && (
+                    <div className="mt-4 pt-4 border-t border-slate-800/50 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                      {/* Company Info */}
+                      <div>
+                        <h4 className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 font-bold">
+                          Company Profile
+                        </h4>
+                        <div className="grid grid-cols-2 gap-y-2 text-xs">
+                          <div className="text-slate-500">Exchange:</div>
+                          <div className="text-right text-slate-300">
+                            {data.extendedData.exchange || "-"}
+                          </div>
+
+                          <div className="text-slate-500">CEO:</div>
+                          <div
+                            className="text-right text-slate-300 line-clamp-1"
+                            title={data.extendedData.ceo || ""}
+                          >
+                            {data.extendedData.ceo || "-"}
+                          </div>
+
+                          <div className="text-slate-500">Employees:</div>
+                          <div className="text-right text-slate-300">
+                            {data.extendedData.fullTimeEmployees?.toLocaleString() ||
+                              "-"}
+                          </div>
+
+                          <div className="text-slate-500">Website:</div>
+                          <div className="text-right text-indigo-400 line-clamp-1">
+                            {data.extendedData.website ? (
+                              <a
+                                href={data.extendedData.website}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:underline"
+                              >
+                                {data.extendedData.website.replace(
+                                  /^https?:\/\/(www\.)?/,
+                                  "",
+                                )}
+                              </a>
+                            ) : (
+                              "-"
+                            )}
+                          </div>
+                        </div>
+                        {data.extendedData.description && (
+                          <p className="mt-3 text-[10px] text-slate-400 leading-relaxed border-l-2 border-indigo-500/30 pl-3">
+                            {data.extendedData.description}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Financial Ratios */}
+                      <div>
+                        <h4 className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 font-bold">
+                          Key Metrics (TTM)
+                        </h4>
+                        <div className="grid grid-cols-2 gap-y-2 text-xs bg-slate-800/20 p-3 rounded-lg border border-slate-700/30">
+                          <div
+                            className="text-slate-500"
+                            title="Return on Equity"
+                          >
+                            ROE:
+                          </div>
+                          <div
+                            className={`text-right font-medium ${data.extendedData.returnOnEquity && data.extendedData.returnOnEquity > 0.15 ? "text-emerald-400" : "text-slate-300"}`}
+                          >
+                            {data.extendedData.returnOnEquity
+                              ? formatNumber(
+                                  data.extendedData.returnOnEquity * 100,
+                                  "",
+                                  "%",
+                                )
+                              : "-"}
+                          </div>
+
+                          <div
+                            className="text-slate-500"
+                            title="Return on Assets"
+                          >
+                            ROA:
+                          </div>
+                          <div
+                            className={`text-right font-medium ${data.extendedData.returnOnAssets && data.extendedData.returnOnAssets > 0.05 ? "text-emerald-400" : "text-slate-300"}`}
+                          >
+                            {data.extendedData.returnOnAssets
+                              ? formatNumber(
+                                  data.extendedData.returnOnAssets * 100,
+                                  "",
+                                  "%",
+                                )
+                              : "-"}
+                          </div>
+
+                          <div
+                            className="text-slate-500"
+                            title="Price to Book Ratio"
+                          >
+                            P/B Ratio:
+                          </div>
+                          <div
+                            className={`text-right font-medium ${(data.extendedData.priceToBook ?? Infinity) < 3 ? "text-emerald-400" : "text-slate-300"}`}
+                          >
+                            {data.extendedData.priceToBook
+                              ? formatNumber(data.extendedData.priceToBook)
+                              : "-"}
+                          </div>
+
+                          <div
+                            className="text-slate-500"
+                            title="Net Profit Margin"
+                          >
+                            Net Margin:
+                          </div>
+                          <div
+                            className={`text-right font-medium ${data.extendedData.netProfitMargin && data.extendedData.netProfitMargin > 0.1 ? "text-emerald-400" : "text-slate-300"}`}
+                          >
+                            {data.extendedData.netProfitMargin
+                              ? formatNumber(
+                                  data.extendedData.netProfitMargin * 100,
+                                  "",
+                                  "%",
+                                )
+                              : "-"}
+                          </div>
+
+                          <div
+                            className="text-slate-500"
+                            title="Operating Margin"
+                          >
+                            Operating Margin:
+                          </div>
+                          <div
+                            className={`text-right font-medium ${data.extendedData.operatingMargin && data.extendedData.operatingMargin > 0.15 ? "text-emerald-400" : "text-slate-300"}`}
+                          >
+                            {data.extendedData.operatingMargin
+                              ? formatNumber(
+                                  data.extendedData.operatingMargin * 100,
+                                  "",
+                                  "%",
+                                )
+                              : "-"}
+                          </div>
+
+                          <div
+                            className="text-slate-500"
+                            title="Current Ratio (Liquidity)"
+                          >
+                            Current Ratio:
+                          </div>
+                          <div
+                            className={`text-right font-medium ${(data.extendedData.currentRatio ?? 0) > 1.5 ? "text-emerald-400" : "text-slate-300"}`}
+                          >
+                            {data.extendedData.currentRatio
+                              ? formatNumber(data.extendedData.currentRatio)
+                              : "-"}
+                          </div>
+
+                          <div className="text-slate-500">Dividend:</div>
+                          <div className="text-right text-slate-300">
+                            {data.extendedData.lastDiv
+                              ? formatNumber(data.extendedData.lastDiv, "$")
+                              : "-"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
