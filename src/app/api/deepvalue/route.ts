@@ -29,7 +29,7 @@ function calculateRSI(prices: number[], period: number = 14): number {
 }
 
 // ─── Yahoo Finance chart (FREE, no API key) ───────────────────────────
-async function getYahooClosingPrices(symbol: string): Promise<number[] | null> {
+async function getYahooHistoricalData(symbol: string) {
   try {
     const res = await fetch(
       `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=3mo`,
@@ -40,9 +40,24 @@ async function getYahooClosingPrices(symbol: string): Promise<number[] | null> {
     );
     if (!res.ok) return null;
     const data = await res.json();
-    const closes =
-      data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || [];
-    return closes.filter((c: number | null) => c !== null && c !== undefined);
+    const quote = data?.chart?.result?.[0]?.indicators?.quote?.[0];
+    if (!quote || !quote.close || !quote.high || !quote.low) return null;
+
+    const formatted = [];
+    for (let i = 0; i < quote.close.length; i++) {
+      if (
+        quote.close[i] !== null &&
+        quote.high[i] !== null &&
+        quote.low[i] !== null
+      ) {
+        formatted.push({
+          close: quote.close[i],
+          high: quote.high[i],
+          low: quote.low[i],
+        });
+      }
+    }
+    return formatted.length > 0 ? formatted : null;
   } catch {
     return null;
   }
@@ -203,8 +218,29 @@ export async function GET(request: Request) {
 
   try {
     // ── Phase 1: Technical Pre-Screen (RSI from Yahoo — FREE) ─────────
-    const closes = await getYahooClosingPrices(symbol);
+    const history = await getYahooHistoricalData(symbol);
+    const closes = history ? history.map((h) => h.close) : null;
     const rsi = closes && closes.length > 15 ? calculateRSI(closes) : null;
+
+    // ── Calculate Support Levels ──────────────────────────────────────
+    let supportLevels = null;
+    if (history && history.length > 0) {
+      const lows = history.map((h) => h.low);
+      const localMinima = Math.min(...lows);
+
+      // Pivot Points from Latest Completed Day
+      const latest = history[history.length - 1];
+      const P = (latest.high + latest.low + latest.close) / 3;
+      const S1 = P * 2 - latest.high;
+      const S2 = P - (latest.high - latest.low);
+
+      supportLevels = {
+        pivot: Number(P.toFixed(2)),
+        s1: Number(S1.toFixed(2)),
+        s2: Number(S2.toFixed(2)),
+        localMinima: Number(localMinima.toFixed(2)),
+      };
+    }
 
     // ── Fail-Fast ─────────────────────────────────────────────────────
     if (strict && (rsi === null || rsi >= 35)) {
@@ -216,6 +252,7 @@ export async function GET(request: Request) {
         technical: {
           rsi: rsi !== null ? Number(rsi.toFixed(2)) : null,
           isOversold: false,
+          supportLevels,
         },
         fundamental: null,
         catalyst: null,
@@ -275,6 +312,7 @@ export async function GET(request: Request) {
       technical: {
         rsi: rsi !== null ? Number(rsi.toFixed(2)) : null,
         isOversold: rsi !== null && rsi < 35,
+        supportLevels,
       },
       fundamental: {
         currentPrice,
@@ -316,6 +354,8 @@ export async function GET(request: Request) {
         returnOnEquity: ratios?.returnOnEquityTTM ?? null,
         returnOnAssets: ratios?.returnOnAssetsTTM ?? null,
         priceToBook: ratios?.priceToBookRatioTTM ?? null,
+        priceToSales: ratios?.priceToSalesRatioTTM ?? null,
+        grossMargin: ratios?.grossProfitMarginTTM ?? null,
         netProfitMargin: ratios?.netProfitMarginTTM ?? null,
         operatingMargin: ratios?.operatingProfitMarginTTM ?? null,
         currentRatio: ratios?.currentRatioTTM ?? null,

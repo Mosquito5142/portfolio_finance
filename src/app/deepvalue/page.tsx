@@ -25,6 +25,12 @@ interface DeepValueData {
   technical: {
     rsi: number | null;
     isOversold: boolean;
+    supportLevels?: {
+      pivot: number | null;
+      s1: number | null;
+      s2: number | null;
+      localMinima: number | null;
+    } | null;
   };
   fundamental: {
     currentPrice: number | null;
@@ -68,6 +74,8 @@ interface DeepValueData {
     returnOnEquity: number | null;
     returnOnAssets: number | null;
     priceToBook: number | null;
+    priceToSales: number | null;
+    grossMargin: number | null;
     netProfitMargin: number | null;
     operatingMargin: number | null;
     currentRatio: number | null;
@@ -762,6 +770,37 @@ export default function DeepValueRadarPage() {
                       {formatNumber(data.fundamental.currentPrice, "$")}
                     </div>
 
+                    {/* Support Levels */}
+                    {(data.technical.supportLevels?.s1 ||
+                      data.technical.supportLevels?.localMinima) && (
+                      <>
+                        <div className="text-slate-500 flex items-center gap-1">
+                          Support{" "}
+                          <span className="text-[9px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">
+                            Tech
+                          </span>
+                          :
+                        </div>
+                        <div className="text-right text-slate-300 font-medium flex flex-col items-end">
+                          <span
+                            className={`${data.fundamental.currentPrice && data.technical.supportLevels.s1 && data.fundamental.currentPrice <= data.technical.supportLevels.s1 * 1.05 ? "text-blue-400" : ""}`}
+                          >
+                            S1:{" "}
+                            {formatNumber(data.technical.supportLevels.s1, "$")}{" "}
+                            / S2:{" "}
+                            {formatNumber(data.technical.supportLevels.s2, "$")}
+                          </span>
+                          <span className="text-[9px] text-slate-500">
+                            3-Mo Low:{" "}
+                            {formatNumber(
+                              data.technical.supportLevels.localMinima,
+                              "$",
+                            )}
+                          </span>
+                        </div>
+                      </>
+                    )}
+
                     {/* Intrinsic Value / Fallback logic */}
                     <div className="text-slate-500 flex items-center gap-1">
                       Intrinsic{" "}
@@ -958,6 +997,35 @@ export default function DeepValueRadarPage() {
                           >
                             {data.extendedData.priceToBook
                               ? formatNumber(data.extendedData.priceToBook)
+                              : "-"}
+                          </div>
+
+                          <div
+                            className="text-slate-500"
+                            title="Price to Sales Ratio"
+                          >
+                            P/S Ratio:
+                          </div>
+                          <div
+                            className={`text-right font-medium ${(data.extendedData.priceToSales ?? Infinity) < 2 ? "text-emerald-400" : "text-slate-300"}`}
+                          >
+                            {data.extendedData.priceToSales
+                              ? formatNumber(data.extendedData.priceToSales)
+                              : "-"}
+                          </div>
+
+                          <div className="text-slate-500" title="Gross Margin">
+                            Gross Margin:
+                          </div>
+                          <div
+                            className={`text-right font-medium ${data.extendedData.grossMargin && data.extendedData.grossMargin > 0.4 ? "text-emerald-400" : "text-slate-300"}`}
+                          >
+                            {data.extendedData.grossMargin
+                              ? formatNumber(
+                                  data.extendedData.grossMargin * 100,
+                                  "",
+                                  "%",
+                                )
                               : "-"}
                           </div>
 
