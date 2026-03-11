@@ -537,8 +537,8 @@ export default function PortfolioTracker() {
         if (targetAlloc && targetAlloc > 0) {
           let displayedTargetAlloc = targetAlloc;
           if (viewFilter === "all") {
-            // If viewing all, calculate relative to global target weights (Main = 70%, Growth = 30%)
-            const portfolioWeight = portfolioType === "growth" ? 0.3 : 0.7; // default to main 0.7 if undefined
+            // If viewing all, calculate relative to global target weights (Main = 90%, Growth = 10%)
+            const portfolioWeight = portfolioType === "growth" ? 0.1 : 0.9; // default to main 0.9 if undefined
             displayedTargetAlloc = targetAlloc * portfolioWeight;
           }
           allocText += ` (เป้า: ${displayedTargetAlloc.toFixed(1)}%)`;
