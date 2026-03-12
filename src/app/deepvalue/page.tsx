@@ -918,30 +918,7 @@ export default function DeepValueRadarPage() {
                               "-"}
                           </div>
 
-                          <div className="text-slate-500">Website:</div>
-                          <div className="text-right text-indigo-400 line-clamp-1">
-                            {data.extendedData.website ? (
-                              <a
-                                href={data.extendedData.website}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="hover:underline"
-                              >
-                                {data.extendedData.website.replace(
-                                  /^https?:\/\/(www\.)?/,
-                                  "",
-                                )}
-                              </a>
-                            ) : (
-                              "-"
-                            )}
-                          </div>
                         </div>
-                        {data.extendedData.description && (
-                          <p className="mt-3 text-[10px] text-slate-400 leading-relaxed border-l-2 border-indigo-500/30 pl-3">
-                            {data.extendedData.description}
-                          </p>
-                        )}
                       </div>
 
                       {/* Financial Ratios */}
