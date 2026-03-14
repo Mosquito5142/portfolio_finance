@@ -62,6 +62,18 @@ const MENU_ITEMS = [
     glowColor: "shadow-red-500/20",
   },
   {
+    href: "/ema200",
+    icon: "🌊",
+    title: "EMA 200 Weekly",
+    subtitle: "สแกนหา 'จุดรับมีด' ล้างไพ่ระยะยาว",
+    description:
+      "ค้นหาหุ้นพื้นฐานดีที่ย่อลงมาแตะเส้น EMA 200 ในกราฟสัปดาห์ (Weekly) เพื่อหาจุดกลับตัวที่ได้เปรียบ",
+    gradient: "from-blue-600 to-cyan-600",
+    hoverGradient: "hover:from-blue-500 hover:to-cyan-500",
+    borderColor: "border-blue-500/30",
+    glowColor: "shadow-blue-500/20",
+  },
+  {
     href: "/portfolio",
     icon: "💼",
     title: "พอร์ตการลงทุน",
