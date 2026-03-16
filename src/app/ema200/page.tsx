@@ -47,6 +47,8 @@ export default function EMA200ScannerPage() {
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [alertLoading, setAlertLoading] = useState<Record<string, boolean>>({});
   const [alertSuccess, setAlertSuccess] = useState<Record<string, boolean>>({});
+  const [bulkAlertLoading, setBulkAlertLoading] = useState(false);
+  const [bulkAlertSuccess, setBulkAlertSuccess] = useState(false);
 
   // Pipeline filter strictly enabled by default to save API calls
   const [strictMode, setStrictMode] = useState(true);
@@ -275,6 +277,53 @@ export default function EMA200ScannerPage() {
       // Error silently handled
     } finally {
       setAlertLoading((prev) => ({ ...prev, [symbol]: false }));
+    }
+  };
+
+  const handleBulkAlert = async () => {
+    if (displayScans.length === 0 || bulkAlertLoading) return;
+    setBulkAlertLoading(true);
+
+    const items = displayScans.map((s) => {
+      const data = s.data!;
+      const currentPrice = data.technical.currentPrice || 0;
+      const entry = data.technical.ema200 || 0;
+      const cut = entry * 0.95;
+      const target = entry * 1.15;
+
+      return {
+        ticker: s.symbol.toUpperCase().endsWith(".BK")
+          ? `BKK:${s.symbol.replace(".BK", "")}`
+          : s.symbol.toUpperCase(),
+        entry: Number(entry.toFixed(2)),
+        currentPrice: Number(currentPrice.toFixed(2)),
+        cut: Number(cut.toFixed(2)),
+        target: Number(target.toFixed(2)),
+        status: "",
+        alertType: "SMART_ENTRY",
+        triggerPrice: Number(entry.toFixed(2)),
+      };
+    });
+
+    try {
+      const res = await fetch("/api/sheets/watchlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      if (res.ok) {
+        setBulkAlertSuccess(true);
+        // Mark all individuals as success too
+        const successMap: Record<string, boolean> = {};
+        displayScans.forEach((s) => (successMap[s.symbol] = true));
+        setAlertSuccess((prev) => ({ ...prev, ...successMap }));
+        
+        setTimeout(() => setBulkAlertSuccess(false), 3000);
+      }
+    } catch {
+      // Error silently handled
+    } finally {
+      setBulkAlertLoading(false);
     }
   };
 
@@ -635,6 +684,44 @@ export default function EMA200ScannerPage() {
                 </span>
               );
             })}
+          </div>
+        )}
+
+        {/* Results Header with Bulk Action */}
+        {!scanning && displayScans.length > 0 && (
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+            <div>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                🔎 Scan Results
+                <span className="text-sm font-normal text-slate-500">
+                  (Found {displayScans.length} setups)
+                </span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Stocks near their 200-week Exponential Moving Average
+              </p>
+            </div>
+            
+            <button
+              onClick={handleBulkAlert}
+              disabled={bulkAlertLoading || bulkAlertSuccess}
+              className={`px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 transition-all w-full md:w-auto shadow-lg ${
+                bulkAlertSuccess
+                  ? "bg-emerald-600 text-white"
+                  : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20"
+              } ${bulkAlertLoading ? "opacity-70 cursor-not-allowed" : ""}`}
+            >
+              {bulkAlertLoading ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-2 border-slate-300 border-t-white rounded-full" />
+                  Sending Batch...
+                </>
+              ) : bulkAlertSuccess ? (
+                <>✅ All Items Sent Successfully</>
+              ) : (
+                <>🚀 Send All to Watchlist</>
+              )}
+            </button>
           </div>
         )}
 
