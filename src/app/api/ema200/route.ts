@@ -4,8 +4,6 @@ export const fetchCache = "force-no-store";
 
 import { NextResponse } from "next/server";
 
-const FMP_KEY = process.env.FMP_API_KEY?.trim() || "";
-
 // ─── Calculate EMA 200 ───────────────────────────────────────────────
 function calculateEMA(prices: number[], period: number = 200): number | null {
   if (prices.length < period) return null;
@@ -52,22 +50,6 @@ async function getYahooWeeklyData(symbol: string) {
   }
 }
 
-// ─── FMP: Company Profile ─────────────────────────────────────────────
-async function getFMPProfile(symbol: string) {
-  if (!FMP_KEY) return null;
-  try {
-    const res = await fetch(
-      `https://financialmodelingprep.com/stable/profile?symbol=${symbol}&apikey=${FMP_KEY}`,
-      { cache: "no-store" },
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    return Array.isArray(data) && data.length > 0 ? data[0] : null;
-  } catch {
-    return null;
-  }
-}
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const symbol = searchParams.get("symbol")?.toUpperCase();
@@ -96,7 +78,6 @@ export async function GET(request: Request) {
     // ── Fail-Fast ─────────────────────────────────────────────────────
     // If strict is true (which it is for the bulk scanner), we only want stocks
     // near their EMA 200 Weekly. Let's say between -5% (dipped below) and +10% (hovering above).
-    // You can adjust these bounds.
     let isNearEMA = false;
     if (distancePct !== null && distancePct >= -5 && distancePct <= 10) {
         isNearEMA = true;
@@ -115,13 +96,9 @@ export async function GET(request: Request) {
           ema200: ema200 !== null ? Number(ema200.toFixed(2)) : null,
           distancePct: distancePct !== null ? Number(distancePct.toFixed(2)) : null,
           isNearEMA,
-        },
-        fundamental: null,
+        }
       });
     }
-
-    // ── Phase 2: Fetch Fundamental Data (FMP — Paid API) ─────────────
-    const profile = await getFMPProfile(symbol);
 
     // ── Output Shaping ─────────────
     const scannerData = {
@@ -132,18 +109,6 @@ export async function GET(request: Request) {
         ema200: ema200 !== null ? Number(ema200.toFixed(2)) : null,
         distancePct: distancePct !== null ? Number(distancePct.toFixed(2)) : null,
         isNearEMA,
-      },
-      fundamental: {
-        companyName: profile?.companyName || null,
-        sector: profile?.sector || null,
-        industry: profile?.industry || null,
-        marketCap: profile?.mktCap || null,
-        beta: profile?.beta || null,
-        exchange: profile?.exchangeShortName || null,
-      },
-      extendedData: {
-        ceo: profile?.ceo || null,
-        fullTimeEmployees: profile?.fullTimeEmployees || null,
       }
     };
 

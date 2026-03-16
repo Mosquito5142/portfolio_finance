@@ -28,18 +28,6 @@ interface EMA200Data {
     distancePct: number | null;
     isNearEMA: boolean;
   };
-  fundamental: {
-    companyName: string | null;
-    sector: string | null;
-    industry: string | null;
-    marketCap: number | null;
-    beta: number | null;
-    exchange: string | null;
-  };
-  extendedData?: {
-    ceo: string | null;
-    fullTimeEmployees: number | null;
-  };
 }
 
 interface ScanResult {
@@ -57,6 +45,8 @@ export default function EMA200ScannerPage() {
   const [apiSaved, setApiSaved] = useState(0);
   const [showPicker, setShowPicker] = useState(false);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const [alertLoading, setAlertLoading] = useState<Record<string, boolean>>({});
+  const [alertSuccess, setAlertSuccess] = useState<Record<string, boolean>>({});
 
   // Pipeline filter strictly enabled by default to save API calls
   const [strictMode, setStrictMode] = useState(true);
@@ -243,6 +233,49 @@ export default function EMA200ScannerPage() {
     }
 
     setScanning(false);
+  };
+
+  const handleQuickAlert = async (symbol: string) => {
+    setAlertLoading((prev) => ({ ...prev, [symbol]: true }));
+    const s = scans.find((x) => x.symbol === symbol);
+    if (!s || !s.data || s.status !== "done") {
+      setAlertLoading((prev) => ({ ...prev, [symbol]: false }));
+      return false;
+    }
+
+    const data = s.data;
+    const currentPrice = data.technical.currentPrice || 0;
+    const entry = data.technical.ema200 || 0; // Trigger exactly at EMA 200
+    const cut = entry * 0.95; // Simple 5% standard stop loss below EMA
+    const target = entry * 1.15; // 15% upside potential expected
+
+    const payload = {
+      ticker: s.symbol.toUpperCase().endsWith(".BK")
+        ? `BKK:${s.symbol.replace(".BK", "")}`
+        : s.symbol.toUpperCase(),
+      entry: Number(entry.toFixed(2)),
+      currentPrice: Number(currentPrice.toFixed(2)),
+      cut: Number(cut.toFixed(2)),
+      target: Number(target.toFixed(2)),
+      status: "",
+      alertType: "SMART_ENTRY",
+      triggerPrice: Number(entry.toFixed(2)),
+    };
+
+    try {
+      const res = await fetch("/api/sheets/watchlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: [payload] }),
+      });
+      if (res.ok) {
+        setAlertSuccess((prev) => ({ ...prev, [symbol]: true }));
+      }
+    } catch {
+      // Error silently handled
+    } finally {
+      setAlertLoading((prev) => ({ ...prev, [symbol]: false }));
+    }
   };
 
   const getScoreColor = (score: number) => {
@@ -640,18 +673,8 @@ export default function EMA200ScannerPage() {
                         )}
                       </h3>
                       <p className="text-xs text-slate-400 mt-1 line-clamp-1">
-                        {data.fundamental.companyName ||
-                          STOCK_DETAILS[data.symbol] ||
-                          "Stock"}
+                        {STOCK_DETAILS[data.symbol] || "Stock"}
                       </p>
-                      {data.fundamental.sector && (
-                        <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                          {data.fundamental.sector}
-                          {data.fundamental.industry
-                            ? ` · ${data.fundamental.industry}`
-                            : ""}
-                        </span>
-                      )}
                     </div>
                     <div className="text-right">
                       <div
@@ -665,102 +688,46 @@ export default function EMA200ScannerPage() {
                     </div>
                   </div>
 
-                  {/* 3 Pillars Grid (Adapted for EMA) */}
-                  <div className="grid grid-cols-3 gap-2 mt-auto">
-                    {/* EMA Value */}
-                    <div
-                      className={`p-3 rounded-xl border ${Math.abs(data.technical.distancePct || 100) < 5 ? "bg-blue-900/20 border-blue-500/30" : "bg-slate-800/50 border-slate-700"} flex flex-col items-center justify-center text-center`}
-                    >
-                      <span className="text-xl mb-1">📐</span>
-                      <span className="text-[10px] text-slate-400 block mb-1">
-                        EMA 200 (W)
-                      </span>
-                      <span
-                        className={`font-bold ${Math.abs(data.technical.distancePct || 100) < 5 ? "text-blue-400" : "text-white"}`}
-                      >
-                        {formatNumber(data.technical.ema200, "$")}
-                      </span>
-                    </div>
-
-                    {/* Market Cap */}
-                    <div
-                      className="p-3 rounded-xl border bg-slate-800/50 border-slate-700 flex flex-col items-center justify-center text-center"
-                    >
-                      <span className="text-xl mb-1">🏛️</span>
-                      <span className="text-[10px] text-slate-400 block mb-1">
-                        Market Cap
-                      </span>
-                      <span className="font-bold text-white">
-                        {formatMarketCap(data.fundamental.marketCap)}
-                      </span>
-                    </div>
-
-                    {/* Beta */}
-                    <div
-                      className="p-3 rounded-xl border bg-slate-800/50 border-slate-700 flex flex-col items-center justify-center text-center"
-                    >
-                      <span className="text-xl mb-1">⚡</span>
-                      <span className="text-[10px] text-slate-400 block mb-1">
-                        Beta (Risk)
-                      </span>
-                      <span className="font-bold text-white">
-                        {formatNumber(data.fundamental.beta)}
-                      </span>
-                    </div>
-                  </div>
-
                   {/* Details block */}
-                  <div className="mt-4 pt-4 border-t border-slate-800/50 grid grid-cols-2 gap-y-2 text-xs items-center">
-                    <div className="text-slate-500">Current Price:</div>
-                    <div className="text-right text-slate-300 font-medium">
+                  <div className="mt-auto pt-4 border-t border-slate-800/50 grid grid-cols-2 gap-y-3 text-sm items-center">
+                    <div className="text-slate-400 flex items-center gap-2">
+                        <span>💵</span> Current Price:
+                    </div>
+                    <div className="text-right text-white font-bold text-lg">
                       {formatNumber(data.technical.currentPrice, "$")}
                     </div>
 
-                    <div className="text-slate-500">Weekly Support:</div>
-                    <div className="text-right text-indigo-400 font-bold">
+                    <div className="text-slate-400 flex items-center gap-2">
+                        <span>📐</span> EMA 200 (W):
+                    </div>
+                    <div className="text-right text-indigo-400 font-bold text-lg">
                       {formatNumber(data.technical.ema200, "$")}
                     </div>
                   </div>
 
-                  {/* View More Button */}
-                  <button
-                    onClick={toggleExpand}
-                    className="mt-4 pt-3 w-full border-t border-slate-800/50 text-indigo-400 hover:text-indigo-300 text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1 transition-colors"
-                  >
-                    {isExpanded ? "Hide Details 🔼" : "View More Data 🔽"}
-                  </button>
-
-                  {/* Expanded Data Panel */}
-                  {isExpanded && data.extendedData && (
-                    <div className="mt-4 pt-4 border-t border-slate-800/50 space-y-4 animate-in slide-in-from-top-2 duration-200">
-                      {/* Company Info */}
-                      <div>
-                        <h4 className="text-[10px] uppercase tracking-widest text-slate-500 mb-2 font-bold">
-                          Company Profile
-                        </h4>
-                        <div className="grid grid-cols-2 gap-y-2 text-xs">
-                          <div className="text-slate-500">Exchange:</div>
-                          <div className="text-right text-slate-300">
-                            {data.fundamental.exchange || "-"}
-                          </div>
-
-                          <div className="text-slate-500">CEO:</div>
-                          <div
-                            className="text-right text-slate-300 line-clamp-1"
-                            title={data.extendedData.ceo || ""}
-                          >
-                            {data.extendedData.ceo || "-"}
-                          </div>
-
-                          <div className="text-slate-500">Employees:</div>
-                          <div className="text-right text-slate-300">
-                            {data.extendedData.fullTimeEmployees?.toLocaleString() ||
-                              "-"}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  {/* Send to Sheet Action */}
+                  <div className="mt-4 border-t border-slate-800/50 pt-4">
+                    <button
+                      onClick={() => handleQuickAlert(data.symbol)}
+                      disabled={alertLoading[data.symbol] || alertSuccess[data.symbol]}
+                      className={`w-full py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                        alertSuccess[data.symbol]
+                          ? "bg-emerald-900/40 text-emerald-400 border border-emerald-500/30"
+                          : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20"
+                      }`}
+                    >
+                      {alertLoading[data.symbol] ? (
+                        <>
+                          <div className="animate-spin h-3.5 w-3.5 border-2 border-slate-300 border-t-white rounded-full" />
+                          Sending...
+                        </>
+                      ) : alertSuccess[data.symbol] ? (
+                        <>✅ Sent to Watchlist</>
+                      ) : (
+                        <>🎯 Add Alert at EMA 200</>
+                      )}
+                    </button>
+                  </div>
                 </div>
               );
             })}
