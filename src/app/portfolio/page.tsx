@@ -45,7 +45,9 @@ interface PortfolioRow {
 }
 
 export default function PortfolioTracker() {
-  const [activeTab, setActiveTab] = useState<"ACTIVE" | "HISTORY">("ACTIVE");
+  const [activeTab, setActiveTab] = useState<"ACTIVE" | "HISTORY" | "DCA">("ACTIVE");
+  const [dcaData, setDcaData] = useState<any[]>([]);
+  const [dcaLoading, setDcaLoading] = useState(false);
   const [portfolioData, setPortfolioData] = useState<PortfolioRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -286,6 +288,27 @@ export default function PortfolioTracker() {
 
   // derived data
   let actives = portfolioData.filter(
+    (r) => r.status === "ACTIVE" && r.ticker !== "CASH",
+  );
+  
+  // Fetch DCA Data when tab becomes active
+  useEffect(() => {
+    if (activeTab === "DCA" && dcaData.length === 0) {
+      const activeTickers = Array.from(new Set(actives.filter(a => a.ticker !== "CASH").map((a) => a.ticker)));
+      if (activeTickers.length > 0) {
+        setDcaLoading(true);
+        fetch(`/api/portfolio/dca?symbols=${activeTickers.join(",")}`)
+          .then((res) => res.json())
+          .then((data) => {
+            setDcaData(data);
+          })
+          .catch((err) => console.error("DCA fetch error:", err))
+          .finally(() => setDcaLoading(false));
+      }
+    }
+  }, [activeTab, dcaData.length, actives]);    // Fix: If status is explicitly ACTIVE, always show it
+      // (soldQty from a previous CLOSED trade on the same ticker can be inherited)
+  actives = portfolioData.filter(
     (r) =>
       r.status !== "CLOSED" &&
       // Fix: If status is explicitly ACTIVE, always show it
@@ -919,6 +942,16 @@ export default function PortfolioTracker() {
               >
                 ประวัติการซื้อขาย
               </button>
+              <button
+                onClick={() => setActiveTab("DCA")}
+                className={`pb-3 text-sm font-bold px-4 border-b-2 transition-colors ${
+                  activeTab === "DCA"
+                    ? "border-indigo-500 text-indigo-400"
+                    : "border-transparent text-slate-500 hover:text-slate-300"
+                }`}
+              >
+                DCA Radar 🎯
+              </button>
             </div>
 
             {activeTab === "ACTIVE" && (
@@ -1415,6 +1448,88 @@ export default function PortfolioTracker() {
                   </div>
                 );
               })}
+            </div>
+          ) : activeTab === "DCA" ? (
+            <div className="space-y-4">
+              <div className="bg-indigo-900/20 border border-indigo-500/30 rounded-2xl p-6 mb-6">
+                <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                  <span>🎯</span> DCA Radar (สแกนหาจุดถัวเฉลี่ย)
+                </h2>
+                <p className="text-indigo-200/80 text-sm">
+                  ระบบจะสแกนเฉพาะ หุ้นที่คุณกำลังถือครองอยู่ เพื่อเปรียบเทียบว่าตัวไหนปรับตัวลงมาลึกที่สุดจากจุดสูงสุด (52-Week High) และลงมาใกล้เส้นแนวรับสำคัญ (200-Day SMA) เพื่อช่วยตัดสินใจในการเข้าซื้อสะสมในไม้ถัดไป
+                </p>
+              </div>
+
+              {dcaLoading ? (
+                <div className="text-center py-20 text-slate-500 animate-pulse">
+                  กำลังสแกนสัญญาณและประเมินราคาส่วนลด...⚡
+                </div>
+              ) : dcaData.length === 0 ? (
+                <div className="text-center py-10 text-slate-500">
+                  ไม่มีข้อมูลหุ้นสำหรับสแกน หรือกรุณารีเฟรช
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.isArray(dcaData) ? dcaData
+                    .sort((a, b) => b.dcaScore - a.dcaScore)
+                    .map((item) => {
+                      const groupInfo = groupedActives.find((g: any) => g.ticker === item.symbol);
+                      const avgPrice = groupInfo ? groupInfo.totalCostUSD / groupInfo.totalQty : 0;
+                      const myPnlPct = avgPrice > 0 ? ((item.price - avgPrice) / avgPrice) * 100 : 0;
+
+                      return (
+                        <div key={item.symbol} className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-indigo-500/50 transition-colors shadow-lg flex flex-col">
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                               <h3 className="text-2xl font-black text-white">{item.symbol}</h3>
+                               <p className="text-xs text-slate-400 mt-1">${item.price.toFixed(2)}</p>
+                            </div>
+                            <div className="text-right">
+                              <div className={`text-2xl font-black ${item.dcaScore >= 70 ? "text-emerald-400" : item.dcaScore >= 40 ? "text-amber-400" : "text-slate-400"}`}>
+                                {item.dcaScore}
+                              </div>
+                              <div className="text-[9px] text-slate-500 uppercase tracking-widest mt-1">
+                                DCA SCORE
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3 mt-auto">
+                            <div className="flex justify-between items-center text-sm border-b border-slate-800 pb-2">
+                              <span className="text-slate-500 text-xs">🔻 Drop from 52W High:</span>
+                              <span className="text-red-400 font-bold">{item.drawdownPct.toFixed(2)}%</span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm border-b border-slate-800 pb-2">
+                              <span className="text-slate-500 text-xs">📐 Dist to SMA 200:</span>
+                              <span className={item.distanceToSma200 <= 5 ? "text-blue-400 font-bold" : "text-slate-300 font-medium"}>
+                                {item.distanceToSma200 > 0 ? "+" : ""}{item.distanceToSma200.toFixed(2)}%
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-slate-500 text-xs">💰 My PnL:</span>
+                              <span className={myPnlPct >= 0 ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                                {myPnlPct > 0 ? "+" : ""}{myPnlPct.toFixed(2)}%
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="mt-5 pt-4 border-t border-slate-800/50">
+                            <button
+                               onClick={() => {
+                                 setTicker(item.symbol);
+                                 setPrice(item.price.toFixed(2));
+                                 setIsAddModalOpen(true);
+                               }}
+                               className="w-full py-2 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded-lg text-xs font-bold transition-colors uppercase tracking-wider"
+                            >
+                               + Buy (DCA ไม้ถัดไป)
+                            </button>
+                          </div>
+                        </div>
+                      )
+                  }) : <div className="text-center py-10 w-full text-red-400 col-span-3">ดึงข้อมูลล้มเหลว กรุณาลองใหม่อีกครั้ง</div>}
+                </div>
+              )}
             </div>
           ) : (
             <div className="bg-slate-900/50 rounded-xl border border-slate-800 overflow-x-auto custom-scrollbar w-full">
