@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   PieChart,
@@ -83,8 +83,17 @@ export default function PortfolioTracker() {
     [key: string]: boolean;
   }>({});
 
+  const [historyViewMode, setHistoryViewMode] = useState<"TIMELINE" | "GROUPED">("TIMELINE");
+  const [expandedHistoryGroups, setExpandedHistoryGroups] = useState<{
+    [key: string]: boolean;
+  }>({});
+
   const toggleGroup = (key: string) => {
     setExpandedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleHistoryGroup = (key: string) => {
+    setExpandedHistoryGroups((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   useEffect(() => {
@@ -321,6 +330,29 @@ export default function PortfolioTracker() {
       (r.status === "CLOSED" || r.status === "PARTIAL_SOLD") &&
       (viewFilter === "all" || r.portfolioType === viewFilter),
   );
+
+  const groupedHistories = Object.values(
+    histories.reduce((acc: any, item: any) => {
+      const key = item.ticker;
+      if (!acc[key]) {
+        acc[key] = {
+          ticker: item.ticker,
+          items: [],
+          totalPnl: 0,
+          totalTrades: 0,
+          winCount: 0,
+        };
+      }
+      
+      const pnl = (item.soldPrice - item.price) * (item.soldQty || item.quantity);
+      acc[key].items.push({ ...item, pnl, pnlPct: ((item.soldPrice - item.price) / item.price) * 100 });
+      acc[key].totalPnl += pnl;
+      acc[key].totalTrades += 1;
+      if (pnl >= 0) acc[key].winCount += 1;
+      
+      return acc;
+    }, {})
+  ).sort((a: any, b: any) => b.totalPnl - a.totalPnl); // Sort by highest profit first
 
   // Grouping Actives by Ticker & PortfolioType
   const groupedObj = actives.reduce(
@@ -1532,100 +1564,159 @@ export default function PortfolioTracker() {
               )}
             </div>
           ) : (
-            <div className="bg-slate-900/50 rounded-xl border border-slate-800 overflow-x-auto custom-scrollbar w-full">
-              <table className="w-full text-sm text-left min-w-[600px]">
-                <thead className="bg-slate-800/50 text-slate-400 text-xs uppercase font-medium">
-                  <tr>
-                    <th className="px-4 py-3">หุ้น</th>
-                    <th className="px-4 py-3">วันที่ขาย</th>
-                    <th className="px-4 py-3 text-right">จำนวนหุ้น</th>
-                    <th className="px-4 py-3 text-right">ราคา เข้า / ออก</th>
-                    <th className="px-4 py-3 text-right">
-                      กำไร (Realized PnL)
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {histories.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        className="text-center py-8 text-slate-500"
-                      >
-                        ยังไม่มีประวัติการขายหุ้น
-                      </td>
-                    </tr>
-                  )}
-                  {histories
-                    // Sort by newest soldDate first
-                    .sort(
-                      (a, b) =>
-                        new Date(b.soldDate).getTime() -
-                        new Date(a.soldDate).getTime(),
-                    )
-                    .map((item, idx) => {
-                      const pnl =
-                        (item.soldPrice - item.price) *
-                        (item.soldQty || item.quantity);
-                      const pnlPct =
-                        ((item.soldPrice - item.price) / item.price) * 100;
-                      const isProfit = pnl >= 0;
-                      return (
-                        <tr
-                          key={`${item.rowIndex}-sell-${idx}`}
-                          className="hover:bg-slate-800/30 transition-colors"
-                        >
-                          <td className="px-4 py-3 font-bold text-white items-center gap-2 flex">
-                            {item.ticker}
-                            {viewFilter === "all" && item.portfolioType && (
-                              <span
-                                className={`text-[10px] px-1.5 py-0.5 rounded ${
-                                  item.portfolioType === "main"
-                                    ? "bg-blue-900/50 text-blue-400"
-                                    : "bg-amber-900/50 text-amber-400"
-                                }`}
-                              >
-                                {item.portfolioType.toUpperCase()}
-                              </span>
-                            )}
-                            {item.status === "PARTIAL_SOLD" && (
-                              <span className="ml-2 text-[10px] bg-blue-900/50 text-blue-400 px-1 py-0.5 rounded">
-                                PARTIAL
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-slate-400">
-                            {new Date(item.soldDate).toLocaleDateString()}
-                          </td>
-                          <td className="px-4 py-3 text-right font-medium">
-                            {item.soldQty}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <span className="text-slate-500">
-                              ${formatUSD(item.price)}
-                            </span>
-                            <span className="mx-1 text-slate-600">→</span>
-                            <span className="text-white">
-                              ${formatUSD(item.soldPrice)}
-                            </span>
-                          </td>
-                          <td
-                            className={`px-4 py-3 text-right font-bold ${
-                              isProfit ? "text-emerald-400" : "text-red-400"
-                            }`}
-                          >
-                            {isProfit ? "+" : ""}
-                            {getSymbol()}
-                            {formatCurrency(pnl)}
-                            <span className="text-xs ml-1 opacity-70 font-normal">
-                              ({pnlPct.toFixed(1)}%)
-                            </span>
+            <div className="space-y-4 w-full">
+              <div className="flex items-center gap-2 mb-4 bg-slate-900/40 p-1 w-max rounded-lg border border-slate-800">
+                <button
+                  onClick={() => setHistoryViewMode("TIMELINE")}
+                  className={`px-4 py-1.5 rounded-md text-xs font-bold transition-colors ${
+                    historyViewMode === "TIMELINE"
+                      ? "bg-amber-600 text-white"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <span className="mr-1">⏱️</span> เรียงตามเวลา
+                </button>
+                <button
+                  onClick={() => setHistoryViewMode("GROUPED")}
+                  className={`px-4 py-1.5 rounded-md text-xs font-bold transition-colors ${
+                    historyViewMode === "GROUPED"
+                      ? "bg-amber-600 text-white"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <span className="mr-1">📊</span> สรุปรายตัว
+                </button>
+              </div>
+
+              {historyViewMode === "TIMELINE" ? (
+                <div className="bg-slate-900/50 rounded-xl border border-slate-800 overflow-x-auto custom-scrollbar w-full">
+                  <table className="w-full text-sm text-left min-w-[600px]">
+                    <thead className="bg-slate-800/50 text-slate-400 text-xs uppercase font-medium">
+                      <tr>
+                        <th className="px-4 py-3">หุ้น</th>
+                        <th className="px-4 py-3">วันที่ขาย</th>
+                        <th className="px-4 py-3 text-right">จำนวนหุ้น</th>
+                        <th className="px-4 py-3 text-right">ราคา เข้า / ออก</th>
+                        <th className="px-4 py-3 text-right">กำไร (Realized PnL)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {histories.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="text-center py-8 text-slate-500">
+                            ยังไม่มีประวัติการขายหุ้น
                           </td>
                         </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
+                      )}
+                      {histories
+                        .sort((a, b) => new Date(b.soldDate).getTime() - new Date(a.soldDate).getTime())
+                        .map((item, idx) => {
+                          const pnl = (item.soldPrice - item.price) * (item.soldQty || item.quantity);
+                          const pnlPct = ((item.soldPrice - item.price) / item.price) * 100;
+                          const isProfit = pnl >= 0;
+                          return (
+                            <tr key={`${item.rowIndex}-sell-${idx}`} className="hover:bg-slate-800/30 transition-colors">
+                              <td className="px-4 py-3 font-bold text-white items-center gap-2 flex">
+                                {item.ticker}
+                                {viewFilter === "all" && item.portfolioType && (
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${item.portfolioType === "main" ? "bg-blue-900/50 text-blue-400" : "bg-amber-900/50 text-amber-400"}`}>
+                                    {item.portfolioType.toUpperCase()}
+                                  </span>
+                                )}
+                                {item.status === "PARTIAL_SOLD" && (
+                                  <span className="ml-2 text-[10px] bg-blue-900/50 text-blue-400 px-1 py-0.5 rounded">PARTIAL</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-slate-400">{new Date(item.soldDate).toLocaleDateString()}</td>
+                              <td className="px-4 py-3 text-right font-medium">{item.soldQty}</td>
+                              <td className="px-4 py-3 text-right">
+                                <span className="text-slate-500">${formatUSD(item.price)}</span>
+                                <span className="mx-1 text-slate-600">→</span>
+                                <span className="text-white">${formatUSD(item.soldPrice)}</span>
+                              </td>
+                              <td className={`px-4 py-3 text-right font-bold ${isProfit ? "text-emerald-400" : "text-red-400"}`}>
+                                {isProfit ? "+" : ""}{getSymbol()}{formatCurrency(pnl)}
+                                <span className="text-xs ml-1 opacity-70 font-normal">({pnlPct.toFixed(1)}%)</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="bg-slate-900/50 rounded-xl border border-slate-800 overflow-x-auto custom-scrollbar w-full">
+                  <table className="w-full text-sm text-left min-w-[600px]">
+                    <thead className="bg-slate-800/50 text-slate-400 text-xs uppercase font-medium">
+                      <tr>
+                        <th className="px-4 py-3">หุ้น</th>
+                        <th className="px-4 py-3 text-right">จำนวนครั้งที่เทรด</th>
+                        <th className="px-4 py-3 text-right">Win Rate</th>
+                        <th className="px-4 py-3 text-right">กำไรสุทธิรวม (Total PnL)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {groupedHistories.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="text-center py-8 text-slate-500">
+                            ยังไม่มีประวัติการขายหุ้น
+                          </td>
+                        </tr>
+                      )}
+                      {groupedHistories.map((group: any) => {
+                        const winRate = group.totalTrades > 0 ? (group.winCount / group.totalTrades) * 100 : 0;
+                        const isProfit = group.totalPnl >= 0;
+                        const isExpanded = expandedHistoryGroups[group.ticker];
+                        
+                        return (
+                          <React.Fragment key={`history-group-${group.ticker}`}>
+                            <tr className="hover:bg-slate-800/30 transition-colors cursor-pointer" onClick={() => toggleHistoryGroup(group.ticker)}>
+                              <td className="px-4 py-3 font-bold text-white items-center gap-2 flex">
+                                <span className="text-slate-500 w-4 inline-block text-[10px]">{isExpanded ? "▼" : "▶"}</span>
+                                {group.ticker}
+                              </td>
+                              <td className="px-4 py-3 text-right font-medium text-slate-300">
+                                {group.totalTrades}
+                              </td>
+                              <td className="px-4 py-3 text-right font-medium text-amber-400">
+                                {winRate.toFixed(1)}%
+                              </td>
+                              <td className={`px-4 py-3 text-right font-bold ${isProfit ? "text-emerald-400" : "text-red-400"}`}>
+                                {isProfit ? "+" : ""}{getSymbol()}{formatCurrency(group.totalPnl)}
+                              </td>
+                            </tr>
+                            {isExpanded && group.items
+                              .sort((a: any, b: any) => new Date(b.soldDate).getTime() - new Date(a.soldDate).getTime())
+                              .map((item: any, childIdx: number) => {
+                                const pnl = item.pnl;
+                                const pnlPct = item.pnlPct;
+                                const childIsProfit = pnl >= 0;
+                                return (
+                                  <tr key={`history-child-${group.ticker}-${childIdx}`} className="bg-slate-950/40 border-l-[3px] border-l-amber-600">
+                                    <td className="px-8 py-2.5 text-slate-400 text-xs flex items-center gap-2">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-700 inline-block"></span>
+                                      {new Date(item.soldDate).toLocaleDateString()}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-right text-xs">
+                                      <span className="text-slate-400">{item.soldQty} หุ้น</span>
+                                    </td>
+                                    <td className="px-4 py-2.5 text-right text-xs">
+                                      <span className="text-slate-500">${formatUSD(item.price)} → </span>
+                                      <span className="text-slate-300">${formatUSD(item.soldPrice)}</span>
+                                    </td>
+                                    <td className={`px-4 py-2.5 text-right font-medium text-xs ${childIsProfit ? "text-emerald-500" : "text-red-500"}`}>
+                                      {childIsProfit ? "+" : ""}{getSymbol()}{formatCurrency(pnl)} <span className="opacity-70">({pnlPct.toFixed(1)}%)</span>
+                                    </td>
+                                  </tr>
+                                );
+                            })}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </div>
