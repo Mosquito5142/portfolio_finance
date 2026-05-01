@@ -127,21 +127,25 @@ function calculateSMA(prices: number[], period: number): number {
 function calculateRSI(prices: number[], period: number = 14): number {
   if (prices.length < period + 1) return 50;
 
-  let gains = 0;
-  let losses = 0;
+  // Seed: first period average
+  let avgGain = 0, avgLoss = 0;
+  for (let i = 1; i <= period; i++) {
+    const diff = prices[i] - prices[i - 1];
+    if (diff > 0) avgGain += diff;
+    else avgLoss -= diff;
+  }
+  avgGain /= period;
+  avgLoss /= period;
 
-  for (let i = prices.length - period; i < prices.length; i++) {
-    const change = prices[i] - prices[i - 1];
-    if (change > 0) gains += change;
-    else losses -= change;
+  // Wilder's Smoothing
+  for (let i = period + 1; i < prices.length; i++) {
+    const diff = prices[i] - prices[i - 1];
+    avgGain = (avgGain * (period - 1) + Math.max(diff, 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + Math.max(-diff, 0)) / period;
   }
 
-  const avgGain = gains / period;
-  const avgLoss = losses / period;
-
   if (avgLoss === 0) return 100;
-  const rs = avgGain / avgLoss;
-  return 100 - 100 / (1 + rs);
+  return 100 - 100 / (1 + avgGain / avgLoss);
 }
 
 // ========== ADVANCED INDICATORS (Institutional Grade) ==========
@@ -2899,6 +2903,7 @@ export async function GET(request: Request) {
       isEarlyMomentum,
       rrRatio,
       warningCount,
+      adxData.adx,
     );
 
     const fusionScore = fusion.score;
@@ -3018,6 +3023,7 @@ function calculateFusionScore(
   isEarlyMomentum: boolean,
   rrRatio?: number,
   warningCount: number = 0,
+  adxValue?: number,
 ): { score: number; reason: string } {
   let score = baseMatrixScore; // Start with Matrix (-100 to +100)
   const reasons: string[] = [];
@@ -3093,6 +3099,19 @@ function calculateFusionScore(
     if (score > 40) {
       score = 40;
       reasons.push("Capped (R/R < 1.5)");
+    }
+  }
+
+  // ADX Trend Strength Filter
+  if (adxValue !== undefined) {
+    if (adxValue < 20) {
+      // Sideways/no trend — reduce signal confidence
+      const reduction = Math.round((20 - adxValue) * 1.0); // max -20
+      score -= reduction;
+      reasons.push(`Weak Trend (ADX ${adxValue.toFixed(1)}) (-${reduction})`);
+    } else if (adxValue > 25) {
+      score += 5;
+      reasons.push(`Strong Trend (ADX ${adxValue.toFixed(1)}) (+5)`);
     }
   }
 

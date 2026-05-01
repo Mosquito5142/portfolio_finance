@@ -11,21 +11,23 @@ const FINNHUB_KEY = process.env.FINNHUB_API_KEY?.trim() || "";
 function calculateRSI(prices: number[], period: number = 14): number {
   if (prices.length < period + 1) return 50;
 
-  let gains = 0;
-  let losses = 0;
+  let avgGain = 0, avgLoss = 0;
+  for (let i = 1; i <= period; i++) {
+    const diff = prices[i] - prices[i - 1];
+    if (diff > 0) avgGain += diff;
+    else avgLoss -= diff;
+  }
+  avgGain /= period;
+  avgLoss /= period;
 
-  for (let i = prices.length - period; i < prices.length; i++) {
-    const change = prices[i] - prices[i - 1];
-    if (change > 0) gains += change;
-    else losses -= change;
+  for (let i = period + 1; i < prices.length; i++) {
+    const diff = prices[i] - prices[i - 1];
+    avgGain = (avgGain * (period - 1) + Math.max(diff, 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + Math.max(-diff, 0)) / period;
   }
 
-  const avgGain = gains / period;
-  const avgLoss = losses / period;
-
   if (avgLoss === 0) return 100;
-  const rs = avgGain / avgLoss;
-  return 100 - 100 / (1 + rs);
+  return 100 - 100 / (1 + avgGain / avgLoss);
 }
 
 // ─── Yahoo Finance chart (FREE, no API key) ───────────────────────────
@@ -367,6 +369,36 @@ export async function GET(request: Request) {
       sniperScore: 0,
     };
 
+    // ── Fundamental Guardrails ────────────────────────────────────────
+    let fundamentalScore = 0; // 0-3
+    const guardChecks = {
+      revenueGrowing: false,
+      debtManageable: false,
+      fcfPositive: false,
+    };
+
+    // Guard 1: Revenue growth (from ratios or profile) — if data unavailable, pass
+    const revenueGrowth = ratios?.revenueGrowthTTM ?? ratios?.revenueGrowthFiveYears ?? null;
+    if (revenueGrowth === null || revenueGrowth > 0) {
+      guardChecks.revenueGrowing = true;
+      fundamentalScore++;
+    }
+
+    // Guard 2: Debt/Equity < 2 (or unavailable = pass)
+    if (debtToEquity === null || debtToEquity < 2) {
+      guardChecks.debtManageable = true;
+      fundamentalScore++;
+    }
+
+    // Guard 3: Current Ratio > 1 (or unavailable = pass) as FCF proxy
+    const currentRatio = ratios?.currentRatioTTM ?? null;
+    if (currentRatio === null || currentRatio > 1) {
+      guardChecks.fcfPositive = true;
+      fundamentalScore++;
+    }
+
+    const passesGuards = fundamentalScore >= 2; // At least 2/3 guards pass
+
     // ── Sniper Score (0‑100) ─────────────────────────────────────────
     let score = 0;
 
@@ -381,9 +413,22 @@ export async function GET(request: Request) {
     // Catalyst – insider buying (max 30 pts)
     if (deepValueData.catalyst.hasStrongInsiderBuy) score += 30;
 
+    // Fundamental Guardrails penalty
+    if (!passesGuards) {
+      score = Math.round(score * 0.6); // Reduce score by 40% if guards fail
+    }
+
     deepValueData.sniperScore = Math.min(100, score);
 
-    return NextResponse.json(deepValueData);
+    return NextResponse.json({
+      ...deepValueData,
+      fundamentalGuards: {
+        score: fundamentalScore,
+        passes: passesGuards,
+        checks: guardChecks,
+        label: passesGuards ? "Holy Trinity ✅" : "Partial Match ⚠️",
+      },
+    });
   } catch (error: any) {
     console.error("Deep Value Scan Error:", error);
     return NextResponse.json(
