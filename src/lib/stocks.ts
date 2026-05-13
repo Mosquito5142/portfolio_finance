@@ -104,6 +104,7 @@ export const TIER_1_ENERGY_RESOURCES = [
   "COPX", // Growth
   "CRML", // Growth
   "BWXT", // Growth
+  "AMSC",
 ];
 
 // 🌟 กลุ่ม Alpha Picks
@@ -252,6 +253,7 @@ export const STOCK_DETAILS: Record<string, string> = {
   COPX: "Global X Copper Miners ETF - กองทุนรวมบริษัทเหมืองทองแดง (แร่สำคัญของ AI และ EV)",
   CRML: "Critical Metals - เหมืองลิเธียมและแร่ธาตุหายากที่จำเป็นต่อเทคโนโลยี",
   BWXT: "BWX Technologies - ผู้ผลิตเตาปฏิกรณ์นิวเคลียร์ขนาดเล็กสำหรับกองทัพเรือสหรัฐฯ และพลังงานสะอาด",
+  AMSC: "American Superconductor - เทคโนโลยีตัวนำยิ่งยวด (Superconductors) และโซลูชั่นโครงข่ายไฟฟ้าอัจฉริยะ",
 
   // ALPHA PICKS
   APP: "AppLovin - ซอฟต์แวร์ AI โฆษณาและสร้างรายได้จากแอปพลิเคชัน (Alpha Picks ท็อปฟอร์ม)",
