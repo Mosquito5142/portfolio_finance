@@ -517,6 +517,46 @@ function doPost(e) {
       ).setMimeType(ContentService.MimeType.JSON);
     }
 
+    // ---------------------------------
+    // 5. SNIPER LOG - บันทึกสัญญาณสไนเปอร์
+    // ---------------------------------
+    if (actionType === "SNIPER_LOG_SAVE") {
+      var logSheet = ss.getSheetByName("sniper_log");
+      if (!logSheet) {
+        logSheet = ss.insertSheet("sniper_log");
+        logSheet.appendRow(["date", "symbol", "playbook", "price", "bbWidth", "rsi", "volumeRatio", "signals", "result"]);
+      }
+      var entries = json.entries;
+      entries.forEach(function (entry) {
+        logSheet.appendRow([
+          entry.date,
+          entry.symbol,
+          entry.playbook,
+          entry.price,
+          entry.bbWidth,
+          entry.rsi,
+          entry.volumeRatio,
+          entry.signals,
+          entry.result || "PENDING",
+        ]);
+      });
+      return ContentService.createTextOutput(
+        JSON.stringify({ success: true, saved: entries.length })
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ---------------------------------
+    // 6. SNIPER LOG - อัปเดตผล (WIN/LOSS)
+    // ---------------------------------
+    if (actionType === "SNIPER_LOG_UPDATE") {
+      var logSheet = ss.getSheetByName("sniper_log");
+      if (!logSheet) throw new Error("sniper_log sheet not found");
+      logSheet.getRange(json.rowIndex, 9).setValue(json.result);
+      return ContentService.createTextOutput(
+        JSON.stringify({ success: true, updated: json.result })
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
     throw new Error("Invalid actionType");
   } catch (err) {
     Logger.log("doPost Error: " + err.toString());
@@ -533,6 +573,40 @@ function doGet(e) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
   try {
+    // ── Sniper Log (ถ้าร้องขอ sheet=sniper_log) ──
+    if (e.parameter.sheet === "sniper_log") {
+      var logSheet = ss.getSheetByName("sniper_log");
+      if (!logSheet) {
+        return ContentService.createTextOutput(
+          JSON.stringify({ success: true, data: [] })
+        ).setMimeType(ContentService.MimeType.JSON);
+      }
+      var logData = [];
+      var logLastRow = logSheet.getLastRow();
+      if (logLastRow >= 2) {
+        var logRows = logSheet.getRange(2, 1, logLastRow - 1, 9).getValues();
+        logRows.forEach(function (row, index) {
+          if (row[1]) {
+            logData.push({
+              rowIndex: index + 2,
+              date: row[0],
+              symbol: row[1],
+              playbook: row[2],
+              price: row[3],
+              bbWidth: row[4],
+              rsi: row[5],
+              volumeRatio: row[6],
+              signals: row[7],
+              result: row[8],
+            });
+          }
+        });
+      }
+      return ContentService.createTextOutput(
+        JSON.stringify({ success: true, data: logData.reverse() })
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
     var data = [];
     var sheetsToCheck = [
       { name: SHEET_PORTFOLIO_MAIN, type: "main" },

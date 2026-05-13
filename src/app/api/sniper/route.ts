@@ -110,16 +110,25 @@ const calculateStdDev = (prices: number[], sma: number, period: number) => {
 };
 
 const calculateRSI = (prices: number[], period: number = 14) => {
-  if (prices.length <= period) return 50;
-  let gains = 0,
-    losses = 0;
-  for (let i = prices.length - period; i < prices.length; i++) {
+  if (prices.length < period + 1) return 50;
+
+  // Seed: first period average
+  let avgGain = 0, avgLoss = 0;
+  for (let i = 1; i <= period; i++) {
     const diff = prices[i] - prices[i - 1];
-    if (diff > 0) gains += diff;
-    else losses -= diff;
+    if (diff > 0) avgGain += diff;
+    else avgLoss -= diff;
   }
-  const avgGain = gains / period,
-    avgLoss = losses / period;
+  avgGain /= period;
+  avgLoss /= period;
+
+  // Wilder's Smoothing
+  for (let i = period + 1; i < prices.length; i++) {
+    const diff = prices[i] - prices[i - 1];
+    avgGain = (avgGain * (period - 1) + Math.max(diff, 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + Math.max(-diff, 0)) / period;
+  }
+
   if (avgLoss === 0) return 100;
   return 100 - 100 / (1 + avgGain / avgLoss);
 };
@@ -305,6 +314,15 @@ export async function GET(request: Request) {
 
             const volM = (volumes[volumes.length - 1] / 1000000).toFixed(2);
 
+            // Volume Confirmation
+            const avgVol10 = volumes.length >= 10
+              ? volumes.slice(-11, -1).reduce((a, b) => a + b, 0) / 10
+              : volumes[volumes.length - 1];
+            const avgVolM = (avgVol10 / 1000000).toFixed(2);
+            const todayVol = volumes[volumes.length - 1];
+            const volumeConfirm = todayVol > avgVol10 * 1.5;
+            const volumeSpike = todayVol > avgVol10 * 2;
+
             // Original signals
             const isSqueeze = bbWidthPct < 15;
             const crossSMA20 = currentClose > sma20 && prevClose <= prevSMA20;
@@ -312,7 +330,8 @@ export async function GET(request: Request) {
             const momentumIgnition =
               currentClose > ema5 &&
               pctChange > 0 &&
-              ((rsi > 55 && prevRsi <= 55) || rsi > 60);
+              ((rsi > 55 && prevRsi <= 55) || rsi > 60) &&
+              volumeConfirm;
 
             // Universal Triggers check
             const rsiFuelReady = rsi >= 40 && rsi <= 55; // "เชื้อเพลิงยังไม่เต็มถัง"
@@ -343,6 +362,9 @@ export async function GET(request: Request) {
               bbWidthPct,
               rsi,
               volM,
+              avgVolM,
+              volumeSpike,
+              volumeConfirm,
               isSqueeze,
               crossSMA20,
               isTrend,
@@ -386,6 +408,13 @@ export async function GET(request: Request) {
     } else if (filter === "momentum") {
       results = results.filter((r) => r.momentumIgnition);
       results.sort((a, b) => b.pctChange - a.pctChange);
+    } else if (filter === "volume_spike") {
+      results = results.filter((r) => r.volumeSpike);
+      results.sort((a, b) => {
+        const ratioA = parseFloat(a.volM) / Math.max(parseFloat(a.avgVolM), 0.01);
+        const ratioB = parseFloat(b.volM) / Math.max(parseFloat(b.avgVolM), 0.01);
+        return ratioB - ratioA;
+      });
     } else {
       // Default: group by playbook priority (squeeze > spring_trap > high_vol > neutral)
       const playbookOrder: Record<string, number> = {
