@@ -27,6 +27,7 @@ export const TIER_1_AI_HARDWARE = [
   "QCOM", // Qualcomm - Edge AI/Mobile AI
   "INTC", // 4IR - CPU
   "ARM", // 4IR - ชิปสถาปัตยกรรม (ย้ายมาจาก Growth)
+  "SITM",
 ];
 
 // 🌐 หมวดหมู่ใหม่: AI Data Center & Equipment
@@ -37,6 +38,7 @@ export const TIER_1_AI_INFRASTRUCTURE = [
   "HPE", // Hewlett Packard Enterprise - AI Servers / Liquid Cooling
   "VRT", // Vertiv - AI Data Center Power & Cooling (Tier 1)
   "FN", // AI Optical Transceivers
+  "FPS",
 ];
 
 // ☁️ หมวดหมู่ AI Software, Cloud & Cybersecurity
@@ -186,6 +188,7 @@ export const STOCK_DETAILS: Record<string, string> = {
   ASML: "ASML - ผู้ผลิตเครื่องพิมพ์ลายวงจรชิป EUV เจ้าเดียวในโลก (ผูกขาดเทคโนโลยีต้นน้ำ)",
   QCOM: "Qualcomm - ผู้นำชิปมือถือและการนำ AI ลงสู่ Edge Devices (AI PC & AI Phones)",
   ARM: "Arm Holdings - เจ้าของสถาปัตยกรรมชิปที่ใช้ในสมาร์ทโฟนเกือบทุกเครื่องในโลก และ AI Servers",
+  SITM: "SiTime - ผู้นำนวัตกรรมระบบจับเวลาซิลิกอน (Silicon MEMS Timing) สำหรับอุปกรณ์ 5G, ยานยนต์ และระบบ AI",
 
   // 🌐 AI INFRASTRUCTURE & DATA CENTER
   ANET: "Arista Networks - อุปกรณ์เครือข่ายสวิตช์ความเร็วสูง (Ethernet) ที่ใช้ใน AI Data Center",
@@ -194,6 +197,7 @@ export const STOCK_DETAILS: Record<string, string> = {
   HPE: "Hewlett Packard Ent - ระบบ Cloud แบบ Hybrid และ Enterprise AI Servers",
   VRT: "Vertiv - ระบบจัดการพลังงานและระบายความร้อนอันดับ 1 สำหรับ AI Data Center",
   FN: "Fabrinet - ผู้ผลิตอุปกรณ์เชื่อมต่อทางแสงความเร็วสูง (Optical Communication) รับจ้างผลิตให้ Nvidia",
+  FPS: "Forgent Power Solutions - ผู้ผลิตระบบควบคุมการกระจายไฟฟ้าและสวิตช์เกียร์สำหรับ Data Center ขนาดใหญ่ และโครงข่ายไฟฟ้า",
 
   // ☁️ AI SOFTWARE, CLOUD & CYBERSECURITY
   PLTR: "Palantir - ซอฟต์แวร์วิเคราะห์ข้อมูลเชิงลึกใช้ในระดับองค์กรใหญ่และกองทัพสหรัฐฯ",

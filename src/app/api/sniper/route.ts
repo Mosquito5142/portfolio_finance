@@ -1,90 +1,8 @@
 import { NextResponse } from "next/server";
+import { UNIQUE_SYMBOLS } from "@/lib/stocks";
 
-// Define the stocks to scan (same as before)
-const ALL_SYMBOLS = Array.from(
-  new Set([
-    "AAPL",
-    "MSFT",
-    "GOOGL",
-    "AMZN",
-    "NVDA",
-    "TSLA",
-    "META",
-    "NFLX",
-    "ORCL",
-    "AVGO",
-    "AMD",
-    "TSM",
-    "ASML",
-    "QCOM",
-    "INTC",
-    "ARM",
-    "ANET",
-    "DELL",
-    "SMCI",
-    "HPE",
-    "VRT",
-    "FN",
-    "PLTR",
-    "CRWD",
-    "PANW",
-    "NET",
-    "SNOW",
-    "NOW",
-    "MDB",
-    "RBRK",
-    "DOCN",
-    "NBIS",
-    "TEM",
-    "ZS",
-    "IOT",
-    "SHOP",
-    "MELI",
-    "ASTS",
-    "IONQ",
-    "RKLB",
-    "SOFI",
-    "SYNA",
-    "NVTS",
-    "AEHR",
-    "ALAB",
-    "AXON",
-    "MU",
-    "HOOD",
-    "ONTO",
-    "KTOS",
-    "JOBY",
-    "ACHR",
-    "LMND",
-    "AVAV",
-    "DPRO",
-    "NOK",
-    "LLY",
-    "TMDX",
-    "VKTX",
-    "CLPT",
-    "PRME",
-    "RXRX",
-    "EOSE",
-    "IREN",
-    "OKLO",
-    "COPX",
-    "CRML",
-    "BWXT",
-    "APP",
-    "JMIA",
-    "ONDS",
-    "OSS",
-    "UUUU",
-    "IMVT",
-    "SNPS",
-    "COHU",
-    "ROG",
-    "ASPN",
-    "CRDO",
-    "AAOI",
-  ]),
-);
+// Define the stocks to scan dynamically from stocks.ts
+const ALL_SYMBOLS = UNIQUE_SYMBOLS;
 
 // Math helpers
 const calculateEMA = (prices: number[], period: number) => {
@@ -282,11 +200,35 @@ export async function GET(request: Request) {
       return chunks;
     };
 
+    interface SniperResult {
+      symbol: string;
+      currentPrice: number;
+      pctChange: number;
+      ema5: number;
+      sma20: number;
+      bbWidthPct: number;
+      rsi: number;
+      volM: string;
+      avgVolM: string;
+      volumeSpike: boolean;
+      volumeConfirm: boolean;
+      isSqueeze: boolean;
+      crossSMA20: boolean;
+      isTrend: boolean;
+      momentumIgnition: boolean;
+      rsiFuelReady: boolean;
+      playbook: string;
+      playbookLabel: string;
+      playbookEmoji: string;
+      playbookTip: string;
+      isWaveRider: boolean;
+    }
+
     const chunks = chunkArray(ALL_SYMBOLS, 5);
-    let results: any[] = [];
+    let results: SniperResult[] = [];
 
     for (const chunk of chunks) {
-      const chunkPromises = chunk.map(async (symbol) => {
+      const chunkPromises = chunk.map(async (symbol): Promise<SniperResult | null> => {
         try {
           const { closes, volumes } = await fetchHistoricalData(symbol);
           if (closes.length > 20) {
@@ -377,6 +319,7 @@ export async function GET(request: Request) {
               isWaveRider,
             };
           }
+          return null;
         } catch (e) {
           console.warn(`Error fetching ${symbol}:`, e);
           return null;
@@ -384,7 +327,7 @@ export async function GET(request: Request) {
       });
 
       const chunkResults = await Promise.all(chunkPromises);
-      results.push(...chunkResults.filter((r) => r !== null));
+      results.push(...(chunkResults.filter((r): r is SniperResult => r !== null)));
     }
 
     // Sort/filter
@@ -435,9 +378,10 @@ export async function GET(request: Request) {
       count: results.length,
       data: results,
     });
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: message },
       { status: 500 },
     );
   }
