@@ -127,6 +127,7 @@ export const AI_HIDDEN_GEMS = [
   "ASPN", // ❄️ Thermal Management
   "CRDO", // 📶 Silicon Photonics
   "AAOI", // 📶 Silicon Photonics
+  "AMBQ", // 🔋 Ultra-low-power microcontrollers & Edge AI
 ];
 
 // ---------------------------------------
@@ -282,4 +283,5 @@ export const STOCK_DETAILS: Record<string, string> = {
   ASPN: "Aspen Aerogels - ผลิตฉนวนแอโรเจลที่บางและกันความร้อนได้ดีที่สุด ป้องกันน้ำควบแน่นในเซิร์ฟเวอร์",
   CRDO: "Credo Technology - สายทองแดงและอุปกรณ์เชื่อมต่อสำหรับเซิร์ฟเวอร์ AI (P/S แค่ 17 เท่า ถูกกว่าคู่แข่ง)",
   AAOI: "Applied Optoelectronics - ซิลิคอนโฟโตนิกส์และตัวรับส่งแสง มีโรงงานในอเมริกา (Domestic U.S. Manufacturing) ได้เปรียบเวลาหนีจีน",
+  AMBQ: "Ambiq Micro - ผู้นำด้านไมโครคอนโทรลเลอร์พลังงานต่ำพิเศษ (Ultra-low-power) และชิป SoC สำหรับอุปกรณ์พกพาและระบบ Edge AI",
 };
