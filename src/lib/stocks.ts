@@ -28,6 +28,7 @@ export const TIER_1_AI_HARDWARE = [
   "INTC", // 4IR - CPU
   "ARM", // 4IR - ชิปสถาปัตยกรรม (ย้ายมาจาก Growth)
   "SITM",
+  "AMBA",
 ];
 
 // 🌐 หมวดหมู่ใหม่: AI Data Center & Equipment
@@ -190,6 +191,7 @@ export const STOCK_DETAILS: Record<string, string> = {
   QCOM: "Qualcomm - ผู้นำชิปมือถือและการนำ AI ลงสู่ Edge Devices (AI PC & AI Phones)",
   ARM: "Arm Holdings - เจ้าของสถาปัตยกรรมชิปที่ใช้ในสมาร์ทโฟนเกือบทุกเครื่องในโลก และ AI Servers",
   SITM: "SiTime - ผู้นำนวัตกรรมระบบจับเวลาซิลิกอน (Silicon MEMS Timing) สำหรับอุปกรณ์ 5G, ยานยนต์ และระบบ AI",
+  AMBA: "Ambarella - ผู้พัฒนาชิปประมวลผลภาพและคอมพิวเตอร์วิทัศน์ (Computer Vision) สำหรับกล้องอัจฉริยะและ Edge AI",
 
   // 🌐 AI INFRASTRUCTURE & DATA CENTER
   ANET: "Arista Networks - อุปกรณ์เครือข่ายสวิตช์ความเร็วสูง (Ethernet) ที่ใช้ใน AI Data Center",
