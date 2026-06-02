@@ -3,13 +3,21 @@ import { NextResponse } from "next/server";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { ticker, entry, cut, target, alertType, triggerPrice } = body;
-
-    if (!ticker || !entry) {
-      return NextResponse.json(
-        { success: false, error: "Missing required fields" },
-        { status: 400 },
-      );
+    
+    // Support both single item and bulk items
+    let itemsToProcess = [];
+    
+    if (body.items && Array.isArray(body.items)) {
+      itemsToProcess = body.items;
+    } else {
+      const { ticker, entry, cut, target, alertType, triggerPrice } = body;
+      if (!ticker || !entry) {
+        return NextResponse.json(
+          { success: false, error: "Missing required fields" },
+          { status: 400 },
+        );
+      }
+      itemsToProcess = [{ ticker, entry, cut, target, alertType, triggerPrice }];
     }
 
     const GOOGLE_SCRIPT_URL = process.env.GOOGLE_SCRIPT_URL;
@@ -22,16 +30,14 @@ export async function POST(request: Request) {
 
     const payload = {
       actionType: "WATCHLIST",
-      items: [
-        {
-          ticker,
-          entry: parseFloat(entry),
-          cut: parseFloat(cut) || 0,
-          target: parseFloat(target) || 0,
-          alertType: alertType || "SMART_ENTRY",
-          triggerPrice: parseFloat(triggerPrice) || parseFloat(entry),
-        },
-      ],
+      items: itemsToProcess.map((item: any) => ({
+        ticker: item.ticker,
+        entry: parseFloat(item.entry),
+        cut: parseFloat(item.cut) || 0,
+        target: parseFloat(item.target) || 0,
+        alertType: item.alertType || "SMART_ENTRY",
+        triggerPrice: parseFloat(item.triggerPrice) || parseFloat(item.entry),
+      })),
     };
 
     const res = await fetch(GOOGLE_SCRIPT_URL, {

@@ -14,6 +14,17 @@ const MENU_ITEMS = [
     glowColor: "shadow-purple-500/20",
   },
   {
+    href: "/import-signals",
+    icon: "📋",
+    title: "นำเข้าโพย (Signals Import)",
+    subtitle: "แปลงข้อความโพยเป็นตาราง",
+    description: "คัดลอกโพยแล้ววางเพื่อแปลงเป็นข้อมูลตาราง คัดลอกลง Google Sheet ได้ทันที",
+    gradient: "from-amber-600 to-orange-600",
+    hoverGradient: "hover:from-amber-500 hover:to-orange-500",
+    borderColor: "border-amber-500/30",
+    glowColor: "shadow-amber-500/20",
+  },
+  {
     href: "/search",
     icon: "🔍",
     title: "ค้นหาหุ้น",

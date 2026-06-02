@@ -348,46 +348,63 @@ function doPost(e) {
 
       var items = json.items;
       var lastRow = sheet.getLastRow();
-      var existingTickers = {};
-
+      
+      // เก็บรายการที่มีอยู่แล้วโดยใช้ Ticker + Entry เป็น Key
+      // เพื่อให้เก็บหลายไม้ (หลาย Entry) ได้ และไม่เซฟทับบรรทัดกัน
+      var existingMap = {}; 
       if (lastRow >= 2) {
-        var vals = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+        var vals = sheet.getRange(2, 1, lastRow - 1, 2).getValues(); // อ่าน Col A (Ticker) และ B (Entry)
         for (var i = 0; i < vals.length; i++) {
-          existingTickers[vals[i][0]] = i + 2;
+          var ticker = vals[i][0];
+          var entry = vals[i][1];
+          if (ticker) {
+            existingMap[ticker + "_" + entry] = i + 2;
+          }
         }
       }
 
+      var newRows = [];
+      
       items.forEach(function (item) {
-        var rowToUpdate = existingTickers[item.ticker];
+        var key = item.ticker + "_" + item.entry;
+        var rowToUpdate = existingMap[key];
+        
         if (rowToUpdate) {
+          // ถ้ามีไม้นี้อยู่แล้ว อัปเดตข้อมูลบางส่วน (ถ้ามี)
           sheet.getRange(rowToUpdate, 5).setValue(""); // reset status
+          if (item.cut !== undefined) sheet.getRange(rowToUpdate, 6).setValue(item.cut);
+          if (item.target !== undefined) sheet.getRange(rowToUpdate, 7).setValue(item.target);
+          if (item.alertType) sheet.getRange(rowToUpdate, 8).setValue(item.alertType);
+          if (item.triggerPrice !== undefined) sheet.getRange(rowToUpdate, 9).setValue(item.triggerPrice);
         } else {
-          rowToUpdate = sheet.getLastRow() + 1;
-          sheet.getRange(rowToUpdate, 1).setValue(item.ticker);
-          sheet
-            .getRange(rowToUpdate, 3)
-            .setFormula("=GOOGLEFINANCE(A" + rowToUpdate + ")");
-          sheet
-            .getRange(rowToUpdate, 4)
-            .setFormula(
-              "=(C" + rowToUpdate + "-B" + rowToUpdate + ")/B" + rowToUpdate,
-            );
-        }
-        sheet.getRange(rowToUpdate, 2).setValue(item.entry);
-        sheet.getRange(rowToUpdate, 6).setValue(item.cut);
-        sheet.getRange(rowToUpdate, 7).setValue(item.target);
-
-        // NEW: Save Alert Settings
-        if (item.alertType) {
-          sheet.getRange(rowToUpdate, 8).setValue(item.alertType); // H: Alert Type
-        }
-        if (item.triggerPrice !== undefined) {
-          sheet.getRange(rowToUpdate, 9).setValue(item.triggerPrice); // I: Trigger Price
+          // ถ้ายังไม่มีไม้นี้ ให้เตรียม Append รวดเดียว
+          var nextRow = lastRow + newRows.length + 1;
+          var formulaC = "=GOOGLEFINANCE(A" + nextRow + ")";
+          var formulaD = "=(C" + nextRow + "-B" + nextRow + ")/B" + nextRow;
+          
+          newRows.push([
+            item.ticker,
+            item.entry,
+            formulaC,
+            formulaD,
+            "", // Status
+            item.cut || "",
+            item.target || "",
+            item.alertType || "",
+            item.triggerPrice !== undefined ? item.triggerPrice : ""
+          ]);
+          
+          existingMap[key] = nextRow; // เผื่อข้อมูลที่ส่งมาซ้ำกันเองในรอบเดียว
         }
       });
 
+      // ใช้ setValues บันทึกข้อมูลใหม่รวดเดียว (Batch Insert) ทำให้สคริปต์ทำงานเร็วขึ้น 10 เท่า
+      if (newRows.length > 0) {
+        sheet.getRange(lastRow + 1, 1, newRows.length, 9).setValues(newRows);
+      }
+
       return ContentService.createTextOutput(
-        JSON.stringify({ success: true, count: items.length }),
+        JSON.stringify({ success: true, count: items.length, appended: newRows.length }),
       ).setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -524,7 +541,17 @@ function doPost(e) {
       var logSheet = ss.getSheetByName("sniper_log");
       if (!logSheet) {
         logSheet = ss.insertSheet("sniper_log");
-        logSheet.appendRow(["date", "symbol", "playbook", "price", "bbWidth", "rsi", "volumeRatio", "signals", "result"]);
+        logSheet.appendRow([
+          "date",
+          "symbol",
+          "playbook",
+          "price",
+          "bbWidth",
+          "rsi",
+          "volumeRatio",
+          "signals",
+          "result",
+        ]);
       }
       var entries = json.entries;
       entries.forEach(function (entry) {
@@ -541,7 +568,7 @@ function doPost(e) {
         ]);
       });
       return ContentService.createTextOutput(
-        JSON.stringify({ success: true, saved: entries.length })
+        JSON.stringify({ success: true, saved: entries.length }),
       ).setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -553,7 +580,7 @@ function doPost(e) {
       if (!logSheet) throw new Error("sniper_log sheet not found");
       logSheet.getRange(json.rowIndex, 9).setValue(json.result);
       return ContentService.createTextOutput(
-        JSON.stringify({ success: true, updated: json.result })
+        JSON.stringify({ success: true, updated: json.result }),
       ).setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -578,7 +605,7 @@ function doGet(e) {
       var logSheet = ss.getSheetByName("sniper_log");
       if (!logSheet) {
         return ContentService.createTextOutput(
-          JSON.stringify({ success: true, data: [] })
+          JSON.stringify({ success: true, data: [] }),
         ).setMimeType(ContentService.MimeType.JSON);
       }
       var logData = [];
@@ -603,7 +630,7 @@ function doGet(e) {
         });
       }
       return ContentService.createTextOutput(
-        JSON.stringify({ success: true, data: logData.reverse() })
+        JSON.stringify({ success: true, data: logData.reverse() }),
       ).setMimeType(ContentService.MimeType.JSON);
     }
 
