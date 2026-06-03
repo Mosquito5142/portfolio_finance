@@ -83,12 +83,42 @@ export default function BreakoutScannerPage() {
 
   useEffect(() => {
     setMounted(true);
-    const initialScans: BreakoutScan[] = UNIQUE_SYMBOLS.map((symbol) => ({
+    
+    // Parse URL Parameters for Auto-Scan
+    const params = new URLSearchParams(window.location.search);
+    const urlSymbols = params.get("symbols");
+    const autoScan = params.get("auto") === "true";
+    
+    let initialTickers = UNIQUE_SYMBOLS;
+    
+    if (urlSymbols) {
+      const parsedSymbols = urlSymbols.split(",").map(s => s.trim().toUpperCase()).filter(s => s);
+      if (parsedSymbols.length > 0) {
+        initialTickers = parsedSymbols;
+        setSelectedTickers(parsedSymbols);
+        
+        // Add unknown tickers to custom
+        const newTickers = parsedSymbols.filter(t => !UNIQUE_SYMBOLS.includes(t));
+        if (newTickers.length > 0) {
+          setCustomTickers(newTickers);
+        }
+      }
+    }
+
+    const initialScans: BreakoutScan[] = Array.from(new Set([...UNIQUE_SYMBOLS, ...initialTickers])).map((symbol) => ({
       symbol,
       data: null,
       status: "pending",
     }));
     setScans(initialScans);
+
+    if (autoScan && urlSymbols) {
+       // We can't directly call handleScan here because it relies on state that might not be updated yet.
+       // So we set a timeout or rely on a separate useEffect
+       setTimeout(() => {
+         document.getElementById("btn-scan-breakout")?.click();
+       }, 500);
+    }
 
     // Fetch user's active portfolio tickers
     fetch("/api/sheets/portfolio")
@@ -246,6 +276,9 @@ export default function BreakoutScannerPage() {
               </div>
             </div>
             <div className="flex items-center gap-4 text-sm">
+              <Link href="/discover" className="text-gray-400 hover:text-purple-400 font-bold transition-colors">
+                🔮 AI Discover
+              </Link>
               <Link href="/" className="text-gray-400 hover:text-white text-sm bg-gray-800 px-3 py-1 rounded-full">
                 ← กลับหน้าแรก
               </Link>
@@ -349,6 +382,7 @@ export default function BreakoutScannerPage() {
 
           <div className="mt-6 flex justify-center">
             <button
+              id="btn-scan-breakout"
               onClick={handleScan}
               disabled={scanning || selectedTickers.length === 0}
               className={`px-8 py-3 rounded-xl font-bold text-lg shadow-lg flex items-center gap-2 transition-all ${
