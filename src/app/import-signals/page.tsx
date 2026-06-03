@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Copy, Check, Trash2, FileSpreadsheet, Send, Loader2 } from "lucide-react";
+import { ArrowLeft, Copy, Check, Trash2, FileSpreadsheet, Send, Loader2, Star } from "lucide-react";
+import { UNIQUE_SYMBOLS } from "@/lib/stocks";
 
 interface ParsedSignal {
   id: string;
@@ -19,6 +20,8 @@ export default function ImportSignalsPage() {
   const [isWatchlistCopied, setIsWatchlistCopied] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isSent, setIsSent] = useState(false);
+  const [isSendingInterested, setIsSendingInterested] = useState(false);
+  const [isSentInterested, setIsSentInterested] = useState(false);
 
   const handleParse = () => {
     const lines = inputText.split('\n').map(l => l.trim()).filter(l => l !== '');
@@ -147,6 +150,58 @@ export default function ImportSignalsPage() {
     }
   };
 
+  const sendInterestedToWatchlist = async () => {
+    if (parsedData.length === 0) return;
+    
+    // Filter only interested stocks
+    const interestedData = parsedData.filter(d => UNIQUE_SYMBOLS.includes(d.ticker));
+    if (interestedData.length === 0) {
+      alert("ไม่มีหุ้นที่ตรงกับ Watchlist ที่สนใจ (UNIQUE_SYMBOLS)");
+      return;
+    }
+    
+    setIsSendingInterested(true);
+    
+    try {
+      const items: any[] = [];
+      interestedData.forEach(d => {
+        const supports = d.support.split(',').map(s => s.trim());
+        supports.forEach(s => {
+          if (s) {
+            const price = s.replace(/\$/g, '').trim();
+            items.push({
+              ticker: d.ticker,
+              entry: price,
+              cut: 0,
+              target: 0,
+              alertType: "SMART_ENTRY",
+              triggerPrice: price
+            });
+          }
+        });
+      });
+      
+      const res = await fetch("/api/alerts/watchlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      
+      const json = await res.json();
+      if (json.success) {
+        setIsSentInterested(true);
+        setTimeout(() => setIsSentInterested(false), 2000);
+      } else {
+        alert("Error sending to Watchlist: " + json.error);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to send data");
+    } finally {
+      setIsSendingInterested(false);
+    }
+  };
+
   const clearData = () => {
     setInputText("");
     setParsedData([]);
@@ -233,6 +288,33 @@ export default function ImportSignalsPage() {
                   ) : (
                     <>
                       <Send className="w-4 h-4" /> ส่งเข้า Sheet
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={sendInterestedToWatchlist}
+                  disabled={parsedData.length === 0 || isSendingInterested}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                    parsedData.length === 0
+                      ? "bg-gray-800 text-gray-500 cursor-not-allowed"
+                      : isSentInterested
+                      ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/20"
+                      : isSendingInterested
+                      ? "bg-orange-500/50 text-white cursor-wait"
+                      : "bg-orange-600 hover:bg-orange-500 text-white shadow-lg shadow-orange-900/20"
+                  }`}
+                >
+                  {isSentInterested ? (
+                    <>
+                      <Check className="w-4 h-4" /> ส่งสำเร็จ!
+                    </>
+                  ) : isSendingInterested ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> กำลังส่ง...
+                    </>
+                  ) : (
+                    <>
+                      <Star className="w-4 h-4" /> ส่งเฉพาะหุ้นที่สนใจ
                     </>
                   )}
                 </button>
