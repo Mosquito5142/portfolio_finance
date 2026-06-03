@@ -118,7 +118,7 @@ export const ALPHA_PICKS_WATCHLIST = [
 // กลุ่มเก็งกำไรจัดจ้าน
 export const TIER_2_SPECULATIVE = ["JMIA", "ONDS", "OSS"];
 
-export const FINVIZ_WATCHLIST = ["UUUU", "IMVT", "BTC-USD"];
+export const FINVIZ_WATCHLIST = ["UUUU", "IMVT", "BTC-USD", "FLTW"];
 
 // 🎯 กองพลซุ่มยิง (AI Hidden Gems & Deep Tech Supply Chain)
 export const AI_HIDDEN_GEMS = [
@@ -277,6 +277,7 @@ export const STOCK_DETAILS: Record<string, string> = {
   PBW: "Pebblebrook Holdings - ผู้เช่าพื้นที่สำหรับ AI Server และ AI Data Center",
   SNDX: "Sanderson Farms - ผู้ผลิตเนื้อสัตว์สำหรับ AI Server และ AI Data Center",
   "BTC-USD": "Bitcoin (BTC/USD) - สกุลเงินดิจิทัลอันดับ 1 ของโลก",
+  FLTW: "Franklin FTSE Taiwan ETF - กองทุนรวมดัชนีหุ้นไต้หวัน...",
 
   // 🔥 AI HIDDEN GEMS (4 กองพลซุ่มยิง)
   SNPS: "Synopsys - 🌟 ผูกขาดซอฟต์แวร์ออกแบบชิป (EDA) ระดับโลก AI ชิปทุกตัวต้องใช้โปรแกรมของ SNPS สร้าง",
