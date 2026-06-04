@@ -77,7 +77,7 @@ function checkPriceAndNotify() {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return;
 
-  var dataRange = sheet.getRange(2, 1, lastRow - 1, 9); // Updated to 9 columns to include H and I
+  var dataRange = sheet.getRange(2, 1, lastRow - 1, 10); // Updated to 10 columns to include J (note)
   var data = dataRange.getValues();
   var pendingAlerts = [];
 
@@ -90,6 +90,7 @@ function checkPriceAndNotify() {
     var targetPrice = row[6];
     var alertType = row[7] || "SMART_ENTRY"; // Column H, default to SMART_ENTRY
     var triggerPrice = row[8] || entryPrice; // Column I, default to entryPrice
+    var note = row[9] || ""; // Column J, Note (e.g. "ไม้ 1")
 
     if (
       currentPrice === "#N/A" ||
@@ -111,10 +112,12 @@ function checkPriceAndNotify() {
     if (alertType === "SMART_ENTRY") {
       var buyBuffer = entryPrice * 1.005; // Buffer 0.5% higher than entry
       if (currentPrice <= buyBuffer && currentPrice > cutLossPrice) {
+        var trancheStr = note ? " [" + note + "]" : "";
         isTriggered = true;
         message =
           "🟢 SMART ENTRY: " +
           symbol +
+          trancheStr +
           "\n" +
           "💰 ราคาลงมาที่โซนซื้อ: $" +
           currentPrice +
@@ -349,16 +352,19 @@ function doPost(e) {
       var items = json.items;
       var lastRow = sheet.getLastRow();
       
-      // เก็บรายการที่มีอยู่แล้วโดยใช้ Ticker + Entry เป็น Key
-      // เพื่อให้เก็บหลายไม้ (หลาย Entry) ได้ และไม่เซฟทับบรรทัดกัน
+      // เก็บรายการที่มีอยู่แล้วโดยใช้ Ticker + Note (ไม้) เป็น Key 
+      // เพื่อให้อัปเดตราคาของ "ไม้เดิม" ได้โดยไม่เพิ่มบรรทัดใหม่
       var existingMap = {}; 
       if (lastRow >= 2) {
-        var vals = sheet.getRange(2, 1, lastRow - 1, 2).getValues(); // อ่าน Col A (Ticker) และ B (Entry)
+        var vals = sheet.getRange(2, 1, lastRow - 1, 10).getValues(); // อ่าน Col A ถึง J
         for (var i = 0; i < vals.length; i++) {
-          var ticker = vals[i][0];
-          var entry = vals[i][1];
+          var ticker = vals[i][0]; // A
+          var entry = vals[i][1]; // B
+          var note = vals[i][9]; // J
+          
           if (ticker) {
-            existingMap[ticker + "_" + entry] = i + 2;
+            var keyPart = note ? note : entry; // ใช้ Note (เช่น "ไม้ 1") เป็น Key หลัก ถ้าไม่มีให้ใช้ Entry
+            existingMap[ticker + "_" + keyPart] = i + 2;
           }
         }
       }
@@ -366,16 +372,19 @@ function doPost(e) {
       var newRows = [];
       
       items.forEach(function (item) {
-        var key = item.ticker + "_" + item.entry;
+        var keyPart = item.note ? item.note : item.entry;
+        var key = item.ticker + "_" + keyPart;
         var rowToUpdate = existingMap[key];
         
         if (rowToUpdate) {
-          // ถ้ามีไม้นี้อยู่แล้ว อัปเดตข้อมูลบางส่วน (ถ้ามี)
+          // ถ้ามีไม้นี้อยู่แล้ว อัปเดตข้อมูลรวมถึงราคาเข้าใหม่ด้วย
+          sheet.getRange(rowToUpdate, 2).setValue(item.entry); // อัปเดต Entry เผื่อมีการเปลี่ยนแปลง
           sheet.getRange(rowToUpdate, 5).setValue(""); // reset status
           if (item.cut !== undefined) sheet.getRange(rowToUpdate, 6).setValue(item.cut);
           if (item.target !== undefined) sheet.getRange(rowToUpdate, 7).setValue(item.target);
           if (item.alertType) sheet.getRange(rowToUpdate, 8).setValue(item.alertType);
-          if (item.triggerPrice !== undefined) sheet.getRange(rowToUpdate, 9).setValue(item.triggerPrice);
+          sheet.getRange(rowToUpdate, 9).setValue(item.triggerPrice !== undefined ? item.triggerPrice : item.entry); // อัปเดต Trigger Price ใหม่
+          if (item.note !== undefined) sheet.getRange(rowToUpdate, 10).setValue(item.note);
         } else {
           // ถ้ายังไม่มีไม้นี้ ให้เตรียม Append รวดเดียว
           var nextRow = lastRow + newRows.length + 1;
@@ -391,7 +400,8 @@ function doPost(e) {
             item.cut || "",
             item.target || "",
             item.alertType || "",
-            item.triggerPrice !== undefined ? item.triggerPrice : ""
+            item.triggerPrice !== undefined ? item.triggerPrice : "",
+            item.note || "" // Note / Tranche
           ]);
           
           existingMap[key] = nextRow; // เผื่อข้อมูลที่ส่งมาซ้ำกันเองในรอบเดียว
@@ -400,7 +410,7 @@ function doPost(e) {
 
       // ใช้ setValues บันทึกข้อมูลใหม่รวดเดียว (Batch Insert) ทำให้สคริปต์ทำงานเร็วขึ้น 10 เท่า
       if (newRows.length > 0) {
-        sheet.getRange(lastRow + 1, 1, newRows.length, 9).setValues(newRows);
+        sheet.getRange(lastRow + 1, 1, newRows.length, 10).setValues(newRows);
       }
 
       return ContentService.createTextOutput(

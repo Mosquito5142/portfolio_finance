@@ -37,6 +37,7 @@ export async function POST(request: Request) {
         target: parseFloat(item.target) || 0,
         alertType: item.alertType || "SMART_ENTRY",
         triggerPrice: parseFloat(item.triggerPrice) || parseFloat(item.entry),
+        note: item.note || "",
       })),
     };
 

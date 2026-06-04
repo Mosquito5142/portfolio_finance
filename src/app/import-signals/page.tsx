@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, Copy, Check, Trash2, FileSpreadsheet, Send, Loader2, Star } from "lucide-react";
+import { ArrowLeft, Copy, Check, Trash2, FileSpreadsheet, Send, Loader2, Target } from "lucide-react";
 import { UNIQUE_SYMBOLS } from "@/lib/stocks";
 
 interface ParsedSignal {
@@ -22,6 +22,19 @@ export default function ImportSignalsPage() {
   const [isSent, setIsSent] = useState(false);
   const [isSendingInterested, setIsSendingInterested] = useState(false);
   const [isSentInterested, setIsSentInterested] = useState(false);
+  
+  // Tranche selection state
+  const [selectedTranche, setSelectedTranche] = useState<number | 'ALL'>('ALL');
+
+  // Calculate maximum tranches available in current data
+  const maxTranches = useMemo(() => {
+    let max = 0;
+    parsedData.forEach(d => {
+      const supports = d.support.split(',').map(s => s.trim()).filter(s => s !== '');
+      if (supports.length > max) max = supports.length;
+    });
+    return max;
+  }, [parsedData]);
 
   const handleParse = () => {
     const lines = inputText.split('\n').map(l => l.trim()).filter(l => l !== '');
@@ -29,14 +42,12 @@ export default function ImportSignalsPage() {
     
     let i = 0;
     while (i < lines.length) {
-      // Skip common trailing words or ignore words
       if (['ซ่อน', 'เลือก', 'New'].includes(lines[i])) {
         i++;
         continue;
       }
       
       const ticker = lines[i];
-      // Check if next line exists
       if (i + 1 >= lines.length) break;
       
       const datetime = lines[i+1];
@@ -45,7 +56,6 @@ export default function ImportSignalsPage() {
       
       i += 2;
       
-      // Parse support and resistance
       while (i < lines.length && (lines[i].startsWith('รับ:') || lines[i].startsWith('ต้าน:'))) {
         if (lines[i].startsWith('รับ:')) {
           support = lines[i].replace('รับ:', '').trim();
@@ -66,40 +76,22 @@ export default function ImportSignalsPage() {
     }
     
     setParsedData(results);
+    setSelectedTranche('ALL'); // Reset selection on new parse
     setIsCopied(false);
-  };
-
-  const copyToClipboard = () => {
-    if (parsedData.length === 0) return;
-    
-    // Header for sheets
-    const header = "Ticker\tDate/Time\tSupport (รับ)\tResistance (ต้าน)";
-    const rows = parsedData.map(d => `${d.ticker}\t${d.datetime}\t${d.support}\t${d.resistance}`);
-    const tsv = [header, ...rows].join('\n');
-    
-    navigator.clipboard.writeText(tsv).then(() => {
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
-    });
   };
 
   const copyForWatchlist = () => {
     if (parsedData.length === 0) return;
-    
     const rows: string[] = [];
     parsedData.forEach(d => {
-      // split support string, e.g. "$599.7, $583.2" -> ["$599.7", "$583.2"]
-      const supports = d.support.split(',').map(s => s.trim());
-      supports.forEach(s => {
-        if (s) {
-          const price = s.replace(/\$/g, '').trim();
-          rows.push(`${d.ticker}\t${price}`);
-        }
+      const supports = d.support.split(',').map(s => s.trim()).filter(Boolean);
+      supports.forEach((s, idx) => {
+        if (selectedTranche !== 'ALL' && idx + 1 !== selectedTranche) return;
+        const price = s.replace(/\$/g, '').trim();
+        rows.push(`${d.ticker}\t${price}`);
       });
     });
-    
     const tsv = rows.join('\n');
-    
     navigator.clipboard.writeText(tsv).then(() => {
       setIsWatchlistCopied(true);
       setTimeout(() => setIsWatchlistCopied(false), 2000);
@@ -113,19 +105,20 @@ export default function ImportSignalsPage() {
     try {
       const items: any[] = [];
       parsedData.forEach(d => {
-        const supports = d.support.split(',').map(s => s.trim());
-        supports.forEach(s => {
-          if (s) {
-            const price = s.replace(/\$/g, '').trim();
-            items.push({
-              ticker: d.ticker,
-              entry: price,
-              cut: 0,
-              target: 0,
-              alertType: "SMART_ENTRY",
-              triggerPrice: price
-            });
-          }
+        const supports = d.support.split(',').map(s => s.trim()).filter(Boolean);
+        supports.forEach((s, idx) => {
+          if (selectedTranche !== 'ALL' && idx + 1 !== selectedTranche) return;
+          
+          const price = s.replace(/\$/g, '').trim();
+          items.push({
+            ticker: d.ticker,
+            entry: price,
+            cut: 0,
+            target: 0,
+            alertType: "SMART_ENTRY",
+            triggerPrice: price,
+            note: `ไม้ ${idx + 1}`
+          });
         });
       });
       
@@ -153,7 +146,6 @@ export default function ImportSignalsPage() {
   const sendInterestedToWatchlist = async () => {
     if (parsedData.length === 0) return;
     
-    // Filter only interested stocks
     const interestedData = parsedData.filter(d => UNIQUE_SYMBOLS.includes(d.ticker));
     if (interestedData.length === 0) {
       alert("ไม่มีหุ้นที่ตรงกับ Watchlist ที่สนใจ (UNIQUE_SYMBOLS)");
@@ -165,19 +157,20 @@ export default function ImportSignalsPage() {
     try {
       const items: any[] = [];
       interestedData.forEach(d => {
-        const supports = d.support.split(',').map(s => s.trim());
-        supports.forEach(s => {
-          if (s) {
-            const price = s.replace(/\$/g, '').trim();
-            items.push({
-              ticker: d.ticker,
-              entry: price,
-              cut: 0,
-              target: 0,
-              alertType: "SMART_ENTRY",
-              triggerPrice: price
-            });
-          }
+        const supports = d.support.split(',').map(s => s.trim()).filter(Boolean);
+        supports.forEach((s, idx) => {
+          if (selectedTranche !== 'ALL' && idx + 1 !== selectedTranche) return;
+
+          const price = s.replace(/\$/g, '').trim();
+          items.push({
+            ticker: d.ticker,
+            entry: price,
+            cut: 0,
+            target: 0,
+            alertType: "SMART_ENTRY",
+            triggerPrice: price,
+            note: `ไม้ ${idx + 1}`
+          });
         });
       });
       
@@ -205,6 +198,7 @@ export default function ImportSignalsPage() {
   const clearData = () => {
     setInputText("");
     setParsedData([]);
+    setSelectedTranche('ALL');
     setIsCopied(false);
     setIsWatchlistCopied(false);
   };
@@ -225,17 +219,17 @@ export default function ImportSignalsPage() {
               Signals Import (นำเข้าโพย)
             </h1>
             <p className="text-gray-400 text-sm">
-              คัดลอกข้อความโพยมาวาง เพื่อแปลงเป็นตารางและนำไปใส่ Google Sheet
+              คัดลอกข้อความโพยมาวาง เพื่อแปลงและส่งเข้า Google Sheet เป็นรายไม้
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Input Section */}
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col space-y-4">
+          <div className="lg:col-span-4 bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col space-y-4 h-[650px]">
             <h2 className="text-lg font-semibold text-gray-200">1. วางข้อความที่นี่</h2>
             <textarea
-              className="w-full h-[500px] bg-gray-950 border border-gray-800 rounded-xl p-4 text-gray-300 focus:outline-none focus:border-amber-500/50 resize-none font-mono text-sm"
+              className="flex-1 w-full bg-gray-950 border border-gray-800 rounded-xl p-4 text-gray-300 focus:outline-none focus:border-amber-500/50 resize-none font-mono text-sm"
               placeholder={`PRCT\n30 พ.ค. 17:10\nรับ: $26.1, $25.0\nต้าน: $28.2, $30.7\nซ่อน\nเลือก\nNew\n...`}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
@@ -245,7 +239,7 @@ export default function ImportSignalsPage() {
                 onClick={handleParse}
                 className="flex-1 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-semibold py-3 px-4 rounded-xl transition-all shadow-lg shadow-amber-900/20"
               >
-                แปลงข้อมูล (Parse)
+                แปลงข้อมูล
               </button>
               <button
                 onClick={clearData}
@@ -258,19 +252,116 @@ export default function ImportSignalsPage() {
           </div>
 
           {/* Output Section */}
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col space-y-4">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="lg:col-span-8 bg-gray-900 border border-gray-800 rounded-2xl p-5 flex flex-col h-[650px]">
+            {/* Header & Tranche Selector */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-800 pb-4 mb-4">
               <h2 className="text-lg font-semibold text-gray-200">
-                2. ข้อมูลตาราง ({parsedData.length} รายการ)
+                2. ข้อมูลหุ้น ({parsedData.length} ตัว)
               </h2>
-              <div className="flex flex-wrap gap-2">
+              
+              {maxTranches > 0 && (
+                <div className="flex items-center gap-2 bg-gray-950 rounded-lg p-1 border border-gray-800">
+                  <div className="px-3 py-1.5 text-sm text-gray-400 font-medium border-r border-gray-800 flex items-center gap-1.5">
+                    <Target className="w-4 h-4 text-amber-500" />
+                    ระดับไม้ (Tranche)
+                  </div>
+                  <select 
+                    value={selectedTranche} 
+                    onChange={(e) => setSelectedTranche(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
+                    className="bg-transparent text-amber-400 font-semibold cursor-pointer px-3 py-1 focus:outline-none appearance-none hover:text-amber-300 transition-colors"
+                  >
+                    <option value="ALL" className="bg-gray-900 text-white">📦 เลือกทุกไม้ (All)</option>
+                    {Array.from({ length: maxTranches }).map((_, i) => (
+                      <option key={i} value={i + 1} className="bg-gray-900 text-white">🎯 เฉพาะ ไม้ {i + 1}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Cards List */}
+            <div className="flex-1 overflow-auto pr-2 space-y-3 custom-scrollbar">
+              {parsedData.length > 0 ? (
+                parsedData.map((item) => {
+                  const supports = item.support.split(',').map(s => s.trim()).filter(Boolean);
+                  const resistances = item.resistance.split(',').map(s => s.trim()).filter(Boolean);
+                  
+                  return (
+                    <div key={item.id} className="bg-gray-950 border border-gray-800 rounded-xl p-4 flex flex-col md:flex-row gap-4 hover:border-gray-700 transition-colors group">
+                      {/* Ticker & Date */}
+                      <div className="md:w-[120px] flex flex-col justify-center shrink-0">
+                        <div className="text-2xl font-black text-amber-400 group-hover:text-amber-300 transition-colors">{item.ticker}</div>
+                        <div className="text-xs text-gray-500 font-medium">{item.datetime}</div>
+                      </div>
+                      
+                      {/* Support Levels */}
+                      <div className="flex-1 flex flex-col gap-2 border-t md:border-t-0 md:border-l border-gray-800 pt-3 md:pt-0 md:pl-5">
+                        <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">Support (แนวรับ)</span>
+                        <div className="flex flex-wrap gap-2">
+                          {supports.map((s, i) => {
+                            const isSelected = selectedTranche === 'ALL' || selectedTranche === i + 1;
+                            return (
+                              <div 
+                                key={i} 
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                                  isSelected 
+                                    ? 'bg-emerald-900/30 text-emerald-300 border border-emerald-800/50 shadow-sm shadow-emerald-900/10' 
+                                    : 'bg-gray-900 text-gray-600 border border-gray-800 opacity-60'
+                                }`}
+                              >
+                                {isSelected && <Check className="w-3 h-3 text-emerald-400" />}
+                                ไม้ {i + 1}: <span className="font-bold">{s}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Resistance Levels */}
+                      <div className="flex-1 flex flex-col gap-2 border-t md:border-t-0 md:border-l border-gray-800 pt-3 md:pt-0 md:pl-5">
+                        <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider">Resistance (แนวต้าน)</span>
+                        <div className="flex flex-wrap gap-2">
+                          {resistances.map((r, i) => (
+                             <span key={i} className="px-2.5 py-1 rounded-md text-xs font-bold bg-rose-950/40 text-rose-300 border border-rose-900/30">
+                               {r}
+                             </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-3 p-8 text-center bg-gray-950/50 rounded-xl border border-dashed border-gray-800">
+                  <FileSpreadsheet className="w-12 h-12 opacity-20 text-amber-500" />
+                  <div>
+                    <p className="font-medium text-gray-400">ยังไม่มีข้อมูล</p>
+                    <p className="text-xs mt-1">วางข้อความที่ช่องด้านซ้าย แล้วกด "แปลงข้อมูล"</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons Footer */}
+            {parsedData.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-800 flex flex-wrap gap-2 justify-end">
+                <button
+                  onClick={copyForWatchlist}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    isWatchlistCopied
+                      ? "bg-emerald-600 text-white"
+                      : "bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700"
+                  }`}
+                >
+                  {isWatchlistCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  คัดลอก {selectedTranche !== 'ALL' ? `(เฉพาะไม้ ${selectedTranche})` : ''}
+                </button>
+
                 <button
                   onClick={sendToWatchlist}
-                  disabled={parsedData.length === 0 || isSending}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                    parsedData.length === 0
-                      ? "bg-gray-800 text-gray-500 cursor-not-allowed"
-                      : isSent
+                  disabled={isSending}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    isSent
                       ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/20"
                       : isSending
                       ? "bg-rose-500/50 text-white cursor-wait"
@@ -278,26 +369,19 @@ export default function ImportSignalsPage() {
                   }`}
                 >
                   {isSent ? (
-                    <>
-                      <Check className="w-4 h-4" /> ส่งสำเร็จ!
-                    </>
+                    <><Check className="w-4 h-4" /> ส่งสำเร็จ!</>
                   ) : isSending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" /> กำลังส่ง...
-                    </>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> กำลังส่ง...</>
                   ) : (
-                    <>
-                      <Send className="w-4 h-4" /> ส่งเข้า Sheet
-                    </>
+                    <><Send className="w-4 h-4" /> ส่งเข้า Sheet</>
                   )}
                 </button>
+
                 <button
                   onClick={sendInterestedToWatchlist}
-                  disabled={parsedData.length === 0 || isSendingInterested}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                    parsedData.length === 0
-                      ? "bg-gray-800 text-gray-500 cursor-not-allowed"
-                      : isSentInterested
+                  disabled={isSendingInterested}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    isSentInterested
                       ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/20"
                       : isSendingInterested
                       ? "bg-orange-500/50 text-white cursor-wait"
@@ -305,94 +389,15 @@ export default function ImportSignalsPage() {
                   }`}
                 >
                   {isSentInterested ? (
-                    <>
-                      <Check className="w-4 h-4" /> ส่งสำเร็จ!
-                    </>
+                    <><Check className="w-4 h-4" /> ส่งสำเร็จ!</>
                   ) : isSendingInterested ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" /> กำลังส่ง...
-                    </>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> กำลังส่ง...</>
                   ) : (
-                    <>
-                      <Star className="w-4 h-4" /> ส่งเฉพาะหุ้นที่สนใจ
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={copyForWatchlist}
-                  disabled={parsedData.length === 0}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                    parsedData.length === 0
-                      ? "bg-gray-800 text-gray-500 cursor-not-allowed"
-                      : isWatchlistCopied
-                      ? "bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-900/20"
-                      : "bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-900/20"
-                  }`}
-                >
-                  {isWatchlistCopied ? (
-                    <>
-                      <Check className="w-4 h-4" /> Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" /> คัดลอก (แยกไม้รับ)
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={copyToClipboard}
-                  disabled={parsedData.length === 0}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                    parsedData.length === 0
-                      ? "bg-gray-800 text-gray-500 cursor-not-allowed"
-                      : isCopied
-                      ? "bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-900/20"
-                      : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20"
-                  }`}
-                >
-                  {isCopied ? (
-                    <>
-                      <Check className="w-4 h-4" /> Copied!
-                    </>
-                  ) : (
-                    <>
-                      <FileSpreadsheet className="w-4 h-4" /> Copy ตารางรวม
-                    </>
+                    <><Target className="w-4 h-4" /> ส่งเฉพาะหุ้นที่สนใจ</>
                   )}
                 </button>
               </div>
-            </div>
-
-            <div className="flex-1 overflow-auto rounded-xl border border-gray-800 bg-gray-950 h-[500px]">
-              {parsedData.length > 0 ? (
-                <table className="w-full text-left text-sm text-gray-300 relative">
-                  <thead className="bg-gray-900 text-gray-400 sticky top-0 z-10">
-                    <tr>
-                      <th className="px-4 py-3 font-medium border-b border-gray-800">Ticker</th>
-                      <th className="px-4 py-3 font-medium border-b border-gray-800">Date/Time</th>
-                      <th className="px-4 py-3 font-medium border-b border-gray-800">Support (รับ)</th>
-                      <th className="px-4 py-3 font-medium border-b border-gray-800">Resistance (ต้าน)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-800">
-                    {parsedData.map((item) => (
-                      <tr key={item.id} className="hover:bg-gray-900/50">
-                        <td className="px-4 py-3 font-bold text-amber-400">{item.ticker}</td>
-                        <td className="px-4 py-3 whitespace-nowrap">{item.datetime}</td>
-                        <td className="px-4 py-3 text-emerald-400">{item.support}</td>
-                        <td className="px-4 py-3 text-red-400">{item.resistance}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-2 p-8 text-center">
-                  <FileSpreadsheet className="w-12 h-12 opacity-20" />
-                  <p>ยังไม่มีข้อมูล</p>
-                  <p className="text-xs">วางข้อความแล้วกด "แปลงข้อมูล"</p>
-                </div>
-              )}
-            </div>
+            )}
           </div>
         </div>
       </div>
