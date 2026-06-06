@@ -23,6 +23,9 @@ export default function ImportSignalsPage() {
   const [isSendingInterested, setIsSendingInterested] = useState(false);
   const [isSentInterested, setIsSentInterested] = useState(false);
   
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  
   // Tranche selection state
   const [selectedTranche, setSelectedTranche] = useState<number | 'ALL'>('ALL');
 
@@ -76,14 +79,34 @@ export default function ImportSignalsPage() {
     }
     
     setParsedData(results);
+    setSelectedIds(new Set(results.map(r => r.id))); // Select all by default
     setSelectedTranche('ALL'); // Reset selection on new parse
     setIsCopied(false);
   };
 
+  const toggleSelection = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === parsedData.length) {
+      setSelectedIds(new Set()); // Deselect all
+    } else {
+      setSelectedIds(new Set(parsedData.map(d => d.id))); // Select all
+    }
+  };
+
   const copyForWatchlist = () => {
-    if (parsedData.length === 0) return;
+    const dataToExport = parsedData.filter(d => selectedIds.has(d.id));
+    if (dataToExport.length === 0) return;
     const rows: string[] = [];
-    parsedData.forEach(d => {
+    dataToExport.forEach(d => {
       const supports = d.support.split(',').map(s => s.trim()).filter(Boolean);
       supports.forEach((s, idx) => {
         if (selectedTranche !== 'ALL' && idx + 1 !== selectedTranche) return;
@@ -99,12 +122,13 @@ export default function ImportSignalsPage() {
   };
 
   const sendToWatchlist = async () => {
-    if (parsedData.length === 0) return;
+    const dataToExport = parsedData.filter(d => selectedIds.has(d.id));
+    if (dataToExport.length === 0) return;
     setIsSending(true);
     
     try {
       const items: any[] = [];
-      parsedData.forEach(d => {
+      dataToExport.forEach(d => {
         const supports = d.support.split(',').map(s => s.trim()).filter(Boolean);
         supports.forEach((s, idx) => {
           if (selectedTranche !== 'ALL' && idx + 1 !== selectedTranche) return;
@@ -144,9 +168,10 @@ export default function ImportSignalsPage() {
   };
 
   const sendInterestedToWatchlist = async () => {
-    if (parsedData.length === 0) return;
+    const dataToExport = parsedData.filter(d => selectedIds.has(d.id));
+    if (dataToExport.length === 0) return;
     
-    const interestedData = parsedData.filter(d => UNIQUE_SYMBOLS.includes(d.ticker));
+    const interestedData = dataToExport.filter(d => UNIQUE_SYMBOLS.includes(d.ticker));
     if (interestedData.length === 0) {
       alert("ไม่มีหุ้นที่ตรงกับ Watchlist ที่สนใจ (UNIQUE_SYMBOLS)");
       return;
@@ -198,6 +223,7 @@ export default function ImportSignalsPage() {
   const clearData = () => {
     setInputText("");
     setParsedData([]);
+    setSelectedIds(new Set());
     setSelectedTranche('ALL');
     setIsCopied(false);
     setIsWatchlistCopied(false);
@@ -255,9 +281,19 @@ export default function ImportSignalsPage() {
           <div className="lg:col-span-8 bg-gray-900 border border-gray-800 rounded-2xl p-5 flex flex-col h-[650px]">
             {/* Header & Tranche Selector */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-800 pb-4 mb-4">
-              <h2 className="text-lg font-semibold text-gray-200">
-                2. ข้อมูลหุ้น ({parsedData.length} ตัว)
-              </h2>
+              <div className="flex items-center gap-3">
+                {parsedData.length > 0 && (
+                  <input 
+                    type="checkbox" 
+                    checked={selectedIds.size === parsedData.length && parsedData.length > 0}
+                    onChange={toggleAll}
+                    className="w-5 h-5 rounded border-gray-700 text-amber-500 focus:ring-amber-500 focus:ring-offset-gray-900 bg-gray-800 cursor-pointer"
+                  />
+                )}
+                <h2 className="text-lg font-semibold text-gray-200">
+                  2. ข้อมูลหุ้น ({selectedIds.size}/{parsedData.length} ตัว)
+                </h2>
+              </div>
               
               {maxTranches > 0 && (
                 <div className="flex items-center gap-2 bg-gray-950 rounded-lg p-1 border border-gray-800">
@@ -287,9 +323,19 @@ export default function ImportSignalsPage() {
                   const resistances = item.resistance.split(',').map(s => s.trim()).filter(Boolean);
                   
                   return (
-                    <div key={item.id} className="bg-gray-950 border border-gray-800 rounded-xl p-4 flex flex-col md:flex-row gap-4 hover:border-gray-700 transition-colors group">
+                    <div key={item.id} className="relative bg-gray-950 border border-gray-800 rounded-xl p-4 flex flex-col md:flex-row gap-4 hover:border-gray-700 transition-colors group">
+                      {/* Checkbox */}
+                      <div className="absolute top-4 right-4 md:static md:flex md:items-center">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedIds.has(item.id)}
+                          onChange={() => toggleSelection(item.id)}
+                          className="w-5 h-5 rounded border-gray-700 text-amber-500 focus:ring-amber-500 focus:ring-offset-gray-900 bg-gray-800 cursor-pointer"
+                        />
+                      </div>
+                      
                       {/* Ticker & Date */}
-                      <div className="md:w-[120px] flex flex-col justify-center shrink-0">
+                      <div className="md:w-[120px] flex flex-col justify-center shrink-0 mt-2 md:mt-0">
                         <div className="text-2xl font-black text-amber-400 group-hover:text-amber-300 transition-colors">{item.ticker}</div>
                         <div className="text-xs text-gray-500 font-medium">{item.datetime}</div>
                       </div>

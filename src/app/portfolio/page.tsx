@@ -87,6 +87,7 @@ export default function PortfolioTracker() {
   const [expandedHistoryGroups, setExpandedHistoryGroups] = useState<{
     [key: string]: boolean;
   }>({});
+  const [chartMode, setChartMode] = useState<"compare" | "individual" | "strategy">("compare");
 
   const toggleGroup = (key: string) => {
     setExpandedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -505,6 +506,9 @@ export default function PortfolioTracker() {
   let gtPnl = 0;
   let gtCost = 0;
 
+  let cashVal = 0;
+  let cashCost = 0;
+
   // calculate across ALL active items
   portfolioData
     .filter((r) => r.status !== "CLOSED")
@@ -518,7 +522,10 @@ export default function PortfolioTracker() {
       const usdCost = item.price * holdingQty;
       const usdPnl = usdValue - usdCost;
 
-      if (item.portfolioType === "main" || !item.portfolioType) {
+      if (item.ticker === "CASH") {
+        cashVal += usdValue;
+        cashCost += usdCost;
+      } else if (item.portfolioType === "main" || !item.portfolioType) {
         mainVal += usdValue;
         mainPnl += usdPnl;
         mainCost += usdCost;
@@ -529,10 +536,11 @@ export default function PortfolioTracker() {
       }
     });
 
-  const totalVal = mainVal + gtVal;
+  const totalVal = mainVal + gtVal + cashVal;
   const mainWeight =
     totalVal > 0 ? ((mainVal / totalVal) * 100).toFixed(0) : "0";
   const gtWeight = totalVal > 0 ? ((gtVal / totalVal) * 100).toFixed(0) : "0";
+  const cashWeight = totalVal > 0 ? ((cashVal / totalVal) * 100).toFixed(0) : "0";
 
   const mainPnlPct =
     mainCost > 0 ? ((mainPnl / mainCost) * 100).toFixed(1) : "0.0";
@@ -540,6 +548,12 @@ export default function PortfolioTracker() {
 
   const gtPnlPct = gtCost > 0 ? ((gtPnl / gtCost) * 100).toFixed(1) : "0.0";
   const gtPnlSign = Number(gtPnlPct) >= 0 ? "+" : "";
+
+  const strategyData = [
+    { name: "🛡️ ทัพหลวง (Bunker)", value: mainVal, color: "#3b82f6" }, // blue-500
+    { name: "🚀 กล้าตาย (Moonshot)", value: gtVal, color: "#f59e0b" }, // amber-500
+    { name: "💰 เงินสด (Cash)", value: cashVal, color: "#10b981" }, // emerald-500
+  ].filter(item => item.value > 0);
 
   const COLORS = [
     "#3b82f6", // blue-500
@@ -554,56 +568,98 @@ export default function PortfolioTracker() {
   ];
 
   const handleCopySummary = () => {
-    let summaryText = `[สรุปพอร์ตการลงทุน - ${viewFilter === "all" ? "ทั้งหมด" : viewFilter === "main" ? "Main" : "Growth"}]\n`;
-    summaryText += `เงินลงทุนสุทธิ: ${getSymbol()}${formatCurrency(totalInvestedUSD)}\n`;
-    const sign = unrealizedPnLUSD >= 0 ? "+" : "";
-    summaryText += `กำไร/ขาดทุน ยังไม่รับรู้: ${sign}${getSymbol()}${formatCurrency(unrealizedPnLUSD)} (${sign}${unrealizedPnLPct.toFixed(2)}%)\n`;
-    const rSign = realizedPnLUSD >= 0 ? "+" : "";
-    summaryText += `กำไร/ขาดทุน รับรู้แล้ว (Realized): ${rSign}${getSymbol()}${formatCurrency(realizedPnLUSD)}\n`;
-    const nSign = netPnLUSD >= 0 ? "+" : "";
-    summaryText += `Net ROI (รวมรับรู้แล้ว): ${nSign}${getSymbol()}${formatCurrency(netPnLUSD)} (${nSign}${netPnLPct.toFixed(2)}%)\n`;
-    summaryText += `Win Rate: ${winRate.toFixed(1)}% (${winCount} ชนะ - ${lossCount} แพ้)\n\n`;
-
-    summaryText += `[รายการหุ้นที่ถืออยู่]\n`;
-    if (groupedActives.length === 0) {
-      summaryText += `- ไม่มีหุ้นในพอร์ต -\n`;
-    } else {
-      groupedActives.forEach((group: any, index: number) => {
-        const {
-          ticker,
-          totalQty,
-          currentPrice,
-          totalCostUSD,
-          portfolioType,
-          targetAlloc,
-        } = group;
-        const avgPrice = totalCostUSD / totalQty;
-        const pnlUSD = (currentPrice - avgPrice) * totalQty;
-        const pnlPct = ((currentPrice - avgPrice) / avgPrice) * 100;
-        const iSign = pnlUSD >= 0 ? "+" : "";
-
-        const itemUSD = currentPrice * totalQty;
-        const currentAllocPct =
-          totalCurrentValueUSD > 0 ? (itemUSD / totalCurrentValueUSD) * 100 : 0;
-
-        let allocText = ` | สัดส่วน: ${currentAllocPct.toFixed(1)}%`;
-
-        // Target Allocation Logic for "All" vs "Main/Growth"
-        if (targetAlloc && targetAlloc > 0) {
-          let displayedTargetAlloc = targetAlloc;
-          if (viewFilter === "all") {
-            // If viewing all, calculate relative to global target weights (Main = 90%, Growth = 10%)
-            const portfolioWeight = portfolioType === "growth" ? 0.1 : 0.9; // default to main 0.9 if undefined
-            displayedTargetAlloc = targetAlloc * portfolioWeight;
-          }
-          allocText += ` (เป้า: ${displayedTargetAlloc.toFixed(1)}%)`;
-        }
-
-        summaryText += `${index + 1}. ${ticker}: ${totalQty} หุ้น | ทุน: $${formatUSD(avgPrice)} | ปัจจุบัน: $${formatUSD(currentPrice)} | PnL: ${iSign}$${formatUSD(Math.abs(pnlUSD))} (${iSign}${Math.abs(pnlPct).toFixed(2)}%)${allocText}\n`;
-      });
+    let summaryText = `📊 สรุปพอร์ตการลงทุน (${viewFilter === "all" ? "Barbell Strategy" : viewFilter === "main" ? "ทัพหลวง" : "หน่วยกล้าตาย"})\n\n`;
+    
+    if (viewFilter === "all") {
+      summaryText += `สัดส่วนพอร์ต: ทัพหลวง ${mainWeight}% | กล้าตาย ${gtWeight}% | เงินสด ${cashWeight}% (เป้า: 40/40/20)\n\n`;
     }
 
-    navigator.clipboard.writeText(summaryText).then(() => {
+    const netFormatted = formatCurrency(Math.abs(netPnLUSD));
+    const netSignStr = netPnLUSD >= 0 ? "+" : "-";
+    summaryText += `Net ROI: ${getSymbol()}${netSignStr}${netFormatted} (${netSignStr}${Math.abs(netPnLPct).toFixed(2)}%) | Win Rate: ${winRate.toFixed(1)}%\n\n`;
+
+    let mainLines: string[] = [];
+    let growthLines: string[] = [];
+    let cashLines: string[] = [];
+
+    groupedActives.forEach((group: any) => {
+      const {
+        ticker,
+        totalQty,
+        currentPrice,
+        totalCostUSD,
+        portfolioType,
+        targetAlloc,
+      } = group;
+
+      const avgPrice = totalCostUSD / totalQty;
+      const pnlUSD = (currentPrice - avgPrice) * totalQty;
+      const pnlPct = ((currentPrice - avgPrice) / avgPrice) * 100;
+      
+      const pnlIcon = pnlUSD >= 0 ? "🟢" : "🔴";
+      const pnlSign = pnlUSD >= 0 ? "+" : "-";
+      const pnlStr = `${pnlSign}$${formatUSD(Math.abs(pnlUSD))} (${pnlSign}${Math.abs(pnlPct).toFixed(2)}%)`;
+
+      const itemUSD = currentPrice * totalQty;
+      const currentAllocPct = totalCurrentValueUSD > 0 ? (itemUSD / totalCurrentValueUSD) * 100 : 0;
+
+      const isCash = ticker === "CASH";
+
+      let displayedTargetAlloc = 0;
+      if (targetAlloc && targetAlloc > 0) {
+        displayedTargetAlloc = targetAlloc;
+        if (viewFilter === "all") {
+          // Target weights: Main = 40%, Growth = 40%, Cash = 20%
+          const portfolioWeight = isCash ? 0.2 : (portfolioType === "growth" ? 0.4 : 0.4); 
+          displayedTargetAlloc = targetAlloc * portfolioWeight;
+        }
+      }
+
+      const overWeightStr = (displayedTargetAlloc > 0 && currentAllocPct > displayedTargetAlloc) ? " (⚠️ Overweight)" : "";
+      
+      let allocText = `สัดส่วน: ${currentAllocPct.toFixed(1)}%`;
+      if (displayedTargetAlloc > 0) {
+        allocText += ` (เป้า ${Number(displayedTargetAlloc.toFixed(1))}%)`;
+      }
+      allocText += overWeightStr;
+
+      if (isCash) {
+        cashLines.push(`CASH | ${allocText} | ยอดคงเหลือ: $${formatUSD(itemUSD)}`);
+      } else if (portfolioType === "growth") {
+        growthLines.push(`${ticker} | ${allocText} | ${pnlIcon} PnL: ${pnlStr} | ทุน: $${formatUSD(avgPrice)} ➡️ ปัจจุบัน: $${formatUSD(currentPrice)} | จำนวน: ${totalQty} หุ้น`);
+      } else {
+        mainLines.push(`${ticker} | ${allocText} | ${pnlIcon} PnL: ${pnlStr} | ทุน: $${formatUSD(avgPrice)} ➡️ ปัจจุบัน: $${formatUSD(currentPrice)} | จำนวน: ${totalQty} หุ้น`);
+      }
+    });
+
+    if (mainLines.length > 0 || viewFilter === "all" || viewFilter === "main") {
+      summaryText += `🛡️ ทัพหลวง (Bunker)\n\n`;
+      if (mainLines.length > 0) {
+        summaryText += mainLines.join("\n\n") + "\n\n";
+      } else {
+        summaryText += `- ไม่มีหุ้นในหมวดนี้ -\n\n`;
+      }
+    }
+
+    if (growthLines.length > 0 || viewFilter === "all" || viewFilter === "growth") {
+      summaryText += `🚀 หน่วยกล้าตาย (Moonshot)\n\n`;
+      if (growthLines.length > 0) {
+        summaryText += growthLines.join("\n\n") + "\n\n";
+      } else {
+        summaryText += `- ไม่มีหุ้นในหมวดนี้ -\n\n`;
+      }
+    }
+
+    if (cashLines.length > 0 || viewFilter === "all") {
+      summaryText += `💰 คลังแสง (Cash Reserve)\n\n`;
+      if (cashLines.length > 0) {
+        summaryText += cashLines.join("\n\n") + "\n\n";
+      } else {
+        summaryText += `- ไม่มีเงินสด -\n\n`;
+      }
+    }
+
+    navigator.clipboard.writeText(summaryText.trim()).then(() => {
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
     });
@@ -831,117 +887,167 @@ export default function PortfolioTracker() {
           </div>
         </div>
 
-        {/* Portfolio Composition Chart Full Width */}
+        {/* Strategy Performance Comparison */}
         <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl">
-          <h2 className="text-lg font-bold text-white mb-4">
-            สัดส่วนพอร์ต (Portfolio)
+          <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <span>⚔️</span> เปรียบเทียบผลตอบแทน (Performance Battle)
           </h2>
-          {compositionData.length > 0 ? (
-            <div className="flex flex-col md:flex-row items-center gap-8">
-              <div className="h-80 w-full md:w-1/2 -ml-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={compositionData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={2}
-                      dataKey="value"
-                      stroke="none"
-                      labelLine={{ stroke: "#475569", strokeWidth: 1 }}
-                      label={({ cx, x, y, payload }: any) => {
-                        const formattedValue = formatCurrency(payload.value);
-                        const formattedPnl = formatCurrency(
-                          Math.abs(payload.pnl),
-                        );
-                        const sign = payload.pnl >= 0 ? "+" : "-";
-                        const pnlPct = Math.abs(payload.pnlPct).toFixed(2);
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Main Portfolio */}
+            <div className={`p-5 rounded-xl border relative overflow-hidden transition-all duration-300 ${Number(mainPnlPct) > Number(gtPnlPct) ? "border-emerald-500/50 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.15)]" : "border-slate-800 bg-slate-950/50"}`}>
+               {Number(mainPnlPct) > Number(gtPnlPct) && (
+                 <div className="absolute top-0 right-0 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg shadow-md">
+                   Winner 🏆
+                 </div>
+               )}
+               <h3 className="text-blue-400 font-bold flex items-center gap-2">
+                 🛡️ ทัพหลวง (Bunker)
+               </h3>
+               <p className={`text-3xl font-bold mt-3 ${Number(mainPnlPct) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                 {mainPnlSign}{mainPnlPct}%
+               </p>
+               <p className="text-sm text-slate-400 mt-2 font-medium">
+                 PnL: <span className={mainPnl >= 0 ? "text-emerald-500" : "text-red-500"}>{mainPnl >= 0 ? "+" : ""}{getSymbol()}{formatCurrency(mainPnl)}</span>
+               </p>
+            </div>
+            
+            {/* Growth Portfolio */}
+            <div className={`p-5 rounded-xl border relative overflow-hidden transition-all duration-300 ${Number(gtPnlPct) > Number(mainPnlPct) ? "border-emerald-500/50 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.15)]" : "border-slate-800 bg-slate-950/50"}`}>
+               {Number(gtPnlPct) > Number(mainPnlPct) && (
+                 <div className="absolute top-0 right-0 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg shadow-md">
+                   Winner 🏆
+                 </div>
+               )}
+               <h3 className="text-amber-400 font-bold flex items-center gap-2">
+                 🚀 กล้าตาย (Moonshot)
+               </h3>
+               <p className={`text-3xl font-bold mt-3 ${Number(gtPnlPct) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                 {gtPnlSign}{gtPnlPct}%
+               </p>
+               <p className="text-sm text-slate-400 mt-2 font-medium">
+                 PnL: <span className={gtPnl >= 0 ? "text-emerald-500" : "text-red-500"}>{gtPnl >= 0 ? "+" : ""}{getSymbol()}{formatCurrency(gtPnl)}</span>
+               </p>
+            </div>
+          </div>
+        </div>
 
-                        let labelText = `${payload.name} ${getSymbol()}${formattedValue}`;
-                        if (payload.name !== "CASH") {
-                          labelText += `(${sign}${formattedPnl}, ${sign}${pnlPct}%)`;
-                        }
+        {/* Portfolio Composition Charts */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <h2 className="text-lg font-bold text-white">
+              สัดส่วนพอร์ต (Portfolio)
+            </h2>
+            <div className="flex bg-slate-950 border border-slate-800 rounded-lg p-1 text-sm font-medium w-full md:w-auto">
+              <button
+                onClick={() => setChartMode("compare")}
+                className={`flex-1 md:px-4 py-1.5 rounded-md transition-all ${chartMode === "compare" ? "bg-slate-800 text-white shadow-sm" : "text-slate-400 hover:text-slate-200"}`}
+              >
+                เปรียบเทียบ
+              </button>
+              <button
+                onClick={() => setChartMode("individual")}
+                className={`flex-1 md:px-4 py-1.5 rounded-md transition-all ${chartMode === "individual" ? "bg-slate-800 text-white shadow-sm" : "text-slate-400 hover:text-slate-200"}`}
+              >
+                รายตัว
+              </button>
+              <button
+                onClick={() => setChartMode("strategy")}
+                className={`flex-1 md:px-4 py-1.5 rounded-md transition-all ${chartMode === "strategy" ? "bg-slate-800 text-white shadow-sm" : "text-slate-400 hover:text-slate-200"}`}
+              >
+                กลยุทธ์
+              </button>
+            </div>
+          </div>
 
-                        return (
-                          <text
-                            x={x}
-                            y={y}
-                            fill={
-                              payload.name !== "CASH"
-                                ? payload.pnl >= 0
-                                  ? "#34d399"
-                                  : "#f87171"
-                                : "#f8fafc"
-                            }
-                            textAnchor={x > cx ? "start" : "end"}
-                            dominantBaseline="central"
-                            fontSize={11}
-                            fontWeight="bold"
-                          >
-                            {labelText}
-                          </text>
-                        );
-                      }}
-                    >
-                      {compositionData.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={
-                            entry.name === "CASH"
-                              ? "#ffffff" // Always white for CASH
-                              : COLORS[index % COLORS.length]
-                          }
+          {(compositionData.length > 0 || strategyData.length > 0) ? (
+            <div className={`grid gap-8 ${chartMode === "compare" ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"}`}>
+              
+              {/* Individual Chart */}
+              {(chartMode === "compare" || chartMode === "individual") && (
+                <div className="flex flex-col items-center bg-slate-950/40 p-5 rounded-xl border border-slate-800/50">
+                  <h3 className="text-slate-300 font-bold mb-4">สัดส่วนรายตัว (Individual)</h3>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={compositionData}
+                          cx="50%" cy="50%"
+                          innerRadius={55} outerRadius={90}
+                          paddingAngle={2} dataKey="value" stroke="none"
+                        >
+                          {compositionData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.name === "CASH" ? "#ffffff" : COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip
+                          formatter={(value: any) => [`${getSymbol()}${formatCurrency(Number(value))}`, "มูลค่า"]}
+                          contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", borderRadius: "12px", color: "#f8fafc" }}
+                          itemStyle={{ color: "#f8fafc", fontWeight: "bold" }}
                         />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip
-                      formatter={(value: any) => [
-                        `${getSymbol()}${formatCurrency(Number(value))}`,
-                        "มูลค่า",
-                      ]}
-                      contentStyle={{
-                        backgroundColor: "#0f172a",
-                        borderColor: "#334155",
-                        borderRadius: "12px",
-                        color: "#f8fafc",
-                        boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.5)",
-                      }}
-                      itemStyle={{ color: "#f8fafc", fontWeight: "bold" }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="w-full md:w-1/2 grid grid-cols-2 gap-y-4 gap-x-2">
-                {compositionData.map((entry, index) => {
-                  const total = compositionData.reduce(
-                    (sum, item) => sum + item.value,
-                    0,
-                  );
-                  const percent = ((entry.value / total) * 100).toFixed(1);
-                  return (
-                    <div
-                      key={`${entry.name}-${index}`}
-                      className="flex items-center gap-2 text-xs text-slate-300"
-                    >
-                      <div
-                        className="w-4 h-4 rounded-full shrink-0 shadow-sm"
-                        style={{
-                          backgroundColor:
-                            entry.name === "CASH"
-                              ? "#ffffff"
-                              : COLORS[index % COLORS.length],
-                        }}
-                      ></div>
-                      <span className="font-bold text-white truncate w-16">
-                        {entry.name}
-                      </span>
-                      <span className="text-slate-400 ml-auto">{percent}%</span>
-                    </div>
-                  );
-                })}
-              </div>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {/* Legend for individual */}
+                  <div className="w-full grid grid-cols-2 gap-y-3 gap-x-2 mt-6 px-2">
+                    {compositionData.map((entry, index) => {
+                      const total = compositionData.reduce((sum, item) => sum + item.value, 0);
+                      const percent = ((entry.value / total) * 100).toFixed(1);
+                      return (
+                        <div key={`${entry.name}-${index}`} className="flex items-center gap-2 text-xs text-slate-300">
+                          <div className="w-3 h-3 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: entry.name === "CASH" ? "#ffffff" : COLORS[index % COLORS.length] }}></div>
+                          <span className="font-bold text-white truncate w-16">{entry.name}</span>
+                          <span className="text-slate-400 ml-auto">{percent}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Strategy Chart */}
+              {(chartMode === "compare" || chartMode === "strategy") && (
+                <div className="flex flex-col items-center bg-slate-950/40 p-5 rounded-xl border border-slate-800/50">
+                  <h3 className="text-slate-300 font-bold mb-4">สัดส่วนกลยุทธ์ (Barbell Strategy)</h3>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={strategyData}
+                          cx="50%" cy="50%"
+                          innerRadius={55} outerRadius={90}
+                          paddingAngle={2} dataKey="value" stroke="none"
+                        >
+                          {strategyData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip
+                          formatter={(value: any) => [`${getSymbol()}${formatCurrency(Number(value))}`, "มูลค่า"]}
+                          contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", borderRadius: "12px", color: "#f8fafc" }}
+                          itemStyle={{ color: "#f8fafc", fontWeight: "bold" }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {/* Legend for strategy */}
+                  <div className="w-full flex flex-col gap-y-4 mt-6 px-4">
+                    {strategyData.map((entry, index) => {
+                      const total = strategyData.reduce((sum, item) => sum + item.value, 0);
+                      const percent = ((entry.value / total) * 100).toFixed(1);
+                      return (
+                        <div key={`${entry.name}-${index}`} className="flex items-center justify-between text-sm text-slate-300">
+                          <div className="flex items-center gap-3">
+                            <div className="w-4 h-4 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: entry.color }}></div>
+                            <span className="font-bold text-white">{entry.name}</span>
+                          </div>
+                          <span className="text-slate-400 font-bold">{percent}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
             </div>
           ) : (
             <div className="text-center py-8 text-slate-500 text-sm">
