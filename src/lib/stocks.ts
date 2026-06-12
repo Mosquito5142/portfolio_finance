@@ -29,6 +29,10 @@ export const TIER_1_AI_HARDWARE = [
   "ARM", // 4IR - ชิปสถาปัตยกรรม (ย้ายมาจาก Growth)
   "SITM",
   "AMBA",
+  "CBRS",
+  "INDI",
+  "VLN",
+  "HIMX",
 ];
 
 // 🌐 หมวดหมู่ใหม่: AI Data Center & Equipment
@@ -40,6 +44,7 @@ export const TIER_1_AI_INFRASTRUCTURE = [
   "VRT", // Vertiv - AI Data Center Power & Cooling (Tier 1)
   "FN", // AI Optical Transceivers
   "FPS",
+  "VICR",
 ];
 
 // ☁️ หมวดหมู่ AI Software, Cloud & Cybersecurity
@@ -83,6 +88,13 @@ export const TIER_1_GROWTH_TECH = [
   "AVAV", // Growth
   "DPRO", // Growth
   "NOK", // Growth
+  "NOVT",
+  "SOLS",
+  "MRCY",
+  "OUST",
+  "VPG",
+  "AVEX",
+  "CLFD",
 ];
 
 // กลุ่ม Healthcare & Biotech
@@ -96,6 +108,7 @@ export const TIER_1_HEALTH_BIO = [
   "CLPT",
   "PRME",
   "RXRX",
+  "WGS",
 ];
 
 // กลุ่มพลังงานแห่งอนาคต & ทรัพยากร
@@ -108,6 +121,7 @@ export const TIER_1_ENERGY_RESOURCES = [
   "CRML", // Growth
   "BWXT", // Growth
   "AMSC",
+  "BE",
 ];
 
 // 🌟 กลุ่ม Alpha Picks
@@ -129,6 +143,7 @@ export const AI_HIDDEN_GEMS = [
   "CRDO", // 📶 Silicon Photonics
   "AAOI", // 📶 Silicon Photonics
   "AMBQ", // 🔋 Ultra-low-power microcontrollers & Edge AI
+  "MRAM",
 ];
 
 // ---------------------------------------
@@ -287,4 +302,21 @@ export const STOCK_DETAILS: Record<string, string> = {
   CRDO: "Credo Technology - สายทองแดงและอุปกรณ์เชื่อมต่อสำหรับเซิร์ฟเวอร์ AI (P/S แค่ 17 เท่า ถูกกว่าคู่แข่ง)",
   AAOI: "Applied Optoelectronics - ซิลิคอนโฟโตนิกส์และตัวรับส่งแสง มีโรงงานในอเมริกา (Domestic U.S. Manufacturing) ได้เปรียบเวลาหนีจีน",
   AMBQ: "Ambiq Micro - ผู้นำด้านไมโครคอนโทรลเลอร์พลังงานต่ำพิเศษ (Ultra-low-power) และชิป SoC สำหรับอุปกรณ์พกพาและระบบ Edge AI",
+
+  // Added Stocks
+  CBRS: "Cerebras Systems - ผู้พัฒนาชิปประมวลผล AI ขนาดใหญ่ระดับ Wafer (Wafer-Scale Engine) และระบบซูเปอร์คอมพิวเตอร์สำหรับการฝึกฝนโมเดล AI ขนาดใหญ่",
+  INDI: "indie Semiconductor - ผู้นำชิปเซ็ตและซอฟต์แวร์ยานยนต์อัจฉริยะ สำหรับระบบขับขี่อัตโนมัติ (ADAS), เซ็นเซอร์ LiDAR/Radar และยานยนต์ไฟฟ้า (EV)",
+  VLN: "Valens Semiconductor - ผู้ผลิตชิปเชื่อมต่อความเร็วสูงระยะไกล (HDBaseT) สำหรับระบบสารสนเทศในรถยนต์ (Infotainment) และกล้องในรถยนต์ขับเคลื่อนอัตโนมัติ",
+  HIMX: "Himax Technologies - ผู้นำการออกแบบชิปขับจอภาพ (Display Driver IC) สำหรับสมาร์ทโฟน, หน้าจอรถยนต์ และเทคโนโลยีแสดงผลภาพ AR/VR",
+  VICR: "Vicor Corp - ผู้เชี่ยวชาญเทคโนโลยีโมดูลจัดการพลังงานความหนาแน่นสูง (High-Density Power Modules) สำหรับ AI Data Centers, ซูเปอร์คอมพิวเตอร์ และยานยนต์",
+  NOVT: "Novanta - ผู้ผลิตอุปกรณ์ควบคุมโฟโตนิกส์, เลเซอร์ความแม่นยำสูง และระบบควบคุมการเคลื่อนที่ สำหรับเครื่องมือแพทย์และอุปกรณ์เซมิคอนดักเตอร์ขั้นสูง",
+  SOLS: "Solstice Advanced Materials - ผู้ผลิตวัสดุพิเศษและเคมีภัณฑ์ขั้นสูงเพื่อการใช้งานในอุตสาหกรรมชิป, ระบบปรับอากาศ และการแปลงยูเรเนียมสำหรับพลังงานสะอาด",
+  MRCY: "Mercury Systems - ผู้จัดหาระบบคอมพิวเตอร์ ชิปประมวลผล และเทคโนโลยีอิเล็กทรอนิกส์ด้านความมั่นคงระดับสูงสำหรับอุตสาหกรรมป้องกันประเทศและอวกาศ",
+  OUST: "Ouster - ผู้นำเทคโนโลยีเซ็นเซอร์ดิจิทัลไลดาร์ (Digital LiDAR) ความละเอียดสูง ทำหน้าที่เป็นดวงตา 3 มิติสำหรับหุ่นยนต์, รถยนต์ไร้คนขับ และระบบอัจฉริยะ",
+  VPG: "Vishay Precision Group - ผู้ผลิตเซ็นเซอร์ความแม่นยำสูง, สเตรนเกจ (Strain Gages) และระบบตรวจวัดสำหรับระบบการผลิตอัตโนมัติ ยานยนต์ และอุตสาหกรรม 4.0",
+  AVEX: "AEVEX Corp - ผู้ให้บริการโซลูชันระบบการบินอัจฉริยะ, อากาศยานไร้คนขับ (UAS) และระบบเซ็นเซอร์เพื่อการสำรวจและเทคโนโลยีป้องกันประเทศ",
+  CLFD: "Clearfield - ผู้พัฒนาแพลตฟอร์มจัดการและเชื่อมต่อใยแก้วนำแสง (Fiber Optic) ช่วยให้ผู้ให้บริการบรอดแบนด์ขยายเครือข่ายอินเทอร์เน็ตได้รวดเร็วและคุ้มทุน",
+  WGS: "GeneDx Holdings - บริษัทเทคโนโลยีชีวภาพ ผู้เชี่ยวชาญการวิเคราะห์ข้อมูลจีโนม (Genomic Analysis) เพื่อตรวจหาและรักษากลุ่มโรคหายากทางพันธุกรรม",
+  BE: "Bloom Energy - ผู้ผลิตเซิร์ฟเวอร์พลังงานไฟฟ้า (Bloom Energy Servers) จากเซลล์เชื้อเพลิงออกไซด์แข็ง (Solid Oxide Fuel Cells) เพื่อการผลิตไฟฟ้าสะอาด 24/7",
+  MRAM: "Everspin Technologies - ผู้บุกเบิกเทคโนโลยีหน่วยความจำ MRAM (Magnetoresistive RAM) ที่มีความเร็วสูงและไม่สูญหายเมื่อไฟดับ เหมาะกับงานอุตสาหกรรม อวกาศ และยานยนต์",
 };
