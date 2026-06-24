@@ -167,6 +167,32 @@ function checkPriceAndNotify() {
           "🚨 โวลุ่มเข้า? จับตาดูให้ดี!";
       }
     }
+    // 4. 🏆 MINERVINI (Buy Stop เหนือ Pivot แต่ "ห้ามไล่เกิน 5%")
+    // เข้าซื้อเฉพาะตอนราคาทะลุ Pivot ขึ้นไป และยังอยู่ในโซน 0-5% เหนือ Pivot เท่านั้น
+    else if (alertType === "MINERVINI") {
+      var chaseLimit = triggerPrice * 1.05; // โซนซื้อ Minervini: Pivot ถึง +5%
+      if (currentPrice >= triggerPrice && currentPrice <= chaseLimit) {
+        var mTranche = note ? " [" + note + "]" : "";
+        isTriggered = true;
+        message =
+          "🏆 MINERVINI BUY: " +
+          symbol +
+          mTranche +
+          "\n" +
+          "🚀 ทะลุ Pivot เข้าโซนซื้อแล้ว! ราคา: $" +
+          currentPrice +
+          "\n" +
+          "🎯 Pivot (Buy Stop): $" +
+          triggerPrice +
+          " | ไล่ได้ไม่เกิน: $" +
+          chaseLimit.toFixed(2) +
+          "\n" +
+          "🛑 คัทลอส: $" +
+          cutLossPrice +
+          " | 🎯 เป้า: $" +
+          targetPrice;
+      }
+    }
 
     if (isTriggered) {
       pendingAlerts.push({

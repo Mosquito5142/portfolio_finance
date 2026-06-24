@@ -1,4 +1,4 @@
-import { Trophy, Activity, Target, AlertTriangle } from "lucide-react";
+import { Trophy, Activity, Target, AlertTriangle, Award } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -56,6 +56,17 @@ export default function Navigation() {
               >
                 <Target size={16} />
                 Sniper
+              </Link>
+              <Link
+                href="/minervini"
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  pathname === "/minervini"
+                    ? "bg-amber-500/10 text-amber-400"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                }`}
+              >
+                <Award size={16} />
+                Minervini
               </Link>
               <Link
                 href="/dashboard"
