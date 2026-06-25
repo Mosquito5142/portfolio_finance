@@ -95,6 +95,30 @@ const MENU_ITEMS = [
     borderColor: "border-emerald-500/30",
     glowColor: "shadow-emerald-500/20",
   },
+  {
+    href: "/minervini",
+    icon: "🏆",
+    title: "Minervini Scanner",
+    subtitle: "Trend Template + VCP + Stage",
+    description:
+      "คัดหุ้นตามสูตร Mark Minervini ครบ 8 ข้อ, ตรวจ VCP, แยก Stage และส่งจุดซื้อเข้าแจ้งเตือน LINE",
+    gradient: "from-amber-600 to-yellow-600",
+    hoverGradient: "hover:from-amber-500 hover:to-yellow-500",
+    borderColor: "border-amber-500/30",
+    glowColor: "shadow-amber-500/20",
+  },
+  {
+    href: "/stocks",
+    icon: "🗂️",
+    title: "จัดการคลังหุ้น",
+    subtitle: "เพิ่ม/ลบ/แก้ Watchlist กลาง",
+    description:
+      "จัดการรายชื่อหุ้นที่ทุกหน้าใช้ร่วมกัน เก็บใน Google Sheet ไม่ต้องแก้โค้ด",
+    gradient: "from-cyan-600 to-blue-600",
+    hoverGradient: "hover:from-cyan-500 hover:to-blue-500",
+    borderColor: "border-cyan-500/30",
+    glowColor: "shadow-cyan-500/20",
+  },
 ];
 
 export default function HomePage() {

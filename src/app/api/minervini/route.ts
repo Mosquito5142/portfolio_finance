@@ -21,6 +21,119 @@ interface Bar {
   v: number; // volume
 }
 
+// ─── VCP Detection (Volatility Contraction Pattern ของ Minervini) ─────
+// หัวใจ VCP: ราคาแกว่งแคบลงเรื่อยๆ (contraction หดตัว) + วอลุ่มแห้ง
+// + ฐานแน่นใกล้แนวต้าน → พร้อมเบรก
+function detectVCP(bars: Bar[]) {
+  const n = bars.length;
+  const baseLen = Math.min(70, n); // ฐาน ~3 เดือน
+  const seg = bars.slice(n - baseLen);
+  const highs = seg.map((b) => b.h);
+  const lows = seg.map((b) => b.l);
+  const vols = seg.map((b) => b.v);
+  const price = bars[n - 1].c;
+
+  // 1) หา swing pivots เพื่อวัด "การหดตัว" (contraction) แต่ละรอบ
+  const k = 3; // เป็น swing เมื่อสูง/ต่ำสุดในกรอบ ±3 แท่ง
+  type Piv = { idx: number; price: number; type: "H" | "L" };
+  const raw: Piv[] = [];
+  for (let i = k; i < seg.length - k; i++) {
+    let isH = true;
+    let isL = true;
+    for (let j = i - k; j <= i + k; j++) {
+      if (highs[j] > highs[i]) isH = false;
+      if (lows[j] < lows[i]) isL = false;
+    }
+    if (isH) raw.push({ idx: i, price: highs[i], type: "H" });
+    else if (isL) raw.push({ idx: i, price: lows[i], type: "L" });
+  }
+  // บีบ pivots ให้สลับ H/L (เก็บค่าสุดโต่งของชนิดเดียวกันที่ติดกัน)
+  const piv: Piv[] = [];
+  for (const p of raw) {
+    const last = piv[piv.length - 1];
+    if (!last || last.type !== p.type) piv.push(p);
+    else if (
+      (p.type === "H" && p.price > last.price) ||
+      (p.type === "L" && p.price < last.price)
+    )
+      piv[piv.length - 1] = p;
+  }
+  // วัดความลึกของแต่ละ contraction (จาก swing High ลงไป swing Low ถัดไป)
+  const contractions: number[] = [];
+  for (let i = 0; i < piv.length - 1; i++) {
+    if (piv[i].type === "H" && piv[i + 1].type === "L") {
+      const depth = ((piv[i].price - piv[i + 1].price) / piv[i].price) * 100;
+      if (depth > 0) contractions.push(Number(depth.toFixed(1)));
+    }
+  }
+  const lastC = contractions.slice(-4); // ดูสูงสุด 4 รอบล่าสุด
+  // contractions ต้องหดตัวลงเรื่อยๆ (รอบหลังตื้นกว่ารอบก่อน, ผ่อนผัน 15%)
+  let shrinking = lastC.length >= 2;
+  for (let i = 1; i < lastC.length; i++) {
+    if (lastC[i] > lastC[i - 1] * 1.15) shrinking = false;
+  }
+  const tightestPullback = lastC.length ? lastC[lastC.length - 1] : null;
+
+  // 2) ความผันผวนหดตัว (เทียบช่วงต้นฐาน vs ช่วงท้ายฐาน)
+  const third = Math.max(5, Math.floor(baseLen / 3));
+  const rangePct = (arr: Bar[]) =>
+    arr.reduce((s, b) => s + ((b.h - b.l) / b.c) * 100, 0) / arr.length;
+  const earlyVola = rangePct(seg.slice(0, third));
+  const recentVola = rangePct(seg.slice(seg.length - third));
+  const volContracted = recentVola < earlyVola * 0.7;
+
+  // 3) วอลุ่มแห้ง (10 วันล่าสุดต่ำกว่าค่าเฉลี่ยฐาน)
+  const vol10 = vols.slice(-10).reduce((s, v) => s + v, 0) / Math.min(10, vols.length);
+  const volBase = vols.reduce((s, v) => s + v, 0) / vols.length;
+  const volDryUp = volBase > 0 && vol10 < volBase * 0.85;
+
+  // 4) ฐานปัจจุบันแน่น (range 12 วันล่าสุดแคบ)
+  const recent = seg.slice(-12);
+  const rHigh = Math.max(...recent.map((b) => b.h));
+  const rLow = Math.min(...recent.map((b) => b.l));
+  const tightRangePct = rLow > 0 ? ((rHigh - rLow) / rLow) * 100 : 999;
+  const isTight = tightRangePct < 12;
+
+  // 5) ราคาอยู่ใกล้แนวต้านของฐาน (พร้อมเบรก ไม่ใช่ยังอยู่ก้นเหว)
+  const baseHigh = Math.max(...highs);
+  const nearPivot = price >= baseHigh * 0.9;
+
+  // คะแนนรวม
+  let score = 0;
+  if (shrinking) score += 30;
+  if (volContracted) score += 20;
+  if (volDryUp) score += 20;
+  if (isTight) score += 15;
+  if (nearPivot) score += 15;
+
+  const detected = score >= 60 && contractions.length >= 2 && nearPivot;
+
+  // จุด swing สำหรับวาดบนกราฟ (date ตรงกับ chart series)
+  const pivots = piv.map((p) => {
+    const dt = new Date(seg[p.idx].t * 1000);
+    return {
+      date: `${dt.getMonth() + 1}/${dt.getDate()}`,
+      price: Number(p.price.toFixed(2)),
+      type: p.type,
+    };
+  });
+
+  return {
+    detected,
+    score,
+    pivots,
+    contractions: lastC,
+    tightestPullback,
+    volDryUp,
+    volContracted,
+    isTight,
+    nearPivot,
+    tightRangePct: Number(tightRangePct.toFixed(1)),
+    baseHigh: Number(baseHigh.toFixed(2)),
+    baseLow: Number(rLow.toFixed(2)),
+  };
+}
+
 // ─── Yahoo Finance daily chart (FREE, no API key) ─────────────────────
 async function getYahooDaily(symbol: string): Promise<Bar[] | null> {
   try {
@@ -214,14 +327,26 @@ export async function GET(request: Request) {
       }
     }
 
+    // ── VCP Detection ──────────────────────────────────────────────────
+    const vcp = detectVCP(bars);
+
     // ── Setup การเข้าซื้อแบบ Minervini (Pivot / Buy Stop / Stop Loss) ──
-    // Pivot proxy: จุดสูงสุดของช่วงพักฐานล่าสุด (high ของ 15 วันก่อนหน้า ไม่รวมวันนี้)
-    const pivotWindow = bars.slice(Math.max(0, n - 16), n - 1);
-    const pivot = pivotWindow.length
-      ? Math.max(...pivotWindow.map((b) => b.h))
-      : high52;
+    // ถ้าเจอ VCP: ใช้แนวต้านของฐาน VCP เป็น pivot และ low ของฐานเป็น stop
+    // ถ้าไม่เจอ: ใช้ proxy เดิม (high 15 วันก่อนหน้า)
+    let pivot: number;
+    let stopLoss: number;
+    if (vcp.detected) {
+      pivot = vcp.baseHigh;
+      // stop ใต้ฐานล่าสุด แต่ไม่ให้เสี่ยงเกิน 10%
+      stopLoss = Math.max(vcp.baseLow, pivot * 0.9);
+    } else {
+      const pivotWindow = bars.slice(Math.max(0, n - 16), n - 1);
+      pivot = pivotWindow.length
+        ? Math.max(...pivotWindow.map((b) => b.h))
+        : high52;
+      stopLoss = pivot * 0.92; // ตัดขาดทุน ~8% ใต้ pivot (กรอบ Minervini)
+    }
     const buyTrigger = pivot; // ตั้ง Buy Stop เหนือ pivot
-    const stopLoss = pivot * 0.92; // ตัดขาดทุน ~8% ใต้ pivot (กรอบ Minervini)
     const distanceToBuy = ((buyTrigger - price) / price) * 100;
     const riskPct = ((buyTrigger - stopLoss) / buyTrigger) * 100;
 
@@ -282,6 +407,7 @@ export async function GET(request: Request) {
         distanceToBuy: Number(distanceToBuy.toFixed(1)),
         riskPct: Number(riskPct.toFixed(1)),
       },
+      vcp,
       chart,
     });
   } catch (error: any) {

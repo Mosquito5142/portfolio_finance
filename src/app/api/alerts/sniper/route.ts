@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { UNIQUE_SYMBOLS } from "@/lib/stocks";
+import { getServerSymbols } from "@/lib/serverStocks";
 
 interface SniperCandidate {
   symbol: string;
@@ -18,6 +18,7 @@ export async function GET() {
   // Note: Vercel/Next.js has timeout limits, but 30-40 stocks might fit if parallelized.
   // For robustness, we process in chunks.
 
+  const UNIQUE_SYMBOLS = await getServerSymbols();
   const CHUNK_SIZE = 5;
   for (let i = 0; i < UNIQUE_SYMBOLS.length; i += CHUNK_SIZE) {
     const chunk = UNIQUE_SYMBOLS.slice(i, i + CHUNK_SIZE);

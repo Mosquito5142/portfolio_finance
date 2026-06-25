@@ -5,6 +5,18 @@ var LINE_ACCESS_TOKEN = ""; // ใส่ Token ของคุณ
 var SHEET_WATCHLIST = "LineNotify_Watchlist";
 var SHEET_PORTFOLIO_MAIN = "Portfolio_main";
 var SHEET_PORTFOLIO_GROWTH = "Portfolio_growth";
+var SHEET_STOCKS = "Stock_Master"; // คลังหุ้นกลาง (Symbol, Category, Detail)
+
+// สร้างชีต Stock_Master ถ้ายังไม่มี (พร้อมหัวตาราง)
+function getOrCreateStocksSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_STOCKS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_STOCKS);
+    sheet.appendRow(["Symbol", "Category", "Detail"]);
+  }
+  return sheet;
+}
 
 // ========================================
 // 🕒 ฟังก์ชันเช็คเวลาตลาด (Master's Timezone Fix - Updated)
@@ -617,6 +629,95 @@ function doPost(e) {
       logSheet.getRange(json.rowIndex, 9).setValue(json.result);
       return ContentService.createTextOutput(
         JSON.stringify({ success: true, updated: json.result }),
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ---------------------------------
+    // 7. STOCK MASTER - ดึงรายการหุ้นทั้งหมด
+    // ---------------------------------
+    if (actionType === "STOCKS_GET") {
+      var sSheet = getOrCreateStocksSheet();
+      var stockData = [];
+      var sLastRow = sSheet.getLastRow();
+      if (sLastRow >= 2) {
+        var sVals = sSheet.getRange(2, 1, sLastRow - 1, 3).getValues();
+        sVals.forEach(function (r) {
+          if (r[0]) {
+            stockData.push({
+              symbol: String(r[0]).toUpperCase().trim(),
+              category: r[1] || "",
+              detail: r[2] || "",
+            });
+          }
+        });
+      }
+      return ContentService.createTextOutput(
+        JSON.stringify({ status: "success", source: "sheet", data: stockData }),
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ---------------------------------
+    // 8. STOCK MASTER - เพิ่ม/แก้ไข (upsert by symbol) รองรับทั้งเดี่ยวและกลุ่ม
+    // ---------------------------------
+    if (actionType === "STOCKS_UPSERT") {
+      var uSheet = getOrCreateStocksSheet();
+      var uItems = json.items || (json.item ? [json.item] : []);
+      var uLastRow = uSheet.getLastRow();
+      var uMap = {};
+      if (uLastRow >= 2) {
+        var uKeys = uSheet.getRange(2, 1, uLastRow - 1, 1).getValues();
+        for (var ui = 0; ui < uKeys.length; ui++) {
+          if (uKeys[ui][0])
+            uMap[String(uKeys[ui][0]).toUpperCase().trim()] = ui + 2;
+        }
+      }
+      var newStockRows = [];
+      uItems.forEach(function (it) {
+        if (!it.symbol) return;
+        var sym = String(it.symbol).toUpperCase().trim();
+        var row = uMap[sym];
+        if (row) {
+          uSheet.getRange(row, 2).setValue(it.category || "");
+          uSheet.getRange(row, 3).setValue(it.detail || "");
+        } else {
+          newStockRows.push([sym, it.category || "", it.detail || ""]);
+          uMap[sym] = uLastRow + newStockRows.length;
+        }
+      });
+      if (newStockRows.length > 0) {
+        uSheet
+          .getRange(uLastRow + 1, 1, newStockRows.length, 3)
+          .setValues(newStockRows);
+      }
+      return ContentService.createTextOutput(
+        JSON.stringify({
+          success: true,
+          appended: newStockRows.length,
+          count: uItems.length,
+        }),
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ---------------------------------
+    // 9. STOCK MASTER - ลบ (by symbol)
+    // ---------------------------------
+    if (actionType === "STOCKS_DELETE") {
+      var dSheet = getOrCreateStocksSheet();
+      var dSym = String(json.symbol || "").toUpperCase().trim();
+      var dLastRow = dSheet.getLastRow();
+      var deleted = 0;
+      if (dSym && dLastRow >= 2) {
+        var dVals = dSheet.getRange(2, 1, dLastRow - 1, 1).getValues();
+        // ลบจากล่างขึ้นบนกัน index เพี้ยน
+        for (var di = dVals.length - 1; di >= 0; di--) {
+          if (String(dVals[di][0]).toUpperCase().trim() === dSym) {
+            dSheet.deleteRow(di + 2);
+            deleted++;
+          }
+        }
+      }
+      return ContentService.createTextOutput(
+        JSON.stringify({ success: true, deleted: deleted }),
       ).setMimeType(ContentService.MimeType.JSON);
     }
 

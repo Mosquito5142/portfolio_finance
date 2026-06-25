@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { ArrowLeft, Copy, Check, Trash2, FileSpreadsheet, Send, Loader2, Target } from "lucide-react";
-import { UNIQUE_SYMBOLS } from "@/lib/stocks";
+import { useStockList } from "@/lib/stockList";
 
 interface ParsedSignal {
   id: string;
@@ -14,6 +14,7 @@ interface ParsedSignal {
 }
 
 export default function ImportSignalsPage() {
+  const { symbols: UNIQUE_SYMBOLS } = useStockList();
   const [inputText, setInputText] = useState("");
   const [parsedData, setParsedData] = useState<ParsedSignal[]>([]);
   const [isCopied, setIsCopied] = useState(false);

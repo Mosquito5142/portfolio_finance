@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
   ComposedChart,
@@ -8,17 +8,12 @@ import {
   XAxis,
   YAxis,
   ReferenceLine,
+  ReferenceDot,
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import {
-  UNIQUE_SYMBOLS,
-  TIER_1_MEGA_TECH,
-  TIER_1_AI_HARDWARE,
-  TIER_1_AI_SOFTWARE,
-  TIER_1_GROWTH_TECH,
-  STOCK_DETAILS,
-} from "@/lib/stocks";
+import { STOCK_DETAILS } from "@/lib/stocks";
+import { fetchStockList, groupByCategory, type StockEntry } from "@/lib/stockList";
 
 interface Criterion {
   pass: boolean;
@@ -54,6 +49,20 @@ interface MinerviniData {
     stopLoss: number;
     distanceToBuy: number;
     riskPct: number;
+  };
+  vcp?: {
+    detected: boolean;
+    score: number;
+    pivots: { date: string; price: number; type: "H" | "L" }[];
+    contractions: number[];
+    tightestPullback: number | null;
+    volDryUp: boolean;
+    volContracted: boolean;
+    isTight: boolean;
+    nearPivot: boolean;
+    tightRangePct: number;
+    baseHigh: number;
+    baseLow: number;
   };
   chart?: {
     date: string;
@@ -115,19 +124,64 @@ const TickerCheckbox = ({
 
 // กราฟราคา + MA + เส้นที่ขีดเอง (Pivot/Buy Stop, Stop Loss, 52wk High)
 const MinerviniChart = ({ d }: { d: MinerviniData }) => {
+  // ซูม: จำนวนวันที่แสดง (ยิ่งน้อยยิ่งใกล้)
+  const [zoom, setZoom] = useState<number>(60);
+
   if (!d.chart?.length) return null;
   const buy = d.setup?.buyTrigger;
   const stop = d.setup?.stopLoss;
   const high52 = d.metrics?.high52;
 
+  // ตัดข้อมูลให้เหลือเฉพาะช่วงที่ซูม
+  const chartData = d.chart.slice(-zoom);
+  const visibleDates = new Set(chartData.map((c) => c.date));
+  // โชว์เฉพาะจุด VCP ที่อยู่ในช่วงที่มองเห็น
+  const visiblePivots = (d.vcp?.pivots ?? []).filter((p) =>
+    visibleDates.has(p.date),
+  );
+
+  const zoomOptions = [
+    { v: 30, label: "1 เดือน" },
+    { v: 60, label: "3 เดือน" },
+    { v: 120, label: "6 เดือน" },
+  ];
+
   return (
-    <div className="h-[420px] w-full mb-4 bg-slate-900/40 rounded-xl border border-slate-700/50 p-2">
+    <div className="w-full mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-1 px-1">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-gray-400">
+          <span><span className="text-blue-400">━</span> MA50</span>
+          <span><span className="text-amber-500">━</span> MA150</span>
+          <span><span className="text-red-400">━</span> MA200</span>
+          <span><span className="text-yellow-300">━</span> Buy/Pivot</span>
+          <span><span className="text-fuchsia-400">┅</span> เส้นหดตัว VCP</span>
+          <span><span className="text-red-400">●</span> จุดสูง / <span className="text-emerald-400">●</span> จุดต่ำ</span>
+        </div>
+        {/* ปุ่มซูม */}
+        <div className="flex gap-1">
+          <span className="text-[10px] text-gray-500 self-center mr-1">🔍 ซูม:</span>
+          {zoomOptions.map((opt) => (
+            <button
+              key={opt.v}
+              onClick={() => setZoom(opt.v)}
+              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${
+                zoom === opt.v
+                  ? "bg-amber-500 text-slate-900"
+                  : "bg-slate-800 text-gray-400 hover:bg-slate-700"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    <div className="h-[420px] w-full bg-slate-900/40 rounded-xl border border-slate-700/50 p-2">
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={d.chart} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+        <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
           <XAxis
             dataKey="date"
             tick={{ fill: "#64748b", fontSize: 9 }}
-            interval={Math.floor(d.chart.length / 6)}
+            interval={Math.floor(chartData.length / 6)}
             tickLine={false}
             axisLine={{ stroke: "#334155" }}
           />
@@ -179,8 +233,38 @@ const MinerviniChart = ({ d }: { d: MinerviniData }) => {
               label={{ value: `Stop ${stop}`, fill: "#f87171", fontSize: 9, position: "insideBottomRight" }}
             />
           )}
+          {/* VCP: เส้นเชื่อมการหดตัว (zigzag) */}
+          {visiblePivots.map((p, i, arr) =>
+            i < arr.length - 1 ? (
+              <ReferenceLine
+                key={`seg-${i}`}
+                segment={[
+                  { x: p.date, y: p.price },
+                  { x: arr[i + 1].date, y: arr[i + 1].price },
+                ]}
+                stroke="#e879f9"
+                strokeWidth={1}
+                strokeDasharray="3 2"
+                ifOverflow="extendDomain"
+              />
+            ) : null,
+          )}
+          {/* VCP: จุด swing (H = แดง, L = เขียว) */}
+          {visiblePivots.map((p, i) => (
+            <ReferenceDot
+              key={`dot-${i}`}
+              x={p.date}
+              y={p.price}
+              r={3}
+              fill={p.type === "H" ? "#f87171" : "#34d399"}
+              stroke="#0f172a"
+              strokeWidth={1}
+              ifOverflow="extendDomain"
+            />
+          ))}
         </ComposedChart>
       </ResponsiveContainer>
+    </div>
     </div>
   );
 };
@@ -202,6 +286,9 @@ export default function MinerviniPage() {
 
   // กรองตาม Stage (0 = ทั้งหมด)
   const [stageFilter, setStageFilter] = useState<number>(0);
+
+  // แสดงเฉพาะหุ้นที่เจอ VCP
+  const [vcpOnly, setVcpOnly] = useState(false);
 
   // สถานะการส่งเข้าแจ้งเตือน LINE (idle/sending/sent ต่อ symbol)
   const [alertState, setAlertState] = useState<Record<string, "idle" | "sending" | "sent" | "error">>({});
@@ -273,33 +360,52 @@ export default function MinerviniPage() {
         : [...prev, symbol],
     );
 
+  // คลังหุ้นแบบ dynamic (ดึงจาก Sheet ผ่าน /api/stocks, fallback ไปโค้ด)
+  const [stockEntries, setStockEntries] = useState<StockEntry[]>([]);
+  const allSymbols = useMemo(
+    () => stockEntries.map((e) => e.symbol),
+    [stockEntries],
+  );
+  const detailMap = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const e of stockEntries) if (e.detail) m[e.symbol] = e.detail;
+    return m;
+  }, [stockEntries]);
+  const categoryGroups = useMemo(
+    () => groupByCategory(stockEntries),
+    [stockEntries],
+  );
+
   useEffect(() => {
     setMounted(true);
 
     const params = new URLSearchParams(window.location.search);
     const urlSymbols = params.get("symbols");
-    if (urlSymbols) {
-      const parsed = urlSymbols
-        .split(",")
-        .map((s) => s.trim().toUpperCase())
-        .filter(Boolean);
-      if (parsed.length) {
-        setSelectedTickers(parsed);
-        const unknown = parsed.filter((t) => !UNIQUE_SYMBOLS.includes(t));
-        if (unknown.length) setCustomTickers(unknown);
-      }
-    }
+    const parsed = urlSymbols
+      ? urlSymbols.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean)
+      : [];
+    if (parsed.length) setSelectedTickers(parsed);
 
-    const initial: Scan[] = UNIQUE_SYMBOLS.map((symbol) => ({
-      symbol,
-      data: null,
-      status: "pending",
-    }));
-    setScans(initial);
+    let masterSyms: string[] = [];
 
-    // ดึงหุ้นที่ถืออยู่ใน portfolio เพื่อ Quick Select
-    fetch("/api/sheets/portfolio")
-      .then((res) => res.json())
+    fetchStockList()
+      .then(({ entries }) => {
+        setStockEntries(entries);
+        masterSyms = entries.map((e) => e.symbol);
+
+        const customFromUrl = parsed.filter((t) => !masterSyms.includes(t));
+        if (customFromUrl.length)
+          setCustomTickers((prev) =>
+            Array.from(new Set([...prev, ...customFromUrl])),
+          );
+
+        const all = Array.from(new Set([...masterSyms, ...parsed]));
+        setScans(
+          all.map((symbol) => ({ symbol, data: null, status: "pending" })),
+        );
+
+        return fetch("/api/sheets/portfolio").then((res) => res.json());
+      })
       .then((json) => {
         if (json?.data) {
           const actives = json.data.filter(
@@ -313,11 +419,18 @@ export default function MinerviniPage() {
           ) as string[];
           setPortfolioTickers(pTickers);
 
-          const newTickers = pTickers.filter((t) => !UNIQUE_SYMBOLS.includes(t));
+          const newTickers = pTickers.filter((t) => !masterSyms.includes(t));
           if (newTickers.length) {
             setCustomTickers((prev) =>
               Array.from(new Set([...prev, ...newTickers])),
             );
+            setScans((prev) => {
+              const ex = new Set(prev.map((s) => s.symbol));
+              const add = newTickers
+                .filter((t) => !ex.has(t))
+                .map((t) => ({ symbol: t, data: null, status: "pending" as const }));
+              return [...prev, ...add];
+            });
           }
         }
       })
@@ -327,7 +440,7 @@ export default function MinerviniPage() {
   const addCustomTicker = (ticker: string) => {
     const upper = ticker.trim().toUpperCase();
     if (!upper) return;
-    if (!customTickers.includes(upper) && !UNIQUE_SYMBOLS.includes(upper)) {
+    if (!customTickers.includes(upper) && !allSymbols.includes(upper)) {
       setCustomTickers((prev) => [...prev, upper]);
     }
     if (!selectedTickers.includes(upper)) {
@@ -336,9 +449,32 @@ export default function MinerviniPage() {
     setSearchTerm("");
   };
 
-  const filteredSymbols = [...UNIQUE_SYMBOLS, ...customTickers].filter((s) =>
-    s.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  const filteredSymbols = Array.from(
+    new Set([...allSymbols, ...customTickers]),
+  ).filter((s) => s.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  // ปุ่ม Quick Select: พอร์ต + ALL + ตามหมวดจาก Sheet
+  const CAT_COLORS = [
+    "bg-purple-800",
+    "bg-purple-600",
+    "bg-blue-600",
+    "bg-pink-600",
+    "bg-emerald-700",
+    "bg-teal-700",
+    "bg-rose-700",
+    "bg-indigo-700",
+    "bg-fuchsia-700",
+    "bg-cyan-700",
+  ];
+  const quickGroups = [
+    { label: "พอร์ตของฉัน 🌟", list: portfolioTickers, color: "bg-yellow-600" },
+    { label: "ALL LIST", list: allSymbols, color: "bg-gray-600" },
+    ...categoryGroups.map((g, i) => ({
+      label: g.category,
+      list: g.symbols,
+      color: CAT_COLORS[i % CAT_COLORS.length],
+    })),
+  ];
 
   const handleScan = async () => {
     if (scanning || selectedTickers.length === 0) return;
@@ -391,11 +527,18 @@ export default function MinerviniPage() {
     .filter((s) => s.status === "done" && s.data?.status === "success")
     .filter((s) => (onlyQualified ? s.data?.meetsTemplate : true))
     .filter((s) => (stageFilter === 0 ? true : s.data?.stage?.num === stageFilter))
+    .filter((s) => (vcpOnly ? s.data?.vcp?.detected : true))
     .sort((a, b) => {
-      // เรียงตามจำนวนข้อที่ผ่าน แล้วตาม RS
+      // VCP ที่เจอแล้วมาก่อน → จำนวนข้อที่ผ่าน → คะแนน VCP → RS
+      const va = a.data?.vcp?.detected ? 1 : 0;
+      const vb = b.data?.vcp?.detected ? 1 : 0;
+      if (vb !== va) return vb - va;
       const pa = a.data?.passed ?? 0;
       const pb = b.data?.passed ?? 0;
       if (pb !== pa) return pb - pa;
+      const sa = a.data?.vcp?.score ?? 0;
+      const sb = b.data?.vcp?.score ?? 0;
+      if (sb !== sa) return sb - sa;
       return (b.data?.metrics?.rsVsSpy ?? -999) - (a.data?.metrics?.rsVsSpy ?? -999);
     });
 
@@ -481,14 +624,7 @@ export default function MinerviniPage() {
                 <span className="text-gray-400 text-xs self-center mr-2">
                   Quick Select:
                 </span>
-                {[
-                  { label: "พอร์ตของฉัน 🌟", list: portfolioTickers, color: "bg-yellow-600" },
-                  { label: "ALL LIST", list: UNIQUE_SYMBOLS, color: "bg-gray-600" },
-                  { label: "Tech & Leaders", list: TIER_1_MEGA_TECH, color: "bg-purple-800" },
-                  { label: "AI Hardware", list: TIER_1_AI_HARDWARE, color: "bg-purple-600" },
-                  { label: "AI Software", list: TIER_1_AI_SOFTWARE, color: "bg-blue-600" },
-                  { label: "Growth", list: TIER_1_GROWTH_TECH, color: "bg-pink-600" },
-                ].map((group) => {
+                {quickGroups.map((group) => {
                   const isFull =
                     group.list.length > 0 &&
                     group.list.every((t) => selectedTickers.includes(t));
@@ -623,6 +759,16 @@ export default function MinerviniPage() {
             >
               🏆 ผ่านครบ 8 ข้อ ({qualifiedCount})
             </button>
+            <button
+              onClick={() => setVcpOnly((v) => !v)}
+              className={`px-4 py-2 rounded-lg font-bold text-sm transition-all border flex items-center gap-2 ${
+                vcpOnly
+                  ? "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/50"
+                  : "bg-slate-800 text-gray-400 border-transparent hover:bg-slate-700"
+              }`}
+            >
+              🎯 เจอ VCP ({scans.filter((s) => s.data?.vcp?.detected).length})
+            </button>
           </div>
         )}
 
@@ -723,9 +869,14 @@ export default function MinerviniPage() {
                             🏆 ผ่านครบ
                           </span>
                         )}
+                        {d.vcp?.detected && (
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/40">
+                            🎯 VCP
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-gray-400 truncate max-w-[180px]">
-                        {STOCK_DETAILS[scan.symbol] || "Stock"}
+                        {detailMap[scan.symbol] || STOCK_DETAILS[scan.symbol] || "Stock"}
                       </p>
                     </div>
                     <div className="text-right">
@@ -745,6 +896,59 @@ export default function MinerviniPage() {
                         {d.stage.name}
                       </p>
                       <p className="text-xs text-gray-400">{d.stage.action}</p>
+                    </div>
+                  )}
+
+                  {/* VCP footprint */}
+                  {d.vcp && (
+                    <div
+                      className={`mb-4 rounded-lg px-3 py-2 border ${
+                        d.vcp.detected
+                          ? "bg-fuchsia-500/10 border-fuchsia-500/40"
+                          : "bg-slate-900/40 border-slate-700/50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span
+                          className={`text-sm font-bold ${
+                            d.vcp.detected ? "text-fuchsia-300" : "text-gray-400"
+                          }`}
+                        >
+                          {d.vcp.detected ? "🎯 พบ VCP" : "ยังไม่เข้า VCP"}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          คะแนน VCP {d.vcp.score}/100
+                        </span>
+                      </div>
+                      {/* การหดตัวแต่ละรอบ */}
+                      {d.vcp.contractions.length > 0 && (
+                        <div className="flex items-center gap-1 text-xs mb-1.5">
+                          <span className="text-gray-500">การหดตัว:</span>
+                          {d.vcp.contractions.map((c, i) => (
+                            <span key={i} className="flex items-center gap-1">
+                              <span className="font-bold text-gray-300">-{c}%</span>
+                              {i < d.vcp!.contractions.length - 1 && (
+                                <span className="text-gray-600">→</span>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {/* checklist ย่อย */}
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
+                        <span className={d.vcp.volDryUp ? "text-emerald-400" : "text-gray-600"}>
+                          {d.vcp.volDryUp ? "✓" : "✗"} วอลุ่มแห้ง
+                        </span>
+                        <span className={d.vcp.volContracted ? "text-emerald-400" : "text-gray-600"}>
+                          {d.vcp.volContracted ? "✓" : "✗"} ผันผวนหดตัว
+                        </span>
+                        <span className={d.vcp.isTight ? "text-emerald-400" : "text-gray-600"}>
+                          {d.vcp.isTight ? "✓" : "✗"} ฐานแน่น ({d.vcp.tightRangePct}%)
+                        </span>
+                        <span className={d.vcp.nearPivot ? "text-emerald-400" : "text-gray-600"}>
+                          {d.vcp.nearPivot ? "✓" : "✗"} ใกล้แนวต้าน
+                        </span>
+                      </div>
                     </div>
                   )}
 

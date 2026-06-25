@@ -1,23 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import {
-  UNIQUE_SYMBOLS,
-  MAGNIFICENT_SEVEN,
-  TIER_1_MEGA_TECH,
-  TIER_1_AI_HARDWARE,
-  TIER_1_AI_INFRASTRUCTURE,
-  TIER_1_AI_SOFTWARE,
-  TIER_1_GROWTH_TECH,
-  TIER_1_ENERGY_RESOURCES,
-  TIER_1_HEALTH_BIO,
-  TIER_2_SPECULATIVE,
-  ALPHA_PICKS_WATCHLIST,
-  FINVIZ_WATCHLIST,
-  AI_HIDDEN_GEMS,
-  STOCK_DETAILS,
-} from "@/lib/stocks";
+import { STOCK_DETAILS } from "@/lib/stocks";
+import { useStockList } from "@/lib/stockList";
+
+// สีปุ่มหมวด Quick Select (วนใช้)
+const CAT_COLORS = [
+  "bg-purple-800",
+  "bg-purple-600",
+  "bg-blue-600",
+  "bg-pink-600",
+  "bg-emerald-700",
+  "bg-teal-700",
+  "bg-rose-700",
+  "bg-indigo-700",
+  "bg-fuchsia-700",
+  "bg-cyan-700",
+];
 
 interface BreakoutData {
   symbol: string;
@@ -64,13 +64,16 @@ const TickerCheckbox = ({
 );
 
 export default function BreakoutScannerPage() {
+  const { symbols: UNIQUE_SYMBOLS, detailMap, categoryGroups } = useStockList();
+  const initRef = useRef(false);
+
   const [scans, setScans] = useState<BreakoutScan[]>([]);
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [mounted, setMounted] = useState(false);
 
   // Stock Selection State
-  const [selectedTickers, setSelectedTickers] = useState<string[]>(UNIQUE_SYMBOLS);
+  const [selectedTickers, setSelectedTickers] = useState<string[]>([]);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [customTickers, setCustomTickers] = useState<string[]>([]);
@@ -83,26 +86,29 @@ export default function BreakoutScannerPage() {
 
   useEffect(() => {
     setMounted(true);
-    
+
     // Parse URL Parameters for Auto-Scan
     const params = new URLSearchParams(window.location.search);
     const urlSymbols = params.get("symbols");
     const autoScan = params.get("auto") === "true";
-    
+
     let initialTickers = UNIQUE_SYMBOLS;
-    
+
     if (urlSymbols) {
       const parsedSymbols = urlSymbols.split(",").map(s => s.trim().toUpperCase()).filter(s => s);
       if (parsedSymbols.length > 0) {
         initialTickers = parsedSymbols;
         setSelectedTickers(parsedSymbols);
-        
+
         // Add unknown tickers to custom
         const newTickers = parsedSymbols.filter(t => !UNIQUE_SYMBOLS.includes(t));
         if (newTickers.length > 0) {
           setCustomTickers(newTickers);
         }
       }
+    } else {
+      // ไม่มี URL → เลือกทั้งหมดเป็นค่าเริ่มต้น (ตามคลังหุ้นที่โหลดมา)
+      setSelectedTickers(UNIQUE_SYMBOLS);
     }
 
     const initialScans: BreakoutScan[] = Array.from(new Set([...UNIQUE_SYMBOLS, ...initialTickers])).map((symbol) => ({
@@ -112,9 +118,11 @@ export default function BreakoutScannerPage() {
     }));
     setScans(initialScans);
 
+    // งานที่ทำครั้งเดียวพอ (autoscan + ดึงพอร์ต)
+    if (initRef.current) return;
+    initRef.current = true;
+
     if (autoScan && urlSymbols) {
-       // We can't directly call handleScan here because it relies on state that might not be updated yet.
-       // So we set a timeout or rely on a separate useEffect
        setTimeout(() => {
          document.getElementById("btn-scan-breakout")?.click();
        }, 500);
@@ -154,7 +162,7 @@ export default function BreakoutScannerPage() {
         }
       })
       .catch((e) => console.error("Failed to load portfolio", e));
-  }, []);
+  }, [UNIQUE_SYMBOLS]);
 
   const addCustomTicker = (ticker: string) => {
     const upper = ticker.toUpperCase();
@@ -327,9 +335,11 @@ export default function BreakoutScannerPage() {
                     { label: "My Portfolio 🌟", list: portfolioTickers, color: "bg-yellow-600" },
                     { label: "ALL LIST", list: UNIQUE_SYMBOLS, color: "bg-gray-600" },
                     { label: "ALL LIST + Custom", list: [...UNIQUE_SYMBOLS, ...customTickers], color: "bg-gray-500" },
-                    { label: "Tech & Leaders", list: TIER_1_MEGA_TECH, color: "bg-purple-800" },
-                    { label: "AI Hardware & Chips", list: TIER_1_AI_HARDWARE, color: "bg-purple-600" },
-                    { label: "Growth", list: TIER_1_GROWTH_TECH, color: "bg-pink-600" },
+                    ...categoryGroups.map((g, i) => ({
+                      label: g.category,
+                      list: g.symbols,
+                      color: CAT_COLORS[i % CAT_COLORS.length],
+                    })),
                   ].map((group) => {
                     const isFullySelected = group.list.length > 0 && group.list.every((t) => selectedTickers.includes(t));
                     return (
@@ -471,7 +481,7 @@ export default function BreakoutScannerPage() {
                   <div className="relative z-10 flex justify-between items-start mb-4">
                     <div>
                       <h3 className="text-2xl font-black text-white">{scan.symbol}</h3>
-                      <p className="text-xs text-gray-400 truncate max-w-[150px]">{STOCK_DETAILS[scan.symbol] || "Stock"}</p>
+                      <p className="text-xs text-gray-400 truncate max-w-[150px]">{detailMap[scan.symbol] || STOCK_DETAILS[scan.symbol] || "Stock"}</p>
                     </div>
                     <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${style.bg} ${style.color} ${style.border}`}>
                       <span>{style.icon}</span>

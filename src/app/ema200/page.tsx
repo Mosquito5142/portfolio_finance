@@ -1,23 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import {
-  UNIQUE_SYMBOLS,
-  STOCK_DETAILS,
-  MAGNIFICENT_SEVEN,
-  TIER_1_MEGA_TECH,
-  TIER_1_AI_HARDWARE,
-  TIER_1_AI_INFRASTRUCTURE,
-  TIER_1_AI_SOFTWARE,
-  TIER_1_GROWTH_TECH,
-  TIER_1_ENERGY_RESOURCES,
-  TIER_1_HEALTH_BIO,
-  TIER_2_SPECULATIVE,
-  ALPHA_PICKS_WATCHLIST,
-  FINVIZ_WATCHLIST,
-  AI_HIDDEN_GEMS,
-} from "@/lib/stocks";
+import { STOCK_DETAILS } from "@/lib/stocks";
+import { useStockList } from "@/lib/stockList";
+
+// สีปุ่มหมวด Quick Select (วนใช้)
+const CAT_COLORS = [
+  "bg-purple-800",
+  "bg-purple-600",
+  "bg-blue-600",
+  "bg-pink-600",
+  "bg-emerald-700",
+  "bg-teal-700",
+  "bg-rose-700",
+  "bg-indigo-700",
+  "bg-fuchsia-700",
+  "bg-cyan-700",
+];
 
 // Define the EMA data shape based on our new API
 interface EMA200Data {
@@ -38,6 +38,9 @@ interface ScanResult {
 }
 
 export default function EMA200ScannerPage() {
+  const { symbols: UNIQUE_SYMBOLS, detailMap, categoryGroups } = useStockList();
+  const initRef = useRef(false);
+
   const [scans, setScans] = useState<ScanResult[]>([]);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -54,8 +57,7 @@ export default function EMA200ScannerPage() {
   const [strictMode, setStrictMode] = useState(true);
 
   // Stock selection state (array-based like patterns page)
-  const [selectedSymbols, setSelectedSymbols] =
-    useState<string[]>(UNIQUE_SYMBOLS);
+  const [selectedSymbols, setSelectedSymbols] = useState<string[]>([]);
 
   // Custom & Portfolio tickers (same as patterns page)
   const [customTickers, setCustomTickers] = useState<string[]>([]);
@@ -114,6 +116,12 @@ export default function EMA200ScannerPage() {
         data: null,
       })),
     );
+    // เลือกทั้งหมดเป็นค่าเริ่มต้น (ตามคลังหุ้นที่โหลดมา)
+    setSelectedSymbols(UNIQUE_SYMBOLS);
+
+    // งานที่ทำครั้งเดียวพอ (ดึงพอร์ต)
+    if (initRef.current) return;
+    initRef.current = true;
 
     // Auto-inject portfolio tickers (same as patterns page)
     fetch("/api/sheets/portfolio")
@@ -153,7 +161,7 @@ export default function EMA200ScannerPage() {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [UNIQUE_SYMBOLS]);
 
   const handleScan = async () => {
     if (scanning) return;
@@ -521,61 +529,11 @@ export default function EMA200ScannerPage() {
                   )}
                   {[
                     { label: "ALL", list: allSymbols, color: "bg-slate-600" },
-                    {
-                      label: "Magnificent 7",
-                      list: MAGNIFICENT_SEVEN,
-                      color: "bg-blue-600",
-                    },
-                    {
-                      label: "AI Hardware",
-                      list: TIER_1_AI_HARDWARE,
-                      color: "bg-purple-600",
-                    },
-                    {
-                      label: "AI Infra",
-                      list: TIER_1_AI_INFRASTRUCTURE,
-                      color: "bg-indigo-600",
-                    },
-                    {
-                      label: "AI Software",
-                      list: TIER_1_AI_SOFTWARE,
-                      color: "bg-blue-600",
-                    },
-                    {
-                      label: "Growth Tech",
-                      list: TIER_1_GROWTH_TECH,
-                      color: "bg-indigo-600",
-                    },
-                    {
-                      label: "Energy",
-                      list: TIER_1_ENERGY_RESOURCES,
-                      color: "bg-amber-600",
-                    },
-                    {
-                      label: "Healthcare",
-                      list: TIER_1_HEALTH_BIO,
-                      color: "bg-pink-600",
-                    },
-                    {
-                      label: "Alpha Picks",
-                      list: ALPHA_PICKS_WATCHLIST,
-                      color: "bg-teal-600",
-                    },
-                    {
-                      label: "Finviz",
-                      list: FINVIZ_WATCHLIST,
-                      color: "bg-emerald-600",
-                    },
-                    {
-                      label: "Hidden Gems 💎",
-                      list: AI_HIDDEN_GEMS,
-                      color: "bg-amber-500",
-                    },
-                    {
-                      label: "Speculative",
-                      list: TIER_2_SPECULATIVE,
-                      color: "bg-red-600",
-                    },
+                    ...categoryGroups.map((g, i) => ({
+                      label: g.category,
+                      list: g.symbols,
+                      color: CAT_COLORS[i % CAT_COLORS.length],
+                    })),
                   ].map((group) => {
                     const isFullySelected = group.list.every((t) =>
                       selectedSymbols.includes(t),
@@ -629,7 +587,7 @@ export default function EMA200ScannerPage() {
                         key={sym}
                         onClick={() => toggleSymbol(sym)}
                         disabled={scanning}
-                        title={STOCK_DETAILS[sym] || sym}
+                        title={detailMap[sym] || STOCK_DETAILS[sym] || sym}
                         className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition ${
                           selectedSymbols.includes(sym)
                             ? customTickers.includes(sym)
@@ -760,7 +718,7 @@ export default function EMA200ScannerPage() {
                         )}
                       </h3>
                       <p className="text-xs text-slate-400 mt-1 line-clamp-1">
-                        {STOCK_DETAILS[data.symbol] || "Stock"}
+                        {detailMap[data.symbol] || STOCK_DETAILS[data.symbol] || "Stock"}
                       </p>
                     </div>
                     <div className="text-right">

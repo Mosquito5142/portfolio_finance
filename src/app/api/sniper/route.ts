@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
-import { UNIQUE_SYMBOLS } from "@/lib/stocks";
-
-// Define the stocks to scan dynamically from stocks.ts
-const ALL_SYMBOLS = UNIQUE_SYMBOLS;
+import { getServerSymbols } from "@/lib/serverStocks";
 
 // Math helpers
 const calculateEMA = (prices: number[], period: number) => {
@@ -224,6 +221,7 @@ export async function GET(request: Request) {
       isWaveRider: boolean;
     }
 
+    const ALL_SYMBOLS = await getServerSymbols();
     const chunks = chunkArray(ALL_SYMBOLS, 5);
     let results: SniperResult[] = [];
 
