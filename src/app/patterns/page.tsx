@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { STOCK_DETAILS } from "@/lib/stocks";
-import { useStockList } from "@/lib/stockList";
+import { useStockList } from "@/lib/useStockList";
 
 // สีปุ่มหมวด Quick Select (วนใช้)
 const CAT_COLORS = [

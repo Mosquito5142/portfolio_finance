@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { ArrowLeft, Copy, Check, Trash2, FileSpreadsheet, Send, Loader2, Target } from "lucide-react";
-import { useStockList } from "@/lib/stockList";
+import { useStockList } from "@/lib/useStockList";
 
 interface ParsedSignal {
   id: string;

@@ -1,6 +1,7 @@
 // คลังหุ้นแบบ dynamic — ดึงจาก Google Sheet (Stock_Master) ถ้ามี
 // ถ้าชีตว่าง/ดึงไม่ได้ จะ fallback ไปลิสต์ในโค้ด (stocks.ts)
-import { useState, useEffect, useMemo } from "react";
+// ⚠️ ไฟล์นี้ใช้ได้ทั้ง server และ client — ห้าม import React hook ที่นี่
+//    (hook อยู่ใน useStockList.ts ซึ่งเป็น client เท่านั้น)
 import {
   MAGNIFICENT_SEVEN,
   TIER_1_MEGA_TECH,
@@ -88,37 +89,6 @@ export async function fetchStockList(): Promise<{
     /* ตกไป fallback */
   }
   return { entries: CODE_STOCK_LIST, source: "code" };
-}
-
-// Hook สำหรับหน้า client: ดึงคลังหุ้น + ค่าที่ derive ไว้ใช้ได้เลย
-// เริ่มจากลิสต์ในโค้ดก่อน (ไม่ว่างตอนโหลด) แล้วแทนที่ด้วยข้อมูลจาก Sheet
-export function useStockList() {
-  const [entries, setEntries] = useState<StockEntry[]>(CODE_STOCK_LIST);
-  const [source, setSource] = useState<"sheet" | "code">("code");
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    fetchStockList().then((res) => {
-      if (!alive) return;
-      setEntries(res.entries);
-      setSource(res.source);
-      setLoaded(true);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  const symbols = useMemo(() => entries.map((e) => e.symbol), [entries]);
-  const detailMap = useMemo(() => {
-    const m: Record<string, string> = {};
-    for (const e of entries) if (e.detail) m[e.symbol] = e.detail;
-    return m;
-  }, [entries]);
-  const categoryGroups = useMemo(() => groupByCategory(entries), [entries]);
-
-  return { entries, symbols, detailMap, categoryGroups, source, loaded };
 }
 
 // จัดกลุ่มตาม category → ใช้ทำปุ่ม Quick Select
