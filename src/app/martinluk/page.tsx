@@ -229,7 +229,7 @@ export default function MartinLukPage() {
   const [customTickers, setCustomTickers] = useState<string[]>([]);
   const [portfolioTickers, setPortfolioTickers] = useState<string[]>([]);
 
-  const [tierFilter, setTierFilter] = useState<string>("ALL");
+  const [tierFilter, setTierFilter] = useState<string>("LEAD");
   const [pullbackOnly, setPullbackOnly] = useState(false);
 
   const [alertState, setAlertState] = useState<Record<string, "idle" | "sending" | "sent" | "error">>({});
@@ -242,7 +242,7 @@ export default function MartinLukPage() {
     cut: d.setup!.stopLoss,
     target: Number((d.setup!.entryTrigger * 1.2).toFixed(2)),
     alertType: "MARTINLUK",
-    note: `${d.tierLabel} · ADR ${d.adrPct}%`,
+    note: `${d.tierLabel} · แกว่งเฉลี่ยวันละ ${d.adrPct}%`,
   });
 
   const sendToAlert = async (d: MartinLukData) => {
@@ -702,10 +702,8 @@ export default function MartinLukPage() {
               กรองตาม Tier:
             </span>
             {[
-              { val: "ALL", label: "ทุก Tier" },
-              { val: "LEAD", label: "🥇 LEAD" },
-              { val: "MEDIOCRE", label: "🥈 MEDIOCRE" },
-              { val: "LAG", label: "🥉 LAG" },
+              { val: "ALL", label: "ทุก Tier (ไม่แนะนำ)" },
+              { val: "LEAD", label: "🥇 LEAD (Martin Luk's choice)" },
             ].map((opt) => {
               const count =
                 opt.val === "ALL"
@@ -786,7 +784,7 @@ export default function MartinLukPage() {
                       💧 สภาพคล่อง &gt; $1M: {data.liquidity?.pass ? "ผ่าน" : "ไม่ผ่าน"}
                     </div>
                     <div className={`p-1.5 rounded border ${data.highADR ? "bg-emerald-900/20 border-emerald-500/30 text-emerald-400" : "bg-slate-900/50 border-slate-700 text-gray-500"}`}>
-                      ⚡ ADR: {data.adrPct}%
+                      ⚡ แกว่งวันละ: {data.adrPct}%
                     </div>
                   </div>
 
