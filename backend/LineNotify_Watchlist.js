@@ -205,6 +205,31 @@ function checkPriceAndNotify() {
           targetPrice;
       }
     }
+    // 5. 🎯 MARTIN LUK (Pullback Bounce)
+    else if (alertType === "MARTINLUK") {
+      var chaseLimitML = triggerPrice * 1.03; // โซนซื้อ Martin Luk: ไม่เกิน +3% จาก Entry Trigger
+      if (currentPrice >= triggerPrice && currentPrice <= chaseLimitML) {
+        var mlTranche = note ? " [" + note + "]" : "";
+        isTriggered = true;
+        message =
+          "🎯 สัญญาณย่อตัว MARTIN LUK: " +
+          symbol +
+          mlTranche +
+          "\n" +
+          "🔥 ราคาทะลุจุดเข้าซื้อแล้ว! ราคา: $" +
+          currentPrice +
+          "\n" +
+          "🎯 จุดเข้า (Entry): $" +
+          triggerPrice +
+          " | ห้ามไล่เกิน: $" +
+          chaseLimitML.toFixed(2) +
+          "\n" +
+          "🛑 คัทลอส: $" +
+          cutLossPrice +
+          " | 🎯 เป้า: $" +
+          targetPrice;
+      }
+    }
 
     if (isTriggered) {
       pendingAlerts.push({

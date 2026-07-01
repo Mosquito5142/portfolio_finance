@@ -108,6 +108,18 @@ const MENU_ITEMS = [
     glowColor: "shadow-amber-500/20",
   },
   {
+    href: "/martinluk",
+    icon: "🎯",
+    title: "Martin Luk Pullback",
+    subtitle: "Momentum Pullback Scanner",
+    description:
+      "สแกนหาจุดเข้าตอนย่อ (Pullback) ของหุ้น Momentum แบบ Martin Luk (USIC) พร้อมส่งแจ้งเตือนเข้า LINE",
+    gradient: "from-indigo-600 to-purple-600",
+    hoverGradient: "hover:from-indigo-500 hover:to-purple-500",
+    borderColor: "border-indigo-500/30",
+    glowColor: "shadow-indigo-500/20",
+  },
+  {
     href: "/stocks",
     icon: "🗂️",
     title: "จัดการคลังหุ้น",

@@ -69,6 +69,17 @@ export default function Navigation() {
                 Minervini
               </Link>
               <Link
+                href="/martinluk"
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  pathname === "/martinluk"
+                    ? "bg-indigo-500/10 text-indigo-400"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                }`}
+              >
+                <Target size={16} />
+                Martin Luk
+              </Link>
+              <Link
                 href="/dashboard"
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   pathname === "/dashboard"
