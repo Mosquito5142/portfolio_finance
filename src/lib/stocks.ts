@@ -33,6 +33,13 @@ export const TIER_1_AI_HARDWARE = [
   "INDI",
   "VLN",
   "HIMX",
+  "AMAT",
+  "LRCX",
+  "KLAC",
+  "SNDK",
+  "MRVL",
+  "MKSI",
+  "ALGM"
 ];
 
 // 🌐 หมวดหมู่ใหม่: AI Data Center & Equipment
@@ -45,6 +52,7 @@ export const TIER_1_AI_INFRASTRUCTURE = [
   "FN", // AI Optical Transceivers
   "FPS",
   "VICR",
+  "GLW",
 ];
 
 // ☁️ หมวดหมู่ AI Software, Cloud & Cybersecurity
@@ -111,6 +119,9 @@ export const TIER_1_HEALTH_BIO = [
   "PRME",
   "RXRX",
   "WGS",
+  "MRNA",
+  "APGE",
+  "KYMR",
 ];
 
 // กลุ่มพลังงานแห่งอนาคต & ทรัพยากร
@@ -124,6 +135,7 @@ export const TIER_1_ENERGY_RESOURCES = [
   "BWXT", // Growth
   "AMSC",
   "BE",
+  "CRS",
 ];
 
 // 🌟 กลุ่ม Alpha Picks

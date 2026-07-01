@@ -36,6 +36,8 @@ interface MartinLukData {
     bouncing: boolean;
     tightDay: boolean;
     signal: boolean;
+    isBasing?: boolean;
+    baseRangePct?: number;
   };
   momentum?: {
     pass: boolean;
@@ -785,6 +787,9 @@ export default function MartinLukPage() {
                     </div>
                     <div className={`p-1.5 rounded border ${data.highADR ? "bg-emerald-900/20 border-emerald-500/30 text-emerald-400" : "bg-slate-900/50 border-slate-700 text-gray-500"}`}>
                       ⚡ แกว่งวันละ: {data.adrPct}%
+                    </div>
+                    <div className={`p-1.5 rounded border ${data.pullback?.isBasing ? "bg-emerald-900/20 border-emerald-500/30 text-emerald-400" : "bg-slate-900/50 border-slate-700 text-gray-500"}`}>
+                      📦 ทำฐาน 1 เดือน: {data.pullback?.isBasing ? `ใช่ (${data.pullback?.baseRangePct}%)` : `สวิงกว้าง (${data.pullback?.baseRangePct}%)`}
                     </div>
                   </div>
 

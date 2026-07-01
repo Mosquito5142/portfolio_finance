@@ -198,7 +198,21 @@ export async function GET(request: Request) {
       bars.slice(Math.max(0, n - 11), n - 1).reduce((s, b) => s + ((b.h - b.l) / b.c) * 100, 0) / 10;
     const tightDay = rangePct < avgRange10 * 0.7;
 
-    const pullbackSignal = inPullbackZone && (bouncing || tightDay);
+    // ─── Base Building Filter (Consolidation) ───────────────────────────
+    // Check if the stock has been consolidating in a tight range over the last 1 month (21 trading days)
+    const baseWindow = 21;
+    const baseSeg = bars.slice(Math.max(0, n - baseWindow), n);
+    let baseHigh = 0;
+    let baseLow = Infinity;
+    for (const b of baseSeg) {
+      if (b.h > baseHigh) baseHigh = b.h;
+      if (b.l < baseLow) baseLow = b.l;
+    }
+    const baseRangePct = baseLow > 0 ? ((baseHigh - baseLow) / baseLow) * 100 : 0;
+    const isBasing = baseRangePct <= 25 && baseSeg.length >= 15;
+
+    // A valid setup requires the stock to be basing, in a pullback zone, and showing a bounce or tight inside day.
+    const pullbackSignal = inPullbackZone && isBasing && (bouncing || tightDay);
 
     // ─── Setup: Entry / Stop Loss ───────────────────────────────────────
     const entryTrigger = today.h;
@@ -258,6 +272,8 @@ export async function GET(request: Request) {
         bouncing,
         tightDay,
         signal: pullbackSignal,
+        isBasing,
+        baseRangePct: Number(baseRangePct.toFixed(1)),
       },
       metrics: {
         ema9: Number(e9.toFixed(2)),
