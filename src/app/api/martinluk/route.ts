@@ -127,6 +127,39 @@ export async function GET(request: Request) {
 
     const { tier, label } = classifyTier(e9, e21, e50);
 
+    // ─── Trend Crossover Detection (ตรงกับ Pine Script "trendStart") ─────
+    // isLead[i] = EMA9>EMA21>EMA50 ที่แท่ง i, liquidityPass[i] = dollarVol 20 วันย้อนหลัง > $1M
+    // crossover = วันแรกที่ isLead กลายเป็น true (จาก false เมื่อวันก่อน) + liquidity ผ่าน
+    const crossovers: { date: string; price: number }[] = [];
+    {
+      let rollingVolSum = 0;
+      const volQueue: number[] = [];
+      let prevIsLead: boolean | null = null;
+      for (let i = 0; i < n; i++) {
+        volQueue.push(bars[i].v);
+        rollingVolSum += bars[i].v;
+        if (volQueue.length > 20) rollingVolSum -= volQueue.shift()!;
+        const avgVolAtI = rollingVolSum / volQueue.length;
+        const dollarVolAtI = avgVolAtI * bars[i].c;
+        const liquidityPassAtI = dollarVolAtI > 1_000_000;
+
+        const a9 = ema9Arr[i];
+        const a21 = ema21Arr[i];
+        const a50 = ema50Arr[i];
+        const isLeadAtI =
+          a9 !== null && a21 !== null && a50 !== null && a9 > a21 && a21 > a50;
+
+        if (prevIsLead === false && isLeadAtI && liquidityPassAtI) {
+          const dt = new Date(bars[i].t * 1000);
+          crossovers.push({
+            date: `${dt.getMonth() + 1}/${dt.getDate()}`,
+            price: Number(bars[i].l.toFixed(2)), // ป้ายอยู่ใต้แท่ง เหมือน Pine (location.belowbar)
+          });
+        }
+        prevIsLead = isLeadAtI;
+      }
+    }
+
     // ─── AVWAP Anchors ──────────────────────────────────────────────────
     let highestIndex = 0;
     let highestPrice = -Infinity;
@@ -174,6 +207,52 @@ export async function GET(request: Request) {
     const adrPct =
       adrSeg.reduce((s, b) => s + ((b.h - b.l) / b.c) * 100, 0) / adrSeg.length;
     const highADR = adrPct >= 5;
+
+    // ─── Forecast: คาดการณ์ราคาที่ EMA จะตัดเป็น UPTREND (ล่วงหน้า) ────────
+    // แก้สมการ EMA แท่งถัดไป: ราคาปิดเท่าไหร่ถึงทำให้ EMA9>EMA21>EMA50
+    const k9 = 2 / 10;
+    const k21 = 2 / 22;
+    const k50 = 2 / 51;
+    // c1 = ราคาที่ทำให้ EMA9 ตัดขึ้นเหนือ EMA21
+    const c1 = (e21 * (1 - k21) - e9 * (1 - k9)) / (k9 - k21);
+    // c2 = ราคาที่ทำให้ EMA21 ตัดขึ้นเหนือ EMA50
+    const c2 = (e50 * (1 - k50) - e21 * (1 - k21)) / (k21 - k50);
+    const crossPrice = Math.max(c1, c2); // ต้องผ่านทั้งคู่ถึงเป็น LEAD เต็มตัว
+    const forecastDistPct = ((crossPrice - price) / price) * 100;
+    const isLeadNow = tier === "LEAD";
+    // "ใกล้จุดตัด" = ยังไม่ LEAD และราคาต้องขึ้นอีกไม่เกินระยะที่กำหนด (ผูกกับ ADR)
+    const approachThreshold = Math.min(10, Math.max(4, adrPct * 1.2));
+    const approaching =
+      !isLeadNow && forecastDistPct > 0 && forecastDistPct <= approachThreshold;
+
+    // ─── Base Strength: ยิ่งทำฐานนาน+แน่น ยิ่งแข็งแกร่ง (มีเวลาเตรียมตัว) ──
+    // นับถอยหลังจากวันนี้ ว่าราคาอยู่ในกรอบไม่หลุด (สร้างฐาน) มากี่วัน
+    const rangeCap = 30; // ฐานกว้างได้ถึง 30% (หุ้น ADR สูงแกว่งกว้าง)
+    let bsDays = 0;
+    let bsHigh = -Infinity;
+    let bsLow = Infinity;
+    for (let i = n - 1; i >= 0; i--) {
+      const nh = Math.max(bsHigh, bars[i].h);
+      const nl = Math.min(bsLow, bars[i].l);
+      if (((nh - nl) / nl) * 100 > rangeCap) break;
+      bsHigh = nh;
+      bsLow = nl;
+      bsDays++;
+    }
+    const bsRange = bsLow > 0 && bsHigh > -Infinity ? ((bsHigh - bsLow) / bsLow) * 100 : rangeCap;
+    const tightComp = Math.max(0, 1 - bsRange / rangeCap); // แน่นกว่า = สูง
+    const durComp = Math.min(1, bsDays / 60); // นานกว่า = สูง (อิ่มตัว ~60 วัน)
+    const baseStrength = Math.round(durComp * 60 + tightComp * 40);
+    const baseLabel =
+      baseStrength >= 70
+        ? "🟢 ฐานแกร่งมาก"
+        : baseStrength >= 40
+          ? "🟡 ฐานปานกลาง"
+          : "⚪ ฐานสั้น/อ่อน";
+
+    // ─── Prime Setup: มีครบทั้ง "ฐานแข็งแรง" + "ใกล้จุดตัด" = ควรค่าเฝ้าดู ───
+    // (ตรงกับจุดที่ลูกศรชี้ในกราฟ — ฐานพร้อม + EMA จ่อตัดขึ้น)
+    const primeSetup = approaching && baseStrength >= 40;
 
     // ─── Pullback Detection ─────────────────────────────────────────────
     const distToEma9 = ((price - e9) / e9) * 100;
@@ -249,6 +328,20 @@ export async function GET(request: Request) {
       tierLabel: label,
       adrPct: Number(adrPct.toFixed(1)),
       highADR,
+      forecast: {
+        isLeadNow,
+        crossPrice: Number(crossPrice.toFixed(2)),
+        distPct: Number(forecastDistPct.toFixed(1)),
+        approaching,
+        approachThreshold: Number(approachThreshold.toFixed(1)),
+      },
+      baseStrength: {
+        score: baseStrength,
+        days: bsDays,
+        rangePct: Number(bsRange.toFixed(1)),
+        label: baseLabel,
+      },
+      primeSetup,
       momentum: {
         pass: momentumPass,
         r1m: Number(r1m.toFixed(1)),
@@ -289,6 +382,7 @@ export async function GET(request: Request) {
         riskPass,
       },
       chart,
+      crossovers, // จุดตัด EMA9>21>50 ทั้งหมด (สำหรับเทียบกับ Pine Script บน TradingView)
     });
   } catch (error: any) {
     return NextResponse.json(

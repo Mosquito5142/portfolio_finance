@@ -8,6 +8,7 @@ import {
   XAxis,
   YAxis,
   ReferenceLine,
+  ReferenceDot,
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
@@ -23,6 +24,20 @@ interface MartinLukData {
   tierLabel?: string;
   adrPct?: number;
   highADR?: boolean;
+  forecast?: {
+    isLeadNow: boolean;
+    crossPrice: number;
+    distPct: number;
+    approaching: boolean;
+    approachThreshold: number;
+  };
+  baseStrength?: {
+    score: number;
+    days: number;
+    rangePct: number;
+    label: string;
+  };
+  primeSetup?: boolean;
   pullback?: {
     inPullbackZone: boolean;
     nearEma9: boolean;
@@ -71,6 +86,7 @@ interface MartinLukData {
     avwapHigh: number | null;
     avwapLow: number | null;
   }[];
+  crossovers?: { date: string; price: number }[];
 }
 
 interface Scan {
@@ -127,6 +143,11 @@ const MartinLukChart = ({ d }: { d: MartinLukData }) => {
   const stop = d.setup?.stopLoss;
 
   const chartData = d.chart.slice(-zoom);
+  const visibleDates = new Set(chartData.map((c) => c.date));
+  // เฉพาะจุดตัด (EMA9>21>50 ครั้งแรก) ที่อยู่ในช่วงที่ซูมอยู่ — เทียบกับป้าย 🚀 ใน Pine Script
+  const visibleCrossovers = (d.crossovers ?? []).filter((c) =>
+    visibleDates.has(c.date),
+  );
 
   const zoomOptions = [
     { v: 30, label: "1 เดือน" },
@@ -145,6 +166,7 @@ const MartinLukChart = ({ d }: { d: MartinLukData }) => {
           <span><span className="text-cyan-500">━</span> AVWAP(L)</span>
           <span><span className="text-emerald-400">━</span> Buy</span>
           <span><span className="text-rose-400">━</span> Stop</span>
+          <span>🚀 จุดตัด (EMA9&gt;21&gt;50 ครั้งแรก)</span>
         </div>
         <div className="flex gap-1">
           <span className="text-[10px] text-gray-500 self-center mr-1">🔍 ซูม:</span>
@@ -212,6 +234,21 @@ const MartinLukChart = ({ d }: { d: MartinLukData }) => {
                 label={{ value: `Stop ${stop}`, fill: "#f87171", fontSize: 9, position: "insideBottomRight" }}
               />
             )}
+            {/* จุดตัด EMA9>21>50 ครั้งแรก — เทียบกับป้าย 🚀 UPTREND ใน Pine Script */}
+            {visibleCrossovers.map((c, i) => (
+              <ReferenceDot
+                key={`cross-${i}`}
+                x={c.date}
+                y={c.price}
+                r={0}
+                ifOverflow="extendDomain"
+                label={{
+                  value: "🚀",
+                  fontSize: 16,
+                  position: "bottom",
+                }}
+              />
+            ))}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -231,21 +268,29 @@ export default function MartinLukPage() {
   const [customTickers, setCustomTickers] = useState<string[]>([]);
   const [portfolioTickers, setPortfolioTickers] = useState<string[]>([]);
 
-  const [tierFilter, setTierFilter] = useState<string>("LEAD");
+  // ค่าเริ่มต้น = โหมด "รอตรงนี้": โชว์เฉพาะ Prime (จ่อตัด+ฐานพร้อม) ทุก Tier
+  const [tierFilter, setTierFilter] = useState<string>("ALL");
   const [pullbackOnly, setPullbackOnly] = useState(false);
+  const [primeOnly, setPrimeOnly] = useState(true);
 
   const [alertState, setAlertState] = useState<Record<string, "idle" | "sending" | "sent" | "error">>({});
   const [bulkSending, setBulkSending] = useState(false);
 
-  const buildAlertItem = (d: MartinLukData) => ({
-    ticker: d.symbol,
-    entry: d.setup!.entryTrigger,
-    triggerPrice: d.setup!.entryTrigger,
-    cut: d.setup!.stopLoss,
-    target: Number((d.setup!.entryTrigger * 1.2).toFixed(2)),
-    alertType: "MARTINLUK",
-    note: `${d.tierLabel} · แกว่งเฉลี่ยวันละ ${d.adrPct}%`,
-  });
+  const buildAlertItem = (d: MartinLukData) => {
+    // ยังไม่ LEAD → ส่งราคาจุดตัดที่คาดไว้ (เตือนล่วงหน้าก่อนตัด)
+    // LEAD แล้ว → ส่งจุดเบรก pullback ตามเดิม
+    const notLead = d.forecast && !d.forecast.isLeadNow;
+    const trig = notLead ? d.forecast!.crossPrice : d.setup!.entryTrigger;
+    return {
+      ticker: d.symbol,
+      entry: trig,
+      triggerPrice: trig,
+      cut: d.setup!.stopLoss,
+      target: Number((trig * 1.2).toFixed(2)),
+      alertType: "MARTINLUK",
+      note: `${d.tier} ADR${d.adrPct}% B${d.baseStrength?.score ?? "-"}`,
+    };
+  };
 
   const sendToAlert = async (d: MartinLukData) => {
     if (!d.setup) return;
@@ -464,16 +509,29 @@ export default function MartinLukPage() {
     .filter((s) => s.status === "done" && s.data?.status === "success")
     .filter((s) => (tierFilter === "ALL" ? true : s.data?.tier === tierFilter))
     .filter((s) => (pullbackOnly ? s.data?.pullback?.signal : true))
+    .filter((s) => (primeOnly ? s.data?.primeSetup : true))
     .sort((a, b) => {
-      // Pullback signal > Tier LEAD > ADR
+      // ⭐ Prime > ใกล้จุดตัด > pullback > "ไม่ไล่แพง" > ฐานแข็งแรง > ADR
+      const pmA = a.data?.primeSetup ? 1 : 0;
+      const pmB = b.data?.primeSetup ? 1 : 0;
+      if (pmB !== pmA) return pmB - pmA;
+
+      const apA = a.data?.forecast?.approaching ? 1 : 0;
+      const apB = b.data?.forecast?.approaching ? 1 : 0;
+      if (apB !== apA) return apB - apA;
+
       const sigA = a.data?.pullback?.signal ? 1 : 0;
       const sigB = b.data?.pullback?.signal ? 1 : 0;
       if (sigB !== sigA) return sigB - sigA;
-      
-      const tierRank: Record<string, number> = { "LEAD": 3, "MEDIOCRE": 2, "LAG": 1 };
-      const ta = tierRank[a.data?.tier || "LAG"];
-      const tb = tierRank[b.data?.tier || "LAG"];
-      if (tb !== ta) return tb - ta;
+
+      // หุ้นไล่แพง (extended/risk สูง) ให้จมลงล่าง
+      const exA = (a.data?.pullback?.distToEma9 ?? 0) > 5 || (a.data?.setup?.riskPct ?? 0) > 4 ? 1 : 0;
+      const exB = (b.data?.pullback?.distToEma9 ?? 0) > 5 || (b.data?.setup?.riskPct ?? 0) > 4 ? 1 : 0;
+      if (exA !== exB) return exA - exB;
+
+      const bsA = a.data?.baseStrength?.score ?? 0;
+      const bsB = b.data?.baseStrength?.score ?? 0;
+      if (bsB !== bsA) return bsB - bsA;
 
       return (b.data?.adrPct || 0) - (a.data?.adrPct || 0);
     });
@@ -481,6 +539,7 @@ export default function MartinLukPage() {
   const signalCount = scans.filter(
     (s) => s.data?.pullback?.signal,
   ).length;
+  const primeCount = scans.filter((s) => s.data?.primeSetup).length;
 
   if (!mounted) return null;
 
@@ -694,6 +753,16 @@ export default function MartinLukPage() {
             >
               🎯 มีสัญญาณ Pullback ({signalCount})
             </button>
+            <button
+              onClick={() => setPrimeOnly((v) => !v)}
+              className={`px-4 py-2 rounded-lg font-bold text-sm transition-all border flex items-center gap-2 ${
+                primeOnly
+                  ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/50"
+                  : "bg-slate-800 text-gray-400 border-transparent hover:bg-slate-700"
+              }`}
+            >
+              ⭐ Prime — ฐาน+ใกล้ตัด ({primeCount})
+            </button>
           </div>
         )}
 
@@ -747,18 +816,58 @@ export default function MartinLukPage() {
           </div>
         )}
 
+        {/* Empty state — โดยเฉพาะโหมด Prime ที่อาจไม่เจอ (ตลาดวิ่งไปแล้ว) */}
+        {!scanning &&
+          results.length === 0 &&
+          scans.some((s) => s.status === "done") && (
+            <div className="text-center py-10 bg-slate-800/40 rounded-2xl border border-slate-700/50">
+              <div className="text-3xl mb-2">🔍</div>
+              {primeOnly ? (
+                <>
+                  <p className="text-white font-bold mb-1">
+                    ยังไม่มี ⭐ Prime Setup ตอนนี้
+                  </p>
+                  <p className="text-gray-400 text-sm mb-4">
+                    แปลว่าตลาดส่วนใหญ่วิ่งไปแล้ว (ไม่มีตัวจ่อตัดที่ฐานพร้อม) —
+                    ช่วงนี้ควรใจเย็น อย่าไล่ของแพง
+                  </p>
+                  <button
+                    onClick={() => setPrimeOnly(false)}
+                    className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold"
+                  >
+                    ดูทั้งหมดที่สแกน (รวมตัวที่ตัดไปแล้ว)
+                  </button>
+                </>
+              ) : (
+                <p className="text-gray-400 text-sm">
+                  ไม่พบหุ้นตามเงื่อนไขที่กรอง — ลองปรับตัวกรอง
+                </p>
+              )}
+            </div>
+          )}
+
         {/* Results grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {results.map(({ symbol, data }) => {
             if (!data) return null;
             const tStyle = tierStyle(data.tier);
             const alertStatus = alertState[symbol] || "idle";
+            // ไล่แพง (Extended): ราคาลอยเหนือ EMA9 มาก หรือ risk เกิน 4%
+            const distE9 = data.pullback?.distToEma9 ?? 0;
+            const riskHigh = (data.setup?.riskPct ?? 0) > 4;
+            const isExtended = distE9 > 5 || riskHigh;
 
             return (
               <div
                 key={symbol}
                 className={`bg-slate-800/80 rounded-2xl border p-4 hover:shadow-lg transition-all ${
-                  data.pullback?.signal ? "border-indigo-500/60 shadow-[0_0_15px_rgba(99,102,241,0.15)]" : "border-slate-700"
+                  data.primeSetup
+                    ? "border-yellow-500/60 shadow-[0_0_18px_rgba(234,179,8,0.2)]"
+                    : data.pullback?.signal
+                      ? "border-indigo-500/60 shadow-[0_0_15px_rgba(99,102,241,0.15)]"
+                      : isExtended
+                        ? "border-red-500/30 opacity-70"
+                        : "border-slate-700"
                 }`}
               >
                 {/* Header */}
@@ -766,6 +875,11 @@ export default function MartinLukPage() {
                   <div>
                     <h3 className="text-xl font-bold text-white flex items-center gap-2">
                       {symbol}
+                      {data.primeSetup && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/50">
+                          ⭐ PRIME
+                        </span>
+                      )}
                     </h3>
                     <div className="text-sm text-gray-400">
                       ${data.price}
@@ -777,6 +891,96 @@ export default function MartinLukPage() {
                 </div>
 
                 <div className="space-y-3 mb-4">
+                  {/* ⚠️ เตือนไล่แพง (Extended / Risk สูง) */}
+                  {isExtended && (
+                    <div className="p-2 rounded-lg border border-red-500/50 bg-red-500/10 text-[11px] text-red-300 flex items-start gap-1.5">
+                      <span>⚠️</span>
+                      <span>
+                        <b>ไล่แพง — ระวัง!</b>{" "}
+                        {distE9 > 5 && `ราคาลอยเหนือ EMA9 +${distE9}% `}
+                        {riskHigh && `· ความเสี่ยง ${data.setup?.riskPct}% (เกิน 4%)`}
+                        <br />
+                        รอราคาย่อกลับมาชิด EMA9/21 ก่อนค่อยเข้า
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Forecast: คาดการณ์จุดตัดล่วงหน้า */}
+                  {data.forecast && (
+                    <div
+                      className={`p-2.5 rounded-lg border text-xs ${
+                        data.forecast.isLeadNow
+                          ? "bg-emerald-900/20 border-emerald-500/40"
+                          : data.forecast.approaching
+                            ? "bg-yellow-500/15 border-yellow-500/50"
+                            : "bg-slate-900/50 border-slate-700"
+                      }`}
+                    >
+                      {data.forecast.isLeadNow ? (
+                        <div className="text-emerald-400 font-bold">
+                          ✅ อยู่ใน UPTREND แล้ว (EMA เรียงตัวขึ้น)
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-300 font-bold">
+                              {data.primeSetup ? "🔭 รอซื้อตรงนี้" : "🔮 คาดจะ turn UPTREND ที่"}
+                            </span>
+                            <span
+                              className={`font-bold ${
+                                data.forecast.approaching ? "text-yellow-300" : "text-gray-400"
+                              }`}
+                            >
+                              ${data.forecast.crossPrice}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-[10px] mt-0.5">
+                            <span className="text-gray-500">
+                              ราคาต้องขึ้นอีก
+                            </span>
+                            <span className={data.forecast.approaching ? "text-yellow-300" : "text-gray-500"}>
+                              +{data.forecast.distPct}%{" "}
+                              {data.primeSetup
+                                ? "⭐ ครบทั้งฐาน+จุดตัด!"
+                                : data.forecast.approaching
+                                  ? "⚡ ใกล้แล้ว เตรียมตัว!"
+                                  : "(ยังไกล)"}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Base Strength: ฐานยิ่งนานยิ่งแกร่ง = มีเวลาศึกษา */}
+                  {data.baseStrength && (
+                    <div className="bg-slate-900/50 p-2 rounded-lg border border-slate-700 text-xs">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-gray-400">
+                          💪 ความแข็งแกร่งของฐาน
+                        </span>
+                        <span className="font-bold text-white">
+                          {data.baseStrength.label} ({data.baseStrength.score})
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-1.5 rounded-full ${
+                            data.baseStrength.score >= 70
+                              ? "bg-emerald-500"
+                              : data.baseStrength.score >= 40
+                                ? "bg-yellow-500"
+                                : "bg-slate-500"
+                          }`}
+                          style={{ width: `${data.baseStrength.score}%` }}
+                        ></div>
+                      </div>
+                      <div className="text-[10px] text-gray-500 mt-1">
+                        ทำฐานมา {data.baseStrength.days} วัน · กรอบ {data.baseStrength.rangePct}%
+                      </div>
+                    </div>
+                  )}
+
                   {/* Indicators */}
                   <div className="grid grid-cols-2 gap-1 text-[10px]">
                     <div className={`p-1.5 rounded border ${data.momentum?.pass ? "bg-emerald-900/20 border-emerald-500/30 text-emerald-400" : "bg-slate-900/50 border-slate-700 text-gray-500"}`}>

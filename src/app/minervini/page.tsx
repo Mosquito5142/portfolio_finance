@@ -302,7 +302,7 @@ export default function MinerviniPage() {
     cut: d.setup!.stopLoss,
     target: Number((d.setup!.buyTrigger * 1.2).toFixed(2)), // เป้าเริ่มต้น +20%
     alertType: "MINERVINI",
-    note: `Stage ${d.stage?.num ?? "-"} · ${d.passed}/${d.total} ข้อ`,
+    note: `S${d.stage?.num ?? "-"} ${d.passed}/${d.total}`,
   });
 
   const sendToAlert = async (d: MinerviniData) => {

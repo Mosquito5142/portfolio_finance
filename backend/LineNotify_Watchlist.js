@@ -114,32 +114,30 @@ function checkPriceAndNotify() {
     var rowNum = index + 2;
     var diffPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
 
+    // ย่อตัวเลขให้สั้น: 2 ตำแหน่ง ตัด .00 ทิ้ง (1989.44 → 1989.44, 370.00 → 370)
+    function fmt(x) {
+      var v = Number(x);
+      if (isNaN(v)) return "-";
+      return (Math.round(v * 100) / 100).toString();
+    }
+    var noteStr = note ? " (" + note + ")" : "";
+
     // We only alert if it hasn't been sent yet
     if (status === "SENT_ENTRY") return;
 
     var isTriggered = false;
     var message = "";
+    var newStatus = "SENT_ENTRY"; // สถานะที่จะเขียนกลับเมื่อยิงเตือน (2 จังหวะจะเปลี่ยนเป็น WATCHING)
 
     // 1. 🎯 SMART ENTRY (รอรับของ) - Buy when price drops to/near Entry Support
     if (alertType === "SMART_ENTRY") {
       var buyBuffer = entryPrice * 1.005; // Buffer 0.5% higher than entry
       if (currentPrice <= buyBuffer && currentPrice > cutLossPrice) {
-        var trancheStr = note ? " [" + note + "]" : "";
         isTriggered = true;
         message =
-          "🟢 SMART ENTRY: " +
-          symbol +
-          trancheStr +
-          "\n" +
-          "💰 ราคาลงมาที่โซนซื้อ: $" +
-          currentPrice +
-          " (เป้ารับ: $" +
-          entryPrice +
-          ")\n" +
-          "🛑 คัทลอส: $" +
-          cutLossPrice +
-          " | 🎯 ทำกำไร: $" +
-          targetPrice;
+          "🟢 " + symbol + " ลงถึงโซนรับ" + noteStr + "\n" +
+          "$" + fmt(currentPrice) + " → รับ " + fmt(entryPrice) +
+          " | SL " + fmt(cutLossPrice) + " | TP " + fmt(targetPrice);
       }
     }
     // 2. 🛡️ EMA5 CROSS (ทะลุเส้น 5 วัน) - Buy when price crosses ABOVE EMA5 (Trigger Price)
@@ -147,19 +145,9 @@ function checkPriceAndNotify() {
       if (currentPrice > triggerPrice) {
         isTriggered = true;
         message =
-          "🚀 MOMENTUM BITE: " +
-          symbol +
-          "\n" +
-          "📈 ราคาทะลุยืนเหนือ EMA5 ได้แล้วที่ $" +
-          currentPrice +
-          "\n" +
-          "🔥 EMA5 Level: $" +
-          triggerPrice +
-          "\n" +
-          "🛑 คัทลอส: $" +
-          cutLossPrice +
-          " | 🎯 แนวต้านถัดไป: $" +
-          targetPrice;
+          "🚀 " + symbol + " ยืนเหนือ EMA5" + noteStr + "\n" +
+          "$" + fmt(currentPrice) + " > EMA5 " + fmt(triggerPrice) +
+          " | SL " + fmt(cutLossPrice) + " | TP " + fmt(targetPrice);
       }
     }
     // 3. 💥 BREAKOUT (ทะลุต้าน) - Alert when price breaks above Resistance (Trigger Price)
@@ -167,16 +155,9 @@ function checkPriceAndNotify() {
       if (currentPrice >= triggerPrice) {
         isTriggered = true;
         message =
-          "💥 BREAKOUT ALERT: " +
-          symbol +
-          "\n" +
-          "🔥 ดันทะลุแนวต้านสำคัญ! ราคา: $" +
-          currentPrice +
-          "\n" +
-          "🚧 แนวต้านที่ทะลุ (Trigger): $" +
-          triggerPrice +
-          "\n" +
-          "🚨 โวลุ่มเข้า? จับตาดูให้ดี!";
+          "💥 " + symbol + " เบรกแนวต้าน" + noteStr + "\n" +
+          "$" + fmt(currentPrice) + " > ต้าน " + fmt(triggerPrice) +
+          " — เช็ควอลุ่มก่อนเข้า";
       }
     }
     // 4. 🏆 MINERVINI (Buy Stop เหนือ Pivot แต่ "ห้ามไล่เกิน 5%")
@@ -184,57 +165,43 @@ function checkPriceAndNotify() {
     else if (alertType === "MINERVINI") {
       var chaseLimit = triggerPrice * 1.05; // โซนซื้อ Minervini: Pivot ถึง +5%
       if (currentPrice >= triggerPrice && currentPrice <= chaseLimit) {
-        var mTranche = note ? " [" + note + "]" : "";
         isTriggered = true;
         message =
-          "🏆 MINERVINI BUY: " +
-          symbol +
-          mTranche +
-          "\n" +
-          "🚀 ทะลุ Pivot เข้าโซนซื้อแล้ว! ราคา: $" +
-          currentPrice +
-          "\n" +
-          "🎯 Pivot (Buy Stop): $" +
-          triggerPrice +
-          " | ไล่ได้ไม่เกิน: $" +
-          chaseLimit.toFixed(2) +
-          "\n" +
-          "🛑 คัทลอส: $" +
-          cutLossPrice +
-          " | 🎯 เป้า: $" +
-          targetPrice;
+          "🏆 " + symbol + " ทะลุ Pivot" + noteStr + "\n" +
+          "$" + fmt(currentPrice) + " | ซื้อ " + fmt(triggerPrice) + "-" + fmt(chaseLimit) +
+          " | SL " + fmt(cutLossPrice) + " | TP " + fmt(targetPrice);
       }
     }
-    // 5. 🎯 MARTIN LUK (Pullback Bounce)
+    // 5. 🔮 MARTIN LUK — แจ้ง 2 จังหวะ (รอตรงนี้ → ถึงแล้ว)
+    // triggerPrice = ราคาที่คาดว่าจะ turn UPTREND
     else if (alertType === "MARTINLUK") {
-      var chaseLimitML = triggerPrice * 1.03; // โซนซื้อ Martin Luk: ไม่เกิน +3% จาก Entry Trigger
-      if (currentPrice >= triggerPrice && currentPrice <= chaseLimitML) {
-        var mlTranche = note ? " [" + note + "]" : "";
+      var watchLowML = triggerPrice * 0.95; // เข้าโซน = ใกล้ตัดจริง
+      var toCrossML = ((triggerPrice - currentPrice) / currentPrice) * 100;
+
+      if (currentPrice >= watchLowML) {
+        // จังหวะ 2: ถึงโซนจุดตัดแล้ว → turn UPTREND (ปิดเคส)
         isTriggered = true;
+        newStatus = "SENT_ENTRY";
         message =
-          "🎯 สัญญาณย่อตัว MARTIN LUK: " +
-          symbol +
-          mlTranche +
-          "\n" +
-          "🔥 ราคาทะลุจุดเข้าซื้อแล้ว! ราคา: $" +
-          currentPrice +
-          "\n" +
-          "🎯 จุดเข้า (Entry): $" +
-          triggerPrice +
-          " | ห้ามไล่เกิน: $" +
-          chaseLimitML.toFixed(2) +
-          "\n" +
-          "🛑 คัทลอส: $" +
-          cutLossPrice +
-          " | 🎯 เป้า: $" +
-          targetPrice;
+          "✅ ถึงแล้ว! " + symbol + noteStr + "\n" +
+          "$" + fmt(currentPrice) + " แตะจุดตัด " + fmt(triggerPrice) +
+          " — turn UPTREND | SL " + fmt(cutLossPrice);
+      } else if (status !== "WATCHING") {
+        // จังหวะ 1: เพิ่งเพิ่มเข้ามา ยังไม่ถึง → ยืนยัน "กำลังเฝ้าดู รอตรงนี้"
+        isTriggered = true;
+        newStatus = "WATCHING";
+        message =
+          "🔭 เฝ้าดู " + symbol + noteStr + "\n" +
+          "รอราคาแตะ " + fmt(triggerPrice) + " (ตอนนี้ $" + fmt(currentPrice) +
+          " · อีก " + toCrossML.toFixed(1) + "%)";
       }
+      // ถ้า status = WATCHING แล้วราคายังไม่ถึง → เงียบไว้ ไม่เตือนซ้ำ
     }
 
     if (isTriggered) {
       pendingAlerts.push({
         rowNum: rowNum,
-        status: "SENT_ENTRY",
+        status: newStatus, // ปกติ SENT_ENTRY; MARTINLUK จังหวะ 1 = WATCHING
         text: message,
         diff: diffPercent, // We still sort by diff mostly for SMART_ENTRY order
       });
@@ -245,12 +212,10 @@ function checkPriceAndNotify() {
     pendingAlerts.sort(function (a, b) {
       return a.diff - b.diff;
     });
-    var finalMessage =
-      "🎯 SNIPER ALERT! ทะลวงโซนรับ 🎯\n====================\n\n";
+    var finalMessage = "🔔 อัปเดตสัญญาณ " + pendingAlerts.length + " รายการ\n";
     for (var i = 0; i < pendingAlerts.length; i++) {
-      finalMessage += i + 1 + ". " + pendingAlerts[i].text + "\n\n";
+      finalMessage += "\n" + (i + 1) + ". " + pendingAlerts[i].text + "\n";
     }
-    finalMessage += "====================\n⚡";
 
     if (sendLineMessagingAPI(finalMessage)) {
       pendingAlerts.forEach(function (alert) {
@@ -305,60 +270,44 @@ function checkPortfolioAndNotify() {
       var rowNum = index + 2;
       var profitPct = ((currentPrice - entryPrice) / entryPrice) * 100;
       var portLabel =
-        sheetName === SHEET_PORTFOLIO_MAIN ? "[MAIN]" : "[GROWTH]";
+        sheetName === SHEET_PORTFOLIO_MAIN ? "MAIN" : "GROWTH";
 
-      // เช็คจุดทำกำไร (Target)
-      if (currentPrice >= targetPrice) {
-        var msgTarget =
-          "🎯 " +
-          portLabel +
-          " TARGET HIT!: " +
-          symbol +
-          "\n💰 ราคาปัจจุบัน: $" +
-          currentPrice +
-          " (เป้า: $" +
-          targetPrice +
-          ")\n🚀 กำไรทะลุเป้า: +" +
-          profitPct.toFixed(2) +
-          "%\n💡 อย่าลืมเข้าไประบบเพื่อล็อคกำไร/ปิดสถานะ!";
+      function fmtP(x) {
+        var v = Number(x);
+        if (isNaN(v)) return "-";
+        return (Math.round(v * 100) / 100).toString();
+      }
 
+      // เช็คจุดทำกำไร (Target) — ต้องตั้งเป้าไว้จริง (>0) เท่านั้น
+      if (targetPrice > 0 && currentPrice >= targetPrice) {
         pendingAlerts.push({
           rowNum: rowNum,
           sheet: sheet,
-          text: msgTarget,
+          text:
+            "🎯 " + symbol + " ถึงเป้า! [" + portLabel + "]\n" +
+            "$" + fmtP(currentPrice) + " ≥ เป้า " + fmtP(targetPrice) +
+            " (+" + profitPct.toFixed(1) + "%) → ล็อคกำไร",
         });
       }
-      // เช็คจุดตัดขาดทุน (Cut Loss)
-      else if (currentPrice <= cutLossPrice) {
-        var msgCut =
-          "🚨 " +
-          portLabel +
-          " CUT LOSS REACHED!: " +
-          symbol +
-          "\n🔻 ราคาปัจจุบัน: $" +
-          currentPrice +
-          " (จุดคัท: $" +
-          cutLossPrice +
-          ")\n🩸 ขาดทุน: " +
-          profitPct.toFixed(2) +
-          "%\n🛑 ถึงจุดต้องมอบตัว! ไปตั้งขายด่วน!!";
-
+      // เช็คจุดตัดขาดทุน (Cut Loss) — ต้องตั้งจุดคัทไว้จริง (>0) เท่านั้น
+      else if (cutLossPrice > 0 && currentPrice <= cutLossPrice) {
         pendingAlerts.push({
           rowNum: rowNum,
           sheet: sheet,
-          text: msgCut,
+          text:
+            "🚨 " + symbol + " หลุดคัทลอส! [" + portLabel + "]\n" +
+            "$" + fmtP(currentPrice) + " ≤ คัท " + fmtP(cutLossPrice) +
+            " (" + profitPct.toFixed(1) + "%) → ขายด่วน",
         });
       }
     });
   });
 
   if (pendingAlerts.length > 0) {
-    var finalMessage =
-      "💼 PORTFOLIO ACTION REQUIRED 💼\n====================\n\n";
+    var finalMessage = "💼 พอร์ตต้องจัดการ " + pendingAlerts.length + " ตัว\n";
     for (var i = 0; i < pendingAlerts.length; i++) {
-      finalMessage += i + 1 + ". " + pendingAlerts[i].text + "\n\n";
+      finalMessage += "\n" + (i + 1) + ". " + pendingAlerts[i].text + "\n";
     }
-    finalMessage += "====================\n⚠️";
 
     if (sendLineMessagingAPI(finalMessage)) {
       pendingAlerts.forEach(function (alert) {
