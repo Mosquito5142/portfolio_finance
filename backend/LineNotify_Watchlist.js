@@ -167,7 +167,7 @@ function checkPriceAndNotify() {
       if (currentPrice >= triggerPrice && currentPrice <= chaseLimit) {
         isTriggered = true;
         message =
-          "🏆 " + symbol + " ทะลุ Pivot" + noteStr + "\n" +
+          "🏆 " + symbol + " ทะลุ Pivot" + noteStr + " [minervini]\n" +
           "$" + fmt(currentPrice) + " | ซื้อ " + fmt(triggerPrice) + "-" + fmt(chaseLimit) +
           " | SL " + fmt(cutLossPrice) + " | TP " + fmt(targetPrice);
       }
@@ -183,7 +183,7 @@ function checkPriceAndNotify() {
         isTriggered = true;
         newStatus = "SENT_ENTRY";
         message =
-          "✅ ถึงแล้ว! " + symbol + noteStr + "\n" +
+          "✅ ถึงแล้ว! " + symbol + noteStr + " [martinluk]\n" +
           "$" + fmt(currentPrice) + " แตะจุดตัด " + fmt(triggerPrice) +
           " — turn UPTREND | SL " + fmt(cutLossPrice);
       } else if (status !== "WATCHING") {
@@ -191,7 +191,7 @@ function checkPriceAndNotify() {
         isTriggered = true;
         newStatus = "WATCHING";
         message =
-          "🔭 เฝ้าดู " + symbol + noteStr + "\n" +
+          "🔭 เฝ้าดู " + symbol + noteStr + " [martinluk]\n" +
           "รอราคาแตะ " + fmt(triggerPrice) + " (ตอนนี้ $" + fmt(currentPrice) +
           " · อีก " + toCrossML.toFixed(1) + "%)";
       }
