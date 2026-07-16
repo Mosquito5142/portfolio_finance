@@ -557,7 +557,102 @@ function doPost(e) {
     }
 
     // ---------------------------------
-    // 5. SNIPER LOG - บันทึกสัญญาณสไนเปอร์
+    // 5. PORTFOLIO - แก้ไขข้อมูลในแถวที่มีอยู่ (EDIT)
+    // ---------------------------------
+    if (actionType === "PORTFOLIO_EDIT") {
+      // { rowIndex, portfolioType, expectTicker, + field ที่ต้องการแก้ }
+      var item = json.item;
+
+      var targetSheetName =
+        item.portfolioType === "growth"
+          ? SHEET_PORTFOLIO_GROWTH
+          : SHEET_PORTFOLIO_MAIN;
+      var sheet = ss.getSheetByName(targetSheetName);
+      if (!sheet)
+        throw new Error("Portfolio sheet " + targetSheetName + " not found");
+
+      var targetRow = item.rowIndex;
+      if (!targetRow || targetRow < 2) throw new Error("rowIndex ไม่ถูกต้อง: " + targetRow);
+
+      // rowIndex เลื่อนได้ถ้ามีการลบแถว จึงบังคับให้ส่ง expectTicker มายืนยันว่าเป็นแถวที่ตั้งใจแก้จริง
+      var currentTicker = sheet.getRange(targetRow, 2).getValue();
+      if (
+        !item.expectTicker ||
+        String(currentTicker).toUpperCase() !== String(item.expectTicker).toUpperCase()
+      ) {
+        throw new Error(
+          "Ticker ไม่ตรง! แถว " + targetRow + " คือ '" + currentTicker +
+            "' แต่ส่ง expectTicker='" + item.expectTicker + "' มา — ยกเลิกการแก้ไข",
+        );
+      }
+
+      var colMap = {
+        date: 1, ticker: 2, action: 3, quantity: 4, price: 5,
+        cut: 6, target: 7, soldDate: 8, soldQty: 9, soldPrice: 10,
+        status: 11, targetAlloc: 13,
+      };
+
+      // แก้เฉพาะ field ที่ส่งมา field ที่ไม่ส่ง (undefined) จะไม่ถูกแตะ
+      var changed = [];
+      Object.keys(colMap).forEach(function (key) {
+        if (item[key] !== undefined) {
+          sheet.getRange(targetRow, colMap[key]).setValue(item[key]);
+          changed.push(key);
+        }
+      });
+
+      if (changed.length === 0) throw new Error("ไม่มี field ให้แก้ไขในแถว " + targetRow);
+
+      return ContentService.createTextOutput(
+        JSON.stringify({
+          success: true,
+          message: "แก้ไขแถว " + targetRow + " (" + currentTicker + "): " + changed.join(", "),
+          changed: changed,
+        }),
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ---------------------------------
+    // 6. PORTFOLIO - ลบแถวทิ้ง (DELETE)
+    // ---------------------------------
+    if (actionType === "PORTFOLIO_DELETE") {
+      var item = json.item; // { rowIndex, portfolioType, expectTicker }
+
+      var targetSheetName =
+        item.portfolioType === "growth"
+          ? SHEET_PORTFOLIO_GROWTH
+          : SHEET_PORTFOLIO_MAIN;
+      var sheet = ss.getSheetByName(targetSheetName);
+      if (!sheet)
+        throw new Error("Portfolio sheet " + targetSheetName + " not found");
+
+      var targetRow = item.rowIndex;
+      if (!targetRow || targetRow < 2) throw new Error("rowIndex ไม่ถูกต้อง: " + targetRow);
+
+      var currentTicker = sheet.getRange(targetRow, 2).getValue();
+      if (
+        !item.expectTicker ||
+        String(currentTicker).toUpperCase() !== String(item.expectTicker).toUpperCase()
+      ) {
+        throw new Error(
+          "Ticker ไม่ตรง! แถว " + targetRow + " คือ '" + currentTicker +
+            "' แต่ส่ง expectTicker='" + item.expectTicker + "' มา — ยกเลิกการลบ",
+        );
+      }
+
+      sheet.deleteRow(targetRow);
+
+      return ContentService.createTextOutput(
+        JSON.stringify({
+          success: true,
+          message: "ลบแถว " + targetRow + " (" + currentTicker + ") แล้ว",
+          note: "แถวที่อยู่ใต้แถว " + targetRow + " จะเลื่อน rowIndex ขึ้น 1 ให้ดึง PORTFOLIO_GET ใหม่ก่อนสั่งงานต่อ",
+        }),
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ---------------------------------
+    // 7. SNIPER LOG - บันทึกสัญญาณสไนเปอร์
     // ---------------------------------
     if (actionType === "SNIPER_LOG_SAVE") {
       var logSheet = ss.getSheetByName("sniper_log");
