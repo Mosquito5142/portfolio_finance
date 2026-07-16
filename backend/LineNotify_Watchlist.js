@@ -3,9 +3,31 @@
 // ========================================
 var LINE_ACCESS_TOKEN = ""; // ใส่ Token ของคุณ
 var SHEET_WATCHLIST = "LineNotify_Watchlist";
+var SHEET_PORTFOLIO = "Portfolio"; // ชีตรวมพอร์ตทั้งหมด (แบ่งหมวดด้วยคอลัมน์ N=Group)
+var SHEET_PORTFOLIO_GROUPS = "Portfolio_groups"; // config สัดส่วนเป้าหมายของแต่ละหมวด
+// ── ชีตเก่า: เก็บไว้เป็น backup + ให้ PORTFOLIO_GET fallback ไปอ่านได้ถ้ายังไม่ได้ migrate ──
 var SHEET_PORTFOLIO_MAIN = "Portfolio_main";
 var SHEET_PORTFOLIO_GROWTH = "Portfolio_growth";
 var SHEET_STOCKS = "Stock_Master"; // คลังหุ้นกลาง (Symbol, Category, Detail)
+
+// หมวดตั้งต้น เพิ่ม/ลบ/แก้ทีหลังได้ผ่าน GROUPS_SET หรือแก้ในชีต Portfolio_groups ตรง ๆ
+var DEFAULT_GROUPS = [
+  ["ai_physical", "AI ฟิสิคอล", 0, 1],
+  ["space", "อวกาศ", 0, 2],
+  ["drone", "โดรน", 0, 3],
+  ["health", "สุขภาพ", 0, 4],
+  ["quantum", "ควอนตัม", 0, 5],
+  ["fintech", "การเงิน/ฟินเทค", 0, 6],
+  ["bigtech", "เทคใหญ่/แพลตฟอร์ม", 0, 7],
+  ["other", "อื่นๆ", 0, 8],
+];
+
+// หัวตารางชีต Portfolio — A ถึง O
+var PORTFOLIO_HEADERS = [
+  "Date", "Symbol", "Action", "Quantity", "Price", "CutLoss", "Target",
+  "SoldDate", "SoldQty", "SoldPrice", "Status", "CurrentPrice", "TargetAlloc",
+  "Group", "LegacyStrategy",
+];
 
 // สร้างชีต Stock_Master ถ้ายังไม่มี (พร้อมหัวตาราง)
 function getOrCreateStocksSheet() {
@@ -16,6 +38,72 @@ function getOrCreateStocksSheet() {
     sheet.appendRow(["Symbol", "Category", "Detail"]);
   }
   return sheet;
+}
+
+// สร้างชีต Portfolio (ชีตรวม) ถ้ายังไม่มี
+function getOrCreatePortfolioSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_PORTFOLIO);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_PORTFOLIO);
+    sheet.appendRow(PORTFOLIO_HEADERS);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+// สร้างชีต Portfolio_groups พร้อมหมวดตั้งต้น ถ้ายังไม่มี
+// เช็คแยกเป็น 2 ขั้น (มีชีตไหม / มีข้อมูลไหม) เพราะถ้าชีตถูกสร้างมือไว้ล่วงหน้าแล้วว่างเปล่า
+// การใส่ default ไว้ใน if (!sheet) อย่างเดียวจะข้ามการ seed ไป แล้วได้ลิสต์หมวดว่างกลับไป
+function getOrCreateGroupsSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_PORTFOLIO_GROUPS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_PORTFOLIO_GROUPS);
+  }
+
+  if (sheet.getLastRow() < 1) {
+    sheet.appendRow(["Group", "Label", "TargetPct", "Order"]);
+    sheet.setFrozenRows(1);
+  }
+  if (sheet.getLastRow() < 2) {
+    sheet.getRange(2, 1, DEFAULT_GROUPS.length, 4).setValues(DEFAULT_GROUPS);
+    SpreadsheetApp.flush(); // ให้ getLastRow() ที่เรียกต่อจากนี้เห็นข้อมูลที่เพิ่งเขียน
+  }
+  return sheet;
+}
+
+// เลือกชีตที่จะทำงานด้วย: ใช้ชีตรวมถ้า migrate แล้ว ถ้ายังไม่ migrate ให้ถอยไปใช้ชีตเก่า
+// (กันไม่ให้เว็บพังช่วงระหว่าง deploy เสร็จ แต่ยังไม่ได้สั่ง PORTFOLIO_MIGRATE)
+function resolvePortfolioSheet(ss, portfolioType) {
+  var unified = ss.getSheetByName(SHEET_PORTFOLIO);
+  if (unified && unified.getLastRow() >= 2) return unified;
+
+  var legacyName =
+    portfolioType === "growth" ? SHEET_PORTFOLIO_GROWTH : SHEET_PORTFOLIO_MAIN;
+  var legacy = ss.getSheetByName(legacyName);
+  if (!legacy) throw new Error("Portfolio sheet " + legacyName + " not found");
+  return legacy;
+}
+
+// คืนรายการชีตพอร์ตที่ "ใช้งานจริง" สำหรับโค้ดที่ต้องไล่อ่านทุกแถว (แจ้งเตือน LINE, doGet)
+// migrate แล้ว = ชีตรวมชีตเดียว / ยังไม่ migrate = 2 ชีตเก่า
+// ต้องผ่านตรงนี้เสมอ ไม่งั้นหลัง migrate จะไปอ่านชีตเก่าที่หยุดอัปเดตแล้ว
+function getActivePortfolioSheets(ss) {
+  var unified = ss.getSheetByName(SHEET_PORTFOLIO);
+  if (unified && unified.getLastRow() >= 2) {
+    return [{ sheet: unified, type: null, migrated: true, numCols: 15 }];
+  }
+
+  var out = [];
+  [
+    { name: SHEET_PORTFOLIO_MAIN, type: "main" },
+    { name: SHEET_PORTFOLIO_GROWTH, type: "growth" },
+  ].forEach(function (s) {
+    var sh = ss.getSheetByName(s.name);
+    if (sh) out.push({ sheet: sh, type: s.type, migrated: false, numCols: 13 });
+  });
+  return out;
 }
 
 // ========================================
@@ -235,18 +323,16 @@ function checkPortfolioAndNotify() {
   }
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetsToCheck = [SHEET_PORTFOLIO_MAIN, SHEET_PORTFOLIO_GROWTH];
   var pendingAlerts = [];
 
-  sheetsToCheck.forEach(function (sheetName) {
-    var sheet = ss.getSheetByName(sheetName);
-    if (!sheet) return;
+  getActivePortfolioSheets(ss).forEach(function (target) {
+    var sheet = target.sheet;
 
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return;
 
-    // อ่านข้อมูล A ถึง M (รวม L=Current Price Formula ที่เพิ่งเพิ่ม)
-    var dataRange = sheet.getRange(2, 1, lastRow - 1, 13);
+    // อ่าน A ถึง M (ก่อน migrate) หรือ A ถึง O (หลัง migrate — มี N=Group เพิ่ม)
+    var dataRange = sheet.getRange(2, 1, lastRow - 1, target.numCols);
     var data = dataRange.getValues();
 
     data.forEach(function (row, index) {
@@ -269,8 +355,12 @@ function checkPortfolioAndNotify() {
 
       var rowNum = index + 2;
       var profitPct = ((currentPrice - entryPrice) / entryPrice) * 100;
-      var portLabel =
-        sheetName === SHEET_PORTFOLIO_MAIN ? "MAIN" : "GROWTH";
+      // หลัง migrate ป้ายกำกับใน LINE จะเป็นชื่อหมวด (N=Group) แทน MAIN/GROWTH เดิม
+      var portLabel = target.migrated
+        ? String(row[13] || "other").toUpperCase()
+        : target.type === "growth"
+          ? "GROWTH"
+          : "MAIN";
 
       function fmtP(x) {
         var v = Number(x);
@@ -434,18 +524,12 @@ function doPost(e) {
     // 2. PORTFOLIO - บันทึกการซื้อ (BUY)
     // ---------------------------------
     if (actionType === "PORTFOLIO_BUY") {
-      var item = json.item; // { date, ticker, quantity, price, cut, target, portfolioType }
+      var item = json.item; // { date, ticker, quantity, price, cut, target, group }
 
-      var targetSheetName =
-        item.portfolioType === "growth"
-          ? SHEET_PORTFOLIO_GROWTH
-          : SHEET_PORTFOLIO_MAIN;
-      var sheet = ss.getSheetByName(targetSheetName);
-      if (!sheet)
-        throw new Error("Portfolio sheet + " + targetSheetName + " not found");
+      var sheet = resolvePortfolioSheet(ss, item.portfolioType);
       var newRow = sheet.getLastRow() + 1;
 
-      // หัวตารางอ้างอิง: A=Date, B=Symbol, C=Action, D=Quantity, E=Price, F=CutLoss, G=Target, H=SoldDate, I=SoldQty, J=SoldPrice, K=Status, L=CurrentPriceFormula, M=TargetAlloc
+      // หัวตารางอ้างอิง: A=Date, B=Symbol, C=Action, D=Quantity, E=Price, F=CutLoss, G=Target, H=SoldDate, I=SoldQty, J=SoldPrice, K=Status, L=CurrentPriceFormula, M=TargetAlloc, N=Group
       sheet.getRange(newRow, 1).setValue(item.date); // A: Date
       sheet.getRange(newRow, 2).setValue(item.ticker); // B: Symbol
       sheet.getRange(newRow, 3).setValue("BUY"); // C: Action
@@ -455,6 +539,7 @@ function doPost(e) {
       sheet.getRange(newRow, 7).setValue(item.target); // G: Target
       sheet.getRange(newRow, 11).setValue("ACTIVE"); // K: Status
       sheet.getRange(newRow, 13).setValue(item.targetAlloc || 0); // M: TargetAlloc
+      sheet.getRange(newRow, 14).setValue(item.group || "other"); // N: Group
 
       // L: Current Price Formula แบบเดียวกับหน้า Watchlist
       if (item.ticker.toUpperCase() === "CASH") {
@@ -477,15 +562,9 @@ function doPost(e) {
     // 3. PORTFOLIO - บันทึกการขาย (SELL)
     // ---------------------------------
     if (actionType === "PORTFOLIO_SELL") {
-      var item = json.item; // { rowIndex, soldDate, soldQty, soldPrice, portfolioType }
+      var item = json.item; // { rowIndex, soldDate, soldQty, soldPrice }
 
-      var targetSheetName =
-        item.portfolioType === "growth"
-          ? SHEET_PORTFOLIO_GROWTH
-          : SHEET_PORTFOLIO_MAIN;
-      var sheet = ss.getSheetByName(targetSheetName);
-      if (!sheet)
-        throw new Error("Portfolio sheet " + targetSheetName + " not found");
+      var sheet = resolvePortfolioSheet(ss, item.portfolioType);
 
       // อัปเดตข้อมูลการขายในแถวที่ระบุ (rowIndex ที่ได้จากการดึง GET)
       var targetRow = item.rowIndex; // ต้องตรงตาม index + 2
@@ -513,46 +592,43 @@ function doPost(e) {
     // ---------------------------------
     if (actionType === "PORTFOLIO_GET") {
       var data = [];
-      var sheetsToCheck = [
-        { name: SHEET_PORTFOLIO_MAIN, type: "main" },
-        { name: SHEET_PORTFOLIO_GROWTH, type: "growth" },
-      ];
+      var targets = getActivePortfolioSheets(ss);
+      var migrated = targets.length > 0 && targets[0].migrated;
 
-      sheetsToCheck.forEach(function (sData) {
-        var sheet = ss.getSheetByName(sData.name);
-        if (!sheet) return; // Skip if sheet doesn't exist yet
-
+      targets.forEach(function (t) {
+        var sheet = t.sheet;
         var lastRow = sheet.getLastRow();
-        if (lastRow >= 2) {
-          var range = sheet.getRange(2, 1, lastRow - 1, 13);
-          var values = range.getValues();
+        if (lastRow < 2) return;
 
-          values.forEach(function (row, index) {
-            var symbol = row[1];
-            if (symbol && symbol !== "") {
-              data.push({
-                rowIndex: index + 2,
-                date: row[0],
-                ticker: symbol,
-                action: row[2],
-                quantity: row[3],
-                price: row[4],
-                cutLoss: row[5],
-                target: row[6],
-                soldDate: row[7],
-                soldQty: row[8],
-                soldPrice: row[9],
-                status: row[10],
-                targetAlloc: row[12] || 0,
-                portfolioType: sData.type,
-              });
-            }
-          });
-        }
+        var values = sheet.getRange(2, 1, lastRow - 1, t.numCols).getValues();
+
+        values.forEach(function (row, index) {
+          var symbol = row[1];
+          if (symbol && symbol !== "") {
+            data.push({
+              rowIndex: index + 2,
+              date: row[0],
+              ticker: symbol,
+              action: row[2],
+              quantity: row[3],
+              price: row[4],
+              cutLoss: row[5],
+              target: row[6],
+              soldDate: row[7],
+              soldQty: row[8],
+              soldPrice: row[9],
+              status: row[10],
+              targetAlloc: row[12] || 0,
+              group: t.migrated ? row[13] || "other" : "other",
+              // portfolioType เลิกใช้แล้ว คงไว้ให้หน้าเว็บเดิมยังทำงานได้ระหว่างเปลี่ยนผ่าน
+              portfolioType: t.migrated ? row[14] || "main" : t.type,
+            });
+          }
+        });
       });
 
       return ContentService.createTextOutput(
-        JSON.stringify({ status: "success", data: data }),
+        JSON.stringify({ status: "success", data: data, migrated: !!migrated }),
       ).setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -560,16 +636,10 @@ function doPost(e) {
     // 5. PORTFOLIO - แก้ไขข้อมูลในแถวที่มีอยู่ (EDIT)
     // ---------------------------------
     if (actionType === "PORTFOLIO_EDIT") {
-      // { rowIndex, portfolioType, expectTicker, + field ที่ต้องการแก้ }
+      // { rowIndex, expectTicker, + field ที่ต้องการแก้ }
       var item = json.item;
 
-      var targetSheetName =
-        item.portfolioType === "growth"
-          ? SHEET_PORTFOLIO_GROWTH
-          : SHEET_PORTFOLIO_MAIN;
-      var sheet = ss.getSheetByName(targetSheetName);
-      if (!sheet)
-        throw new Error("Portfolio sheet " + targetSheetName + " not found");
+      var sheet = resolvePortfolioSheet(ss, item.portfolioType);
 
       var targetRow = item.rowIndex;
       if (!targetRow || targetRow < 2) throw new Error("rowIndex ไม่ถูกต้อง: " + targetRow);
@@ -589,7 +659,7 @@ function doPost(e) {
       var colMap = {
         date: 1, ticker: 2, action: 3, quantity: 4, price: 5,
         cut: 6, target: 7, soldDate: 8, soldQty: 9, soldPrice: 10,
-        status: 11, targetAlloc: 13,
+        status: 11, targetAlloc: 13, group: 14,
       };
 
       // แก้เฉพาะ field ที่ส่งมา field ที่ไม่ส่ง (undefined) จะไม่ถูกแตะ
@@ -616,15 +686,9 @@ function doPost(e) {
     // 6. PORTFOLIO - ลบแถวทิ้ง (DELETE)
     // ---------------------------------
     if (actionType === "PORTFOLIO_DELETE") {
-      var item = json.item; // { rowIndex, portfolioType, expectTicker }
+      var item = json.item; // { rowIndex, expectTicker }
 
-      var targetSheetName =
-        item.portfolioType === "growth"
-          ? SHEET_PORTFOLIO_GROWTH
-          : SHEET_PORTFOLIO_MAIN;
-      var sheet = ss.getSheetByName(targetSheetName);
-      if (!sheet)
-        throw new Error("Portfolio sheet " + targetSheetName + " not found");
+      var sheet = resolvePortfolioSheet(ss, item.portfolioType);
 
       var targetRow = item.rowIndex;
       if (!targetRow || targetRow < 2) throw new Error("rowIndex ไม่ถูกต้อง: " + targetRow);
@@ -652,7 +716,155 @@ function doPost(e) {
     }
 
     // ---------------------------------
-    // 7. SNIPER LOG - บันทึกสัญญาณสไนเปอร์
+    // 7. GROUPS - ดึงหมวดพอร์ต + สัดส่วนเป้าหมาย
+    // ---------------------------------
+    if (actionType === "GROUPS_GET") {
+      var gSheet = getOrCreateGroupsSheet();
+      var groups = [];
+      var gLast = gSheet.getLastRow();
+      if (gLast >= 2) {
+        gSheet.getRange(2, 1, gLast - 1, 4).getValues().forEach(function (row) {
+          if (row[0] && row[0] !== "") {
+            groups.push({
+              group: row[0],
+              label: row[1] || row[0],
+              targetPct: Number(row[2]) || 0,
+              order: Number(row[3]) || 999,
+            });
+          }
+        });
+      }
+      groups.sort(function (a, b) { return a.order - b.order; });
+
+      return ContentService.createTextOutput(
+        JSON.stringify({ status: "success", data: groups }),
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ---------------------------------
+    // 8. GROUPS - เขียนทับรายการหมวดทั้งชุด (เพิ่ม/ลบ/แก้ % ได้จากที่นี่)
+    // ---------------------------------
+    if (actionType === "GROUPS_SET") {
+      var groups = json.groups; // [{ group, label, targetPct, order }]
+      if (!groups || !groups.length) throw new Error("ต้องส่ง groups มาอย่างน้อย 1 หมวด");
+
+      var gSheet = getOrCreateGroupsSheet();
+
+      // กันตั้งสัดส่วนรวมเกิน 100% โดยไม่ตั้งใจ
+      var totalPct = 0;
+      groups.forEach(function (g) { totalPct += Number(g.targetPct) || 0; });
+      if (totalPct > 100.01) {
+        throw new Error("สัดส่วนเป้าหมายรวมกันได้ " + totalPct + "% ซึ่งเกิน 100% — ยกเลิก");
+      }
+
+      var rows = groups.map(function (g, i) {
+        if (!g.group) throw new Error("มีหมวดที่ไม่ได้ใส่ชื่อ key (field 'group')");
+        return [g.group, g.label || g.group, Number(g.targetPct) || 0, Number(g.order) || i + 1];
+      });
+
+      // ล้างของเดิมแล้วเขียนใหม่ทั้งชุด
+      if (gSheet.getLastRow() >= 2) {
+        gSheet.getRange(2, 1, gSheet.getLastRow() - 1, 4).clearContent();
+      }
+      gSheet.getRange(2, 1, rows.length, 4).setValues(rows);
+
+      return ContentService.createTextOutput(
+        JSON.stringify({
+          success: true,
+          message: "บันทึก " + rows.length + " หมวดแล้ว (รวม " + totalPct + "%)",
+          totalPct: totalPct,
+        }),
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ---------------------------------
+    // 9. PORTFOLIO - ย้ายข้อมูลจาก 2 ชีตเก่ามารวมเป็นชีตเดียว (ทำครั้งเดียว)
+    // ---------------------------------
+    if (actionType === "PORTFOLIO_MIGRATE") {
+      var groupMap = json.groupMap || {}; // { "RKLB": "space", ... }
+      var dryRun = json.dryRun === true;
+
+      var pSheet = getOrCreatePortfolioSheet();
+      getOrCreateGroupsSheet(); // สร้าง config ไปพร้อมกันเลย
+
+      // กันเผลอสั่งซ้ำแล้วข้อมูลกลายเป็น 2 เท่า
+      if (pSheet.getLastRow() >= 2 && !json.force) {
+        throw new Error(
+          "ชีต " + SHEET_PORTFOLIO + " มีข้อมูลอยู่แล้ว " + (pSheet.getLastRow() - 1) +
+            " แถว — ถ้าตั้งใจจะเขียนซ้ำให้ส่ง force:true (ข้อมูลเดิมจะไม่ถูกลบ)",
+        );
+      }
+
+      var rows = [];
+      var unmapped = {};
+      [
+        { name: SHEET_PORTFOLIO_MAIN, type: "main" },
+        { name: SHEET_PORTFOLIO_GROWTH, type: "growth" },
+      ].forEach(function (src) {
+        var sheet = ss.getSheetByName(src.name);
+        if (!sheet || sheet.getLastRow() < 2) return;
+
+        sheet.getRange(2, 1, sheet.getLastRow() - 1, 13).getValues().forEach(function (row) {
+          var symbol = row[1];
+          if (!symbol || symbol === "") return;
+
+          var key = String(symbol).toUpperCase();
+          var group = groupMap[key];
+          if (!group) {
+            group = "other";
+            unmapped[key] = true;
+          }
+
+          // คอลัมน์ L เป็นสูตร GOOGLEFINANCE จึงไม่ก็อปค่ามา ปล่อยว่างแล้วไปใส่สูตรใหม่ทีหลัง
+          rows.push([
+            row[0], row[1], row[2], row[3], row[4], row[5], row[6],
+            row[7], row[8], row[9], row[10], "", row[12] || 0,
+            group, src.type,
+          ]);
+        });
+      });
+
+      if (dryRun) {
+        return ContentService.createTextOutput(
+          JSON.stringify({
+            success: true,
+            dryRun: true,
+            wouldWrite: rows.length,
+            unmapped: Object.keys(unmapped),
+            message: "dryRun: ยังไม่ได้เขียนอะไรลงชีต",
+          }),
+        ).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      if (!rows.length) throw new Error("ไม่พบข้อมูลในชีตเก่าเลย");
+
+      var startRow = pSheet.getLastRow() + 1;
+      pSheet.getRange(startRow, 1, rows.length, 15).setValues(rows);
+
+      // ใส่สูตรราคาปัจจุบันในคอลัมน์ L ทีละแถว (CASH ใช้ค่า 1 ตายตัว)
+      for (var i = 0; i < rows.length; i++) {
+        var r = startRow + i;
+        if (String(rows[i][1]).toUpperCase() === "CASH") {
+          pSheet.getRange(r, 12).setValue(1);
+        } else {
+          pSheet.getRange(r, 12).setFormula("=GOOGLEFINANCE(B" + r + ")");
+        }
+      }
+
+      return ContentService.createTextOutput(
+        JSON.stringify({
+          success: true,
+          migrated: rows.length,
+          unmapped: Object.keys(unmapped),
+          message:
+            "ย้าย " + rows.length + " แถวเข้าชีต " + SHEET_PORTFOLIO +
+            " แล้ว (ชีตเก่ายังอยู่ครบ ไม่ได้ลบ)",
+        }),
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ---------------------------------
+    // 10. SNIPER LOG - บันทึกสัญญาณสไนเปอร์
     // ---------------------------------
     if (actionType === "SNIPER_LOG_SAVE") {
       var logSheet = ss.getSheetByName("sniper_log");
@@ -841,19 +1053,14 @@ function doGet(e) {
     }
 
     var data = [];
-    var sheetsToCheck = [
-      { name: SHEET_PORTFOLIO_MAIN, type: "main" },
-      { name: SHEET_PORTFOLIO_GROWTH, type: "growth" },
-    ];
 
-    sheetsToCheck.forEach(function (sData) {
-      var sheet = ss.getSheetByName(sData.name);
-      if (!sheet) return;
+    getActivePortfolioSheets(ss).forEach(function (sData) {
+      var sheet = sData.sheet;
 
       var lastRow = sheet.getLastRow();
 
       if (lastRow >= 2) {
-        var range = sheet.getRange(2, 1, lastRow - 1, 11);
+        var range = sheet.getRange(2, 1, lastRow - 1, sData.numCols);
         var values = range.getValues();
 
         values.forEach(function (row, index) {
@@ -872,7 +1079,8 @@ function doGet(e) {
               soldQty: row[8],
               soldPrice: row[9],
               status: row[10],
-              portfolioType: sData.type,
+              group: sData.migrated ? row[13] || "other" : "other",
+              portfolioType: sData.migrated ? row[14] || "main" : sData.type,
             });
           }
         });

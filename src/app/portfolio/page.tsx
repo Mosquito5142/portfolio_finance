@@ -13,6 +13,7 @@ import {
   TrendingUp,
   TrendingDown,
   Briefcase,
+  Target,
   Save,
   AlertTriangle,
   RefreshCw,
@@ -40,9 +41,34 @@ interface PortfolioRow {
   // Merged live data
   livePrice?: number;
   liveChangePercent?: number;
-  portfolioType?: "main" | "growth";
+  group?: string;
   targetAlloc?: number;
+  /** @deprecated เลิกใช้แล้ว เหลือไว้อ่านของเก่า — แบ่งพอร์ตด้วย group แทน */
+  portfolioType?: "main" | "growth";
 }
+
+interface PortfolioGroup {
+  group: string;
+  label: string;
+  targetPct: number;
+  order: number;
+}
+
+const FALLBACK_GROUP = "other";
+
+// สีประจำหมวด วนใช้ซ้ำตามลำดับ order ถ้าหมวดเยอะกว่าสีที่มี
+const GROUP_COLORS = [
+  "#3b82f6", // blue-500
+  "#f59e0b", // amber-500
+  "#8b5cf6", // violet-500
+  "#10b981", // emerald-500
+  "#ec4899", // pink-500
+  "#06b6d4", // cyan-500
+  "#84cc16", // lime-500
+  "#f97316", // orange-500
+  "#ef4444", // red-500
+  "#64748b", // slate-500
+];
 
 export default function PortfolioTracker() {
   const [activeTab, setActiveTab] = useState<"ACTIVE" | "HISTORY" | "DCA">("ACTIVE");
@@ -74,10 +100,26 @@ export default function PortfolioTracker() {
 
   const [sortBy, setSortBy] = useState<string>("date_desc");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [viewFilter, setViewFilter] = useState<"all" | "main" | "growth">(
-    "all",
-  );
-  const [tradeType, setTradeType] = useState<"main" | "growth">("main");
+  // "all" = ดูรวมทุกหมวด นอกนั้นคือ key ของหมวดในชีต Portfolio_groups
+  const [viewFilter, setViewFilter] = useState<string>("all");
+  const [tradeGroup, setTradeGroup] = useState<string>(FALLBACK_GROUP);
+  const [groups, setGroups] = useState<PortfolioGroup[]>([]);
+
+  // จัดการหมวด (เพิ่ม/ลบ/แก้ % เป้าหมาย)
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [groupDraft, setGroupDraft] = useState<PortfolioGroup[]>([]);
+  const [groupSaving, setGroupSaving] = useState(false);
+  const [groupError, setGroupError] = useState<string | null>(null);
+  // ย้ายหมวดของหุ้นที่ถืออยู่ (key = groupKey ของการ์ด)
+  const [regrouping, setRegrouping] = useState<string | null>(null);
+
+  // หุ้นที่ไม่มีหมวด หรือมีหมวดที่ไม่ตรงกับชีต config (พิมพ์ผิด / หมวดถูกลบทีหลัง)
+  // ให้ตกมาเป็น "อื่นๆ" ทั้งหมด จะได้ไม่มีหมวดลอย ๆ โผล่ในหน้าจอ
+  const normalizeGroup = (g?: string) => {
+    if (!g) return FALLBACK_GROUP;
+    if (groups.length === 0) return g; // config ยังโหลดไม่เสร็จ อย่าเพิ่งตีตกเป็นอื่นๆ
+    return groups.some((x) => x.group === g) ? g : FALLBACK_GROUP;
+  };
   const [isCopied, setIsCopied] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<{
     [key: string]: boolean;
@@ -99,8 +141,176 @@ export default function PortfolioTracker() {
 
   useEffect(() => {
     fetchExchangeRate();
+    fetchGroups();
     fetchPortfolioData();
   }, []);
+
+  const fetchGroups = async () => {
+    try {
+      const res = await fetch("/api/sheets/groups", { cache: "no-store" });
+      const json = await res.json();
+      if (json.status === "success" && Array.isArray(json.data)) {
+        const list: PortfolioGroup[] = json.data;
+        setGroups(list);
+        // ตั้งค่าเริ่มต้นของฟอร์มเป็นหมวดแรก เผื่อชีตไม่มีหมวดชื่อ "other"
+        if (list.length && !list.some((g) => g.group === FALLBACK_GROUP)) {
+          setTradeGroup(list[0].group);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch portfolio groups", e);
+    }
+  };
+
+  const openGroupModal = () => {
+    setGroupDraft(groups.map((g) => ({ ...g })));
+    setGroupError(null);
+    setIsGroupModalOpen(true);
+  };
+
+  const patchDraft = (idx: number, patch: Partial<PortfolioGroup>) => {
+    setGroupDraft((prev) =>
+      prev.map((g, i) => (i === idx ? { ...g, ...patch } : g)),
+    );
+  };
+
+  const addDraftRow = () => {
+    setGroupDraft((prev) => [
+      ...prev,
+      {
+        group: "",
+        label: "",
+        targetPct: 0,
+        order: (prev[prev.length - 1]?.order || prev.length) + 1,
+      },
+    ]);
+  };
+
+  const removeDraftRow = (idx: number) => {
+    setGroupDraft((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const draftTotalPct = groupDraft.reduce(
+    (s, g) => s + (Number(g.targetPct) || 0),
+    0,
+  );
+
+  // นับว่าหมวดนี้มีหุ้นถืออยู่กี่ตัว ใช้เตือนตอนจะลบหมวด
+  const holdingsInGroup = (key: string) =>
+    portfolioData.filter(
+      (r) => r.status !== "CLOSED" && normalizeGroup(r.group) === key,
+    ).length;
+
+  const handleSaveGroups = async () => {
+    setGroupError(null);
+
+    const cleaned = groupDraft.map((g, i) => ({
+      group: g.group.trim(),
+      label: g.label.trim() || g.group.trim(),
+      targetPct: Number(g.targetPct) || 0,
+      order: i + 1,
+    }));
+
+    if (!cleaned.length) {
+      setGroupError("ต้องมีอย่างน้อย 1 หมวด");
+      return;
+    }
+    for (const g of cleaned) {
+      if (!g.group) {
+        setGroupError("มีหมวดที่ยังไม่ได้ใส่ key");
+        return;
+      }
+      if (!/^[a-z0-9_]+$/.test(g.group)) {
+        setGroupError(
+          `key "${g.group}" ใช้ไม่ได้ — ใช้ได้เฉพาะ a-z, 0-9 และ _ (ห้ามเว้นวรรค/ภาษาไทย)`,
+        );
+        return;
+      }
+    }
+    const keys = cleaned.map((g) => g.group);
+    const dup = keys.find((k, i) => keys.indexOf(k) !== i);
+    if (dup) {
+      setGroupError(`key "${dup}" ซ้ำกัน`);
+      return;
+    }
+    if (draftTotalPct > 100.01) {
+      setGroupError(`สัดส่วนรวมกันได้ ${draftTotalPct}% ซึ่งเกิน 100%`);
+      return;
+    }
+
+    // หุ้นในหมวดที่ถูกลบจะตกไปเป็น "อื่นๆ" อัตโนมัติ (normalizeGroup) — เตือนก่อนบันทึก
+    const removed = groups.filter((g) => !keys.includes(g.group));
+    const orphaned = removed
+      .map((g) => ({ label: g.label, n: holdingsInGroup(g.group) }))
+      .filter((x) => x.n > 0);
+    if (orphaned.length) {
+      const msg = orphaned
+        .map((x) => `${x.label} (${x.n} ตัว)`)
+        .join(", ");
+      if (
+        !confirm(
+          `กำลังลบหมวดที่ยังมีหุ้นอยู่: ${msg}\n\nหุ้นเหล่านี้จะถูกตีเป็น "อื่นๆ" ยืนยันหรือไม่?`,
+        )
+      )
+        return;
+    }
+
+    setGroupSaving(true);
+    try {
+      const res = await fetch("/api/sheets/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groups: cleaned }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.success === false) {
+        setGroupError(json.error || "บันทึกไม่สำเร็จ");
+        return;
+      }
+      await fetchGroups();
+      setIsGroupModalOpen(false);
+    } catch (e: any) {
+      setGroupError(e.message || "เกิดข้อผิดพลาดในการติดต่อเซิร์ฟเวอร์");
+    } finally {
+      setGroupSaving(false);
+    }
+  };
+
+  // ย้ายหุ้นทั้งการ์ด (ทุกไม้ของ ticker นั้นในหมวดนั้น) ไปหมวดใหม่
+  const handleChangeGroup = async (
+    cardKey: string,
+    ticker: string,
+    items: any[],
+    newGroup: string,
+  ) => {
+    setRegrouping(cardKey);
+    try {
+      for (const item of items) {
+        const res = await fetch("/api/sheets/portfolio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            actionType: "PORTFOLIO_EDIT",
+            item: {
+              rowIndex: item.rowIndex,
+              // ฝั่ง Apps Script บังคับให้ส่งมายืนยันว่าแถวนี้คือหุ้นตัวที่ตั้งใจแก้จริง
+              expectTicker: ticker,
+              group: newGroup,
+            },
+          }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.detail || j.error || `แก้แถว ${item.rowIndex} ไม่สำเร็จ`);
+        }
+      }
+      await fetchPortfolioData();
+    } catch (e: any) {
+      alert(`ย้ายหมวดไม่สำเร็จ: ${e.message}`);
+    } finally {
+      setRegrouping(null);
+    }
+  };
 
   const fetchExchangeRate = async () => {
     try {
@@ -206,7 +416,7 @@ export default function PortfolioTracker() {
             cut: Number(cutLoss),
             target: Number(target),
             targetAlloc: Number(targetAlloc) || 0,
-            portfolioType: tradeType,
+            group: tradeGroup,
           },
         }),
       });
@@ -218,7 +428,7 @@ export default function PortfolioTracker() {
         setCutLoss("");
         setTarget("");
         setTargetAlloc("");
-        setTradeType("main");
+        setTradeGroup(groups[0]?.group || FALLBACK_GROUP);
         setIsAddModalOpen(false);
         await fetchPortfolioData();
       } else {
@@ -235,9 +445,9 @@ export default function PortfolioTracker() {
     rowIndex: number,
     ticker: string,
     buyQty: number,
-    portfolioType: string,
+    group: string,
   ) => {
-    const itemKey = `${portfolioType}_${rowIndex}`;
+    const itemKey = `${group}_${rowIndex}`;
     const sQty = Number(sellQty[itemKey]);
     const sPrice = Number(sellPrice[itemKey]);
 
@@ -269,7 +479,6 @@ export default function PortfolioTracker() {
             soldDate: dateStr,
             soldQty: sQty,
             soldPrice: sPrice,
-            portfolioType: portfolioType,
           },
         }),
       });
@@ -324,12 +533,12 @@ export default function PortfolioTracker() {
       // Fix: If status is explicitly ACTIVE, always show it
       // (soldQty from a previous CLOSED trade on the same ticker can be inherited)
       (r.status === "ACTIVE" || r.quantity - (r.soldQty || 0) > 0) &&
-      (viewFilter === "all" || r.portfolioType === viewFilter),
+      (viewFilter === "all" || normalizeGroup(r.group) === viewFilter),
   );
   const histories = portfolioData.filter(
     (r) =>
       (r.status === "CLOSED" || r.status === "PARTIAL_SOLD") &&
-      (viewFilter === "all" || r.portfolioType === viewFilter),
+      (viewFilter === "all" || normalizeGroup(r.group) === viewFilter),
   );
 
   const groupedHistories = Object.values(
@@ -355,10 +564,10 @@ export default function PortfolioTracker() {
     }, {})
   ).sort((a: any, b: any) => b.totalPnl - a.totalPnl); // Sort by highest profit first
 
-  // Grouping Actives by Ticker & PortfolioType
+  // Grouping Actives by Ticker & Group
   const groupedObj = actives.reduce(
     (acc, item) => {
-      const key = `${item.portfolioType || "main"}_${item.ticker}`;
+      const key = `${normalizeGroup(item.group)}_${item.ticker}`;
       const holdingQty =
         item.status === "ACTIVE"
           ? item.quantity
@@ -369,7 +578,7 @@ export default function PortfolioTracker() {
       if (!acc[key]) {
         acc[key] = {
           ticker: item.ticker,
-          portfolioType: item.portfolioType || "main",
+          group: normalizeGroup(item.group),
           items: [],
           totalQty: 0,
           totalCostUSD: 0,
@@ -497,17 +706,19 @@ export default function PortfolioTracker() {
     .filter((item) => item.value > 0)
     .sort((a: any, b: any) => b.value - a.value);
 
-  // --- Global Portfolio Split Metrics (for Filter Buttons) ---
-  let mainVal = 0;
-  let mainPnl = 0;
-  let mainCost = 0;
-
-  let gtVal = 0;
-  let gtPnl = 0;
-  let gtCost = 0;
-
-  let cashVal = 0;
-  let cashCost = 0;
+  // --- Per-Group Metrics (for Filter Buttons & Strategy Chart) ---
+  // นับเฉพาะหมวดที่ "มีหุ้นอยู่จริง" — หมวดที่ตั้งเป้าไว้แต่ยังไม่ได้ซื้อจะไม่ขึ้นบนหน้าจอ
+  // (ยังเลือกได้จาก dropdown ตอนบันทึกหุ้นใหม่ ไม่งั้นจะซื้อตัวแรกของหมวดนั้นไม่ได้)
+  const groupStats: Record<
+    string,
+    { value: number; cost: number; pnl: number }
+  > = {};
+  const bump = (key: string, value: number, cost: number) => {
+    if (!groupStats[key]) groupStats[key] = { value: 0, cost: 0, pnl: 0 };
+    groupStats[key].value += value;
+    groupStats[key].cost += cost;
+    groupStats[key].pnl += value - cost;
+  };
 
   // calculate across ALL active items
   portfolioData
@@ -518,42 +729,42 @@ export default function PortfolioTracker() {
           ? item.quantity
           : item.quantity - (item.soldQty || 0);
       const currentPrice = item.livePrice || item.price;
-      const usdValue = currentPrice * holdingQty;
-      const usdCost = item.price * holdingQty;
-      const usdPnl = usdValue - usdCost;
-
-      if (item.ticker === "CASH") {
-        cashVal += usdValue;
-        cashCost += usdCost;
-      } else if (item.portfolioType === "main" || !item.portfolioType) {
-        mainVal += usdValue;
-        mainPnl += usdPnl;
-        mainCost += usdCost;
-      } else if (item.portfolioType === "growth") {
-        gtVal += usdValue;
-        gtPnl += usdPnl;
-        gtCost += usdCost;
-      }
+      bump(
+        normalizeGroup(item.group),
+        currentPrice * holdingQty,
+        item.price * holdingQty,
+      );
     });
 
-  const totalVal = mainVal + gtVal + cashVal;
-  const mainWeight =
-    totalVal > 0 ? ((mainVal / totalVal) * 100).toFixed(0) : "0";
-  const gtWeight = totalVal > 0 ? ((gtVal / totalVal) * 100).toFixed(0) : "0";
-  const cashWeight = totalVal > 0 ? ((cashVal / totalVal) * 100).toFixed(0) : "0";
+  const totalVal = Object.values(groupStats).reduce((s, g) => s + g.value, 0);
 
-  const mainPnlPct =
-    mainCost > 0 ? ((mainPnl / mainCost) * 100).toFixed(1) : "0.0";
-  const mainPnlSign = Number(mainPnlPct) >= 0 ? "+" : "";
+  // เรียงตาม order ในชีต — normalizeGroup การันตีแล้วว่าทุก key มีใน config
+  const groupViews = Object.keys(groupStats)
+    .map((key, i) => {
+      const cfg = groups.find((g) => g.group === key);
+      const st = groupStats[key];
+      const order = cfg?.order ?? 900 + i;
+      return {
+        key,
+        label: cfg?.label || key,
+        targetPct: cfg?.targetPct ?? 0,
+        order,
+        value: st.value,
+        cost: st.cost,
+        pnl: st.pnl,
+        weight: totalVal > 0 ? (st.value / totalVal) * 100 : 0,
+        pnlPct: st.cost > 0 ? (st.pnl / st.cost) * 100 : 0,
+        color: GROUP_COLORS[order % GROUP_COLORS.length],
+      };
+    })
+    .sort((a, b) => a.order - b.order);
 
-  const gtPnlPct = gtCost > 0 ? ((gtPnl / gtCost) * 100).toFixed(1) : "0.0";
-  const gtPnlSign = Number(gtPnlPct) >= 0 ? "+" : "";
+  const strategyData = groupViews
+    .filter((g) => g.value > 0)
+    .map((g) => ({ name: g.label, value: g.value, color: g.color }));
 
-  const strategyData = [
-    { name: "🛡️ ทัพหลวง (Bunker)", value: mainVal, color: "#3b82f6" }, // blue-500
-    { name: "🚀 กล้าตาย (Moonshot)", value: gtVal, color: "#f59e0b" }, // amber-500
-    { name: "💰 เงินสด (Cash)", value: cashVal, color: "#10b981" }, // emerald-500
-  ].filter(item => item.value > 0);
+  const activeGroupView =
+    viewFilter === "all" ? null : groupViews.find((g) => g.key === viewFilter);
 
   const COLORS = [
     "#3b82f6", // blue-500
@@ -568,96 +779,68 @@ export default function PortfolioTracker() {
   ];
 
   const handleCopySummary = () => {
-    let summaryText = `📊 สรุปพอร์ตการลงทุน (${viewFilter === "all" ? "Barbell Strategy" : viewFilter === "main" ? "ทัพหลวง" : "หน่วยกล้าตาย"})\n\n`;
-    
+    let summaryText = `📊 สรุปพอร์ตการลงทุน (${
+      viewFilter === "all" ? "ทุกหมวด" : activeGroupView?.label || viewFilter
+    })\n\n`;
+
     if (viewFilter === "all") {
-      summaryText += `สัดส่วนพอร์ต: ทัพหลวง ${mainWeight}% | กล้าตาย ${gtWeight}% | เงินสด ${cashWeight}% (เป้า: 40/40/20)\n\n`;
+      const parts = groupViews
+        .filter((g) => g.value > 0 || g.targetPct > 0)
+        .map(
+          (g) => `${g.label} ${g.weight.toFixed(0)}%/เป้า ${g.targetPct}%`,
+        );
+      summaryText += `สัดส่วนพอร์ต: ${parts.join(" | ")}\n\n`;
     }
 
     const netFormatted = formatCurrency(Math.abs(netPnLUSD));
     const netSignStr = netPnLUSD >= 0 ? "+" : "-";
     summaryText += `Net ROI: ${getSymbol()}${netSignStr}${netFormatted} (${netSignStr}${Math.abs(netPnLPct).toFixed(2)}%) | Win Rate: ${winRate.toFixed(1)}%\n\n`;
 
-    let mainLines: string[] = [];
-    let growthLines: string[] = [];
-    let cashLines: string[] = [];
+    const linesByGroup: Record<string, string[]> = {};
 
-    groupedActives.forEach((group: any) => {
-      const {
-        ticker,
-        totalQty,
-        currentPrice,
-        totalCostUSD,
-        portfolioType,
-        targetAlloc,
-      } = group;
+    groupedActives.forEach((g: any) => {
+      const { ticker, totalQty, currentPrice, totalCostUSD, group } = g;
 
       const avgPrice = totalCostUSD / totalQty;
       const pnlUSD = (currentPrice - avgPrice) * totalQty;
       const pnlPct = ((currentPrice - avgPrice) / avgPrice) * 100;
-      
+
       const pnlIcon = pnlUSD >= 0 ? "🟢" : "🔴";
       const pnlSign = pnlUSD >= 0 ? "+" : "-";
       const pnlStr = `${pnlSign}$${formatUSD(Math.abs(pnlUSD))} (${pnlSign}${Math.abs(pnlPct).toFixed(2)}%)`;
 
       const itemUSD = currentPrice * totalQty;
-      const currentAllocPct = totalCurrentValueUSD > 0 ? (itemUSD / totalCurrentValueUSD) * 100 : 0;
+      const currentAllocPct =
+        totalCurrentValueUSD > 0 ? (itemUSD / totalCurrentValueUSD) * 100 : 0;
 
-      const isCash = ticker === "CASH";
+      const key = group; // groupedActives normalize มาให้แล้ว
+      if (!linesByGroup[key]) linesByGroup[key] = [];
 
-      let displayedTargetAlloc = 0;
-      if (targetAlloc && targetAlloc > 0) {
-        displayedTargetAlloc = targetAlloc;
-        if (viewFilter === "all") {
-          // Target weights: Main = 40%, Growth = 40%, Cash = 20%
-          const portfolioWeight = isCash ? 0.2 : (portfolioType === "growth" ? 0.4 : 0.4); 
-          displayedTargetAlloc = targetAlloc * portfolioWeight;
-        }
-      }
-
-      const overWeightStr = (displayedTargetAlloc > 0 && currentAllocPct > displayedTargetAlloc) ? " (⚠️ Overweight)" : "";
-      
-      let allocText = `สัดส่วน: ${currentAllocPct.toFixed(1)}%`;
-      if (displayedTargetAlloc > 0) {
-        allocText += ` (เป้า ${Number(displayedTargetAlloc.toFixed(1))}%)`;
-      }
-      allocText += overWeightStr;
-
-      if (isCash) {
-        cashLines.push(`CASH | ${allocText} | ยอดคงเหลือ: $${formatUSD(itemUSD)}`);
-      } else if (portfolioType === "growth") {
-        growthLines.push(`${ticker} | ${allocText} | ${pnlIcon} PnL: ${pnlStr} | ทุน: $${formatUSD(avgPrice)} ➡️ ปัจจุบัน: $${formatUSD(currentPrice)} | จำนวน: ${totalQty} หุ้น`);
+      if (ticker === "CASH") {
+        linesByGroup[key].push(
+          `CASH | สัดส่วน: ${currentAllocPct.toFixed(1)}% | ยอดคงเหลือ: $${formatUSD(itemUSD)}`,
+        );
       } else {
-        mainLines.push(`${ticker} | ${allocText} | ${pnlIcon} PnL: ${pnlStr} | ทุน: $${formatUSD(avgPrice)} ➡️ ปัจจุบัน: $${formatUSD(currentPrice)} | จำนวน: ${totalQty} หุ้น`);
+        linesByGroup[key].push(
+          `${ticker} | สัดส่วน: ${currentAllocPct.toFixed(1)}% | ${pnlIcon} PnL: ${pnlStr} | ทุน: $${formatUSD(avgPrice)} ➡️ ปัจจุบัน: $${formatUSD(currentPrice)} | จำนวน: ${totalQty} หุ้น`,
+        );
       }
     });
 
-    if (mainLines.length > 0 || viewFilter === "all" || viewFilter === "main") {
-      summaryText += `🛡️ ทัพหลวง (Bunker)\n\n`;
-      if (mainLines.length > 0) {
-        summaryText += mainLines.join("\n\n") + "\n\n";
-      } else {
-        summaryText += `- ไม่มีหุ้นในหมวดนี้ -\n\n`;
-      }
-    }
+    groupViews.forEach((g) => {
+      if (viewFilter !== "all" && viewFilter !== g.key) return;
+      const lines = linesByGroup[g.key] || [];
+      if (!lines.length) return;
 
-    if (growthLines.length > 0 || viewFilter === "all" || viewFilter === "growth") {
-      summaryText += `🚀 หน่วยกล้าตาย (Moonshot)\n\n`;
-      if (growthLines.length > 0) {
-        summaryText += growthLines.join("\n\n") + "\n\n";
-      } else {
-        summaryText += `- ไม่มีหุ้นในหมวดนี้ -\n\n`;
-      }
-    }
+      const gap = g.weight - g.targetPct;
+      const gapStr =
+        g.targetPct > 0
+          ? ` — ตอนนี้ ${g.weight.toFixed(1)}% / เป้า ${g.targetPct}% (${gap >= 0 ? "+" : ""}${gap.toFixed(1)}%)`
+          : ` — ตอนนี้ ${g.weight.toFixed(1)}%`;
 
-    if (cashLines.length > 0 || viewFilter === "all") {
-      summaryText += `💰 คลังแสง (Cash Reserve)\n\n`;
-      if (cashLines.length > 0) {
-        summaryText += cashLines.join("\n\n") + "\n\n";
-      } else {
-        summaryText += `- ไม่มีเงินสด -\n\n`;
-      }
-    }
+      summaryText += `${g.label}${gapStr}\n\n`;
+      summaryText += lines.join("\n\n") + "\n\n";
+    });
 
     navigator.clipboard.writeText(summaryText.trim()).then(() => {
       setIsCopied(true);
@@ -691,46 +874,34 @@ export default function PortfolioTracker() {
               >
                 ทั้งหมด (100%)
               </button>
-              <button
-                onClick={() => setViewFilter("main")}
-                className={`px-3 py-1.5 md:px-5 md:py-2 text-xs md:text-sm rounded-md font-bold transition-all ${
-                  viewFilter === "main"
-                    ? "bg-blue-600/20 text-blue-400"
-                    : "text-slate-500 hover:text-slate-300"
-                }`}
-              >
-                พอร์ตหลัก ({mainWeight}%{" "}
-                <span
-                  className={
-                    Number(mainPnlPct) >= 0
-                      ? "text-emerald-500"
-                      : "text-red-500"
+              {groupViews.map((g) => (
+                <button
+                  key={g.key}
+                  onClick={() => setViewFilter(g.key)}
+                  aria-label={`${g.label} — สัดส่วน ${g.weight.toFixed(0)}% เป้าหมาย ${g.targetPct}%`}
+                  title={`${g.label} — เป้าหมาย ${g.targetPct}%`}
+                  className={`px-3 py-1.5 md:px-5 md:py-2 text-xs md:text-sm rounded-md font-bold transition-all ${
+                    viewFilter === g.key
+                      ? "bg-white/10 text-white"
+                      : "text-slate-500 hover:text-slate-300"
+                  }`}
+                  style={
+                    viewFilter === g.key ? { color: g.color } : undefined
                   }
                 >
-                  {mainPnlSign}
-                  {mainPnlPct}%
-                </span>
-                )
-              </button>
-              <button
-                onClick={() => setViewFilter("growth")}
-                className={`px-3 py-1.5 md:px-5 md:py-2 text-xs md:text-sm rounded-md font-bold transition-all ${
-                  viewFilter === "growth"
-                    ? "bg-amber-600/20 text-amber-400"
-                    : "text-slate-500 hover:text-slate-300"
-                }`}
-              >
-                เติบโต ({gtWeight}%{" "}
-                <span
-                  className={
-                    Number(gtPnlPct) >= 0 ? "text-emerald-500" : "text-red-500"
-                  }
-                >
-                  {gtPnlSign}
-                  {gtPnlPct}%
-                </span>
-                )
-              </button>
+                  {g.label} ({g.weight.toFixed(0)}%
+                  <span className="text-slate-600">/{g.targetPct}%</span>{" "}
+                  <span
+                    className={
+                      g.pnlPct >= 0 ? "text-emerald-500" : "text-red-500"
+                    }
+                  >
+                    {g.pnlPct >= 0 ? "+" : ""}
+                    {g.pnlPct.toFixed(1)}%
+                  </span>
+                  )
+                </button>
+              ))}
             </div>
           </div>
 
@@ -887,48 +1058,127 @@ export default function PortfolioTracker() {
           </div>
         </div>
 
-        {/* Strategy Performance Comparison */}
+        {/* Group Allocation vs Target */}
         <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl">
-          <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-            <span>⚔️</span> เปรียบเทียบผลตอบแทน (Performance Battle)
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Main Portfolio */}
-            <div className={`p-5 rounded-xl border relative overflow-hidden transition-all duration-300 ${Number(mainPnlPct) > Number(gtPnlPct) ? "border-emerald-500/50 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.15)]" : "border-slate-800 bg-slate-950/50"}`}>
-               {Number(mainPnlPct) > Number(gtPnlPct) && (
-                 <div className="absolute top-0 right-0 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg shadow-md">
-                   Winner 🏆
-                 </div>
-               )}
-               <h3 className="text-blue-400 font-bold flex items-center gap-2">
-                 🛡️ ทัพหลวง (Bunker)
-               </h3>
-               <p className={`text-3xl font-bold mt-3 ${Number(mainPnlPct) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                 {mainPnlSign}{mainPnlPct}%
-               </p>
-               <p className="text-sm text-slate-400 mt-2 font-medium">
-                 PnL: <span className={mainPnl >= 0 ? "text-emerald-500" : "text-red-500"}>{mainPnl >= 0 ? "+" : ""}{getSymbol()}{formatCurrency(mainPnl)}</span>
-               </p>
-            </div>
-            
-            {/* Growth Portfolio */}
-            <div className={`p-5 rounded-xl border relative overflow-hidden transition-all duration-300 ${Number(gtPnlPct) > Number(mainPnlPct) ? "border-emerald-500/50 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.15)]" : "border-slate-800 bg-slate-950/50"}`}>
-               {Number(gtPnlPct) > Number(mainPnlPct) && (
-                 <div className="absolute top-0 right-0 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg shadow-md">
-                   Winner 🏆
-                 </div>
-               )}
-               <h3 className="text-amber-400 font-bold flex items-center gap-2">
-                 🚀 กล้าตาย (Moonshot)
-               </h3>
-               <p className={`text-3xl font-bold mt-3 ${Number(gtPnlPct) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                 {gtPnlSign}{gtPnlPct}%
-               </p>
-               <p className="text-sm text-slate-400 mt-2 font-medium">
-                 PnL: <span className={gtPnl >= 0 ? "text-emerald-500" : "text-red-500"}>{gtPnl >= 0 ? "+" : ""}{getSymbol()}{formatCurrency(gtPnl)}</span>
-               </p>
-            </div>
+          <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <span>🎯</span> สัดส่วนตามหมวด เทียบเป้าหมาย
+            </h2>
+            <button
+              onClick={openGroupModal}
+              className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg font-bold transition-colors border border-slate-700"
+            >
+              ⚙️ จัดการหมวด &amp; สัดส่วน
+            </button>
           </div>
+
+          {/* หมวดที่ตั้งเป้าไว้แต่ยังไม่มีหุ้น — ไม่โชว์เป็นการ์ดเต็มใบ แต่ยังบอกให้รู้ว่าเหลือช่องว่างเท่าไหร่ */}
+          {(() => {
+            const empty = groups.filter(
+              (g) => !groupViews.some((v) => v.key === g.group) && g.targetPct > 0,
+            );
+            if (!empty.length) return null;
+            const sum = empty.reduce((s, g) => s + g.targetPct, 0);
+            return (
+              <p className="text-xs text-slate-500 mb-4">
+                ยังไม่มีในพอร์ต:{" "}
+                {empty.map((g) => `${g.label} ${g.targetPct}%`).join(" · ")}{" "}
+                <span className="text-slate-600">(รวม {sum}% ของเป้า)</span>
+              </p>
+            );
+          })()}
+
+          {groupViews.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              ยังไม่มีหุ้นในพอร์ต
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {groupViews.map((g) => {
+                const gap = g.weight - g.targetPct;
+                // ถือว่า "ตรงเป้า" ถ้าห่างไม่เกิน 2% เพื่อไม่ให้ขึ้นเตือนตลอดจากการแกว่งปกติ
+                const onTarget = Math.abs(gap) <= 2;
+                return (
+                  <div
+                    key={g.key}
+                    className="p-4 rounded-xl border border-slate-800 bg-slate-950/50"
+                  >
+                    <div className="flex justify-between items-center gap-2">
+                      <h3
+                        className="font-bold text-sm truncate"
+                        style={{ color: g.color }}
+                      >
+                        {g.label}
+                      </h3>
+                      <span
+                        className={`text-xs font-bold ${
+                          g.pnlPct >= 0 ? "text-emerald-400" : "text-red-400"
+                        }`}
+                      >
+                        {g.pnlPct >= 0 ? "+" : ""}
+                        {g.pnlPct.toFixed(1)}%
+                      </span>
+                    </div>
+
+                    <div className="flex items-baseline gap-2 mt-2">
+                      <span className="text-2xl font-bold text-white">
+                        {g.weight.toFixed(1)}%
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        / เป้า {g.targetPct}%
+                      </span>
+                    </div>
+
+                    {/* แถบสัดส่วนจริง พร้อมขีดตำแหน่งเป้าหมาย */}
+                    <div className="relative h-2 bg-slate-800 rounded-full mt-3 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${Math.min(g.weight, 100)}%`,
+                          backgroundColor: g.color,
+                        }}
+                      />
+                    </div>
+                    {g.targetPct > 0 && g.targetPct < 100 && (
+                      <div className="relative h-0">
+                        <div
+                          className="absolute -top-2 w-0.5 h-2 bg-white/70"
+                          style={{ left: `${g.targetPct}%` }}
+                        />
+                      </div>
+                    )}
+
+                    <p className="text-xs mt-3 font-medium">
+                      {onTarget ? (
+                        <span className="text-emerald-500">✓ ตรงเป้า</span>
+                      ) : gap > 0 ? (
+                        <span className="text-amber-400">
+                          เกินเป้า +{gap.toFixed(1)}%
+                        </span>
+                      ) : (
+                        <span className="text-sky-400">
+                          ต่ำกว่าเป้า {gap.toFixed(1)}%
+                        </span>
+                      )}
+                      <span className="text-slate-600">
+                        {" "}
+                        · PnL{" "}
+                        <span
+                          className={
+                            g.pnl >= 0 ? "text-emerald-500" : "text-red-500"
+                          }
+                        >
+                          {g.pnl >= 0 ? "+" : ""}
+                          {getSymbol()}
+                          {formatCurrency(g.pnl)}
+                        </span>
+                      </span>
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Portfolio Composition Charts */}
@@ -1007,7 +1257,7 @@ export default function PortfolioTracker() {
               {/* Strategy Chart */}
               {(chartMode === "compare" || chartMode === "strategy") && (
                 <div className="flex flex-col items-center bg-slate-950/40 p-5 rounded-xl border border-slate-800/50">
-                  <h3 className="text-slate-300 font-bold mb-4">สัดส่วนกลยุทธ์ (Barbell Strategy)</h3>
+                  <h3 className="text-slate-300 font-bold mb-4">สัดส่วนตามหมวด (By Group)</h3>
                   <div className="h-64 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -1126,17 +1376,18 @@ export default function PortfolioTracker() {
                   ไม่พบข้อมูลหุ้นที่ถือครอง ลองบันทึกประวัติการซื้อสิ!
                 </div>
               )}
-              {groupedActives.map((group: any) => {
+              {groupedActives.map((g: any) => {
                 const {
                   ticker,
-                  portfolioType,
+                  group,
                   items,
                   totalQty,
                   totalCostUSD,
                   currentPrice,
                   targetAlloc: targetAllocPct,
-                } = group;
-                const groupKey = `${portfolioType}_${ticker}`;
+                } = g;
+                const groupKey = `${group}_${ticker}`;
+                const groupView = groupViews.find((v) => v.key === group);
                 const avgPrice = totalCostUSD / totalQty;
                 const pnl = (currentPrice - avgPrice) * totalQty;
                 const pnlPct = ((currentPrice - avgPrice) / avgPrice) * 100;
@@ -1164,18 +1415,40 @@ export default function PortfolioTracker() {
                         <div className="flex items-center gap-3">
                           <h3 className="text-xl font-black tracking-tight text-white">
                             {ticker}
-                            {viewFilter === "all" && portfolioType && (
-                              <span
-                                className={`ml-2 text-[10px] px-1.5 py-0.5 rounded ${
-                                  portfolioType === "main"
-                                    ? "bg-blue-900/50 text-blue-400"
-                                    : "bg-amber-900/50 text-amber-400"
-                                }`}
-                              >
-                                {portfolioType.toUpperCase()}
-                              </span>
-                            )}
                           </h3>
+                          {groups.length > 0 && (
+                            <select
+                              value={group}
+                              disabled={regrouping === groupKey}
+                              onChange={(e) =>
+                                handleChangeGroup(
+                                  groupKey,
+                                  ticker,
+                                  items,
+                                  e.target.value,
+                                )
+                              }
+                              aria-label={`หมวดของ ${ticker}`}
+                              title={`ย้ายหมวดของ ${ticker} (มี ${items.length} ไม้)`}
+                              className="text-[10px] bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 font-bold cursor-pointer hover:border-slate-500 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+                              style={{ color: groupView?.color }}
+                            >
+                              {groups.map((gr) => (
+                                <option
+                                  key={gr.group}
+                                  value={gr.group}
+                                  className="text-slate-200 bg-slate-900"
+                                >
+                                  {gr.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          {regrouping === groupKey && (
+                            <span className="text-[10px] text-slate-500">
+                              กำลังย้าย...
+                            </span>
+                          )}
                           <span
                             className="bg-slate-800 text-slate-300 text-xs px-2 py-1 rounded-md cursor-pointer"
                             onClick={() => toggleGroup(groupKey)}
@@ -1402,7 +1675,7 @@ export default function PortfolioTracker() {
                     {isExpanded && ticker !== "CASH" && (
                       <div className="mt-4 space-y-4">
                         {items.map((item: any, idx: number) => {
-                          const itemLotKey = `${item.portfolioType || "main"}_${item.rowIndex}`;
+                          const itemLotKey = `${normalizeGroup(item.group)}_${item.rowIndex}`;
                           const lotPnlUSD =
                             (currentPrice - item.price) * item.holdingQty;
                           const lotPnlPct =
@@ -1566,7 +1839,7 @@ export default function PortfolioTracker() {
                                         item.rowIndex,
                                         item.ticker,
                                         item.holdingQty,
-                                        item.portfolioType || "main",
+                                        normalizeGroup(item.group),
                                       )
                                     }
                                     disabled={sellLoading === itemLotKey}
@@ -1724,9 +1997,18 @@ export default function PortfolioTracker() {
                             <tr key={`${item.rowIndex}-sell-${idx}`} className="hover:bg-slate-800/30 transition-colors">
                               <td className="px-4 py-3 font-bold text-white items-center gap-2 flex">
                                 {item.ticker}
-                                {viewFilter === "all" && item.portfolioType && (
-                                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${item.portfolioType === "main" ? "bg-blue-900/50 text-blue-400" : "bg-amber-900/50 text-amber-400"}`}>
-                                    {item.portfolioType.toUpperCase()}
+                                {viewFilter === "all" && item.group && (
+                                  <span
+                                    className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800"
+                                    style={{
+                                      color: groupViews.find(
+                                        (v) => v.key === normalizeGroup(item.group),
+                                      )?.color,
+                                    }}
+                                  >
+                                    {groups.find(
+                                      (v) => v.group === normalizeGroup(item.group),
+                                    )?.label || normalizeGroup(item.group)}
                                   </span>
                                 )}
                                 {item.status === "PARTIAL_SOLD" && (
@@ -1828,6 +2110,159 @@ export default function PortfolioTracker() {
         </div>
       </div>
 
+      {/* Group Manager Modal */}
+      {isGroupModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl w-full max-w-2xl relative my-8">
+            <button
+              onClick={() => setIsGroupModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+              aria-label="ปิด"
+            >
+              ✕
+            </button>
+
+            <div className="flex items-center gap-2 mb-1">
+              <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400">
+                <Target size={20} />
+              </div>
+              <h2 className="text-lg font-bold text-white">
+                จัดการหมวด &amp; สัดส่วนเป้าหมาย
+              </h2>
+            </div>
+            <p className="text-xs text-slate-500 mb-5">
+              บันทึกลงชีต Portfolio_groups โดยตรง — key ใช้อ้างอิงภายใน
+              เปลี่ยนไม่ได้หลังสร้างแล้ว ส่วนชื่อกับ % แก้ได้ตลอด
+            </p>
+
+            <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+              <div className="grid grid-cols-[1fr_1.3fr_auto_auto] gap-2 text-[11px] text-slate-500 font-bold px-1">
+                <span>key</span>
+                <span>ชื่อที่แสดง</span>
+                <span className="w-20 text-right">เป้า %</span>
+                <span className="w-8" />
+              </div>
+
+              {groupDraft.map((g, idx) => {
+                const isExisting = groups.some((x) => x.group === g.group);
+                const held = isExisting ? holdingsInGroup(g.group) : 0;
+                return (
+                  <div
+                    key={idx}
+                    className="grid grid-cols-[1fr_1.3fr_auto_auto] gap-2 items-center"
+                  >
+                    <input
+                      value={g.group}
+                      readOnly={isExisting}
+                      placeholder="เช่น robotics"
+                      onChange={(e) =>
+                        patchDraft(idx, {
+                          group: e.target.value.toLowerCase().replace(/\s/g, "_"),
+                        })
+                      }
+                      aria-label={`key หมวดที่ ${idx + 1}`}
+                      className={`bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-blue-500 ${
+                        isExisting
+                          ? "text-slate-500 cursor-not-allowed"
+                          : "text-white"
+                      }`}
+                    />
+                    <input
+                      value={g.label}
+                      placeholder="เช่น หุ่นยนต์"
+                      onChange={(e) => patchDraft(idx, { label: e.target.value })}
+                      aria-label={`ชื่อหมวดที่ ${idx + 1}`}
+                      className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.5"
+                      value={g.targetPct}
+                      onChange={(e) =>
+                        patchDraft(idx, { targetPct: Number(e.target.value) })
+                      }
+                      aria-label={`เป้าหมาย % ของหมวดที่ ${idx + 1}`}
+                      className="w-20 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white text-right focus:outline-none focus:border-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeDraftRow(idx)}
+                      title={
+                        held > 0
+                          ? `มีหุ้นอยู่ ${held} ตัว — ลบแล้วจะตกเป็นอื่นๆ`
+                          : "ลบหมวดนี้"
+                      }
+                      aria-label={`ลบหมวด ${g.label || g.group}`}
+                      className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors ${
+                        held > 0
+                          ? "bg-amber-900/30 text-amber-500 hover:bg-amber-900/60"
+                          : "bg-slate-800 text-slate-500 hover:bg-red-900/40 hover:text-red-400"
+                      }`}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={addDraftRow}
+              className="mt-3 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg font-bold transition-colors"
+            >
+              + เพิ่มหมวด
+            </button>
+
+            <div className="flex justify-between items-center mt-5 pt-4 border-t border-slate-800">
+              <div className="text-sm">
+                <span className="text-slate-400">รวม: </span>
+                <span
+                  className={`font-bold ${
+                    draftTotalPct > 100
+                      ? "text-red-400"
+                      : draftTotalPct === 100
+                        ? "text-emerald-400"
+                        : "text-amber-400"
+                  }`}
+                >
+                  {Number(draftTotalPct.toFixed(2))}%
+                </span>
+                {draftTotalPct < 100 && draftTotalPct <= 100 && (
+                  <span className="text-slate-600 text-xs">
+                    {" "}
+                    (เหลืออีก {Number((100 - draftTotalPct).toFixed(2))}%)
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsGroupModalOpen(false)}
+                  className="px-4 py-2 rounded-lg text-sm font-bold text-slate-400 hover:text-white"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  onClick={handleSaveGroups}
+                  disabled={groupSaving || draftTotalPct > 100.01}
+                  className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2 rounded-lg text-sm font-bold transition-colors"
+                >
+                  {groupSaving ? "กำลังบันทึก..." : "บันทึก"}
+                </button>
+              </div>
+            </div>
+
+            {groupError && (
+              <p className="mt-3 text-xs text-red-400 bg-red-950/40 border border-red-900/50 rounded-lg px-3 py-2">
+                {groupError}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Add Trade Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm shadow-black overflow-y-auto">
@@ -1863,35 +2298,47 @@ export default function PortfolioTracker() {
             </div>
 
             <form onSubmit={handleAddTrade} className="space-y-4">
-              {/* Portfolio Selection & Target Alloc */}
+              {/* Group Selection */}
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-2">
-                  เลือกพอร์ตที่จะบันทึก
+                  เลือกหมวดที่จะบันทึก
                 </label>
-                <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-700 mb-2">
-                  <button
-                    type="button"
-                    onClick={() => setTradeType("main")}
-                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
-                      tradeType === "main"
-                        ? "bg-blue-600 text-white"
-                        : "text-slate-500 hover:text-slate-300"
-                    }`}
-                  >
-                    พอร์ตหลัก (Main)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTradeType("growth")}
-                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
-                      tradeType === "growth"
-                        ? "bg-amber-600 text-white"
-                        : "text-slate-500 hover:text-slate-300"
-                    }`}
-                  >
-                    เติบโต (Growth)
-                  </button>
-                </div>
+                <select
+                  required
+                  value={tradeGroup}
+                  onChange={(e) => setTradeGroup(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500"
+                >
+                  {groups.length === 0 && (
+                    <option value={FALLBACK_GROUP}>
+                      (โหลดหมวดไม่สำเร็จ — จะบันทึกเป็น &quot;อื่นๆ&quot;)
+                    </option>
+                  )}
+                  {groups.map((g) => (
+                    <option key={g.group} value={g.group}>
+                      {g.label} — เป้า {g.targetPct}%
+                    </option>
+                  ))}
+                </select>
+                {(() => {
+                  const gv = groupViews.find((v) => v.key === tradeGroup);
+                  if (!gv) return null;
+                  const gap = gv.weight - gv.targetPct;
+                  return (
+                    <p className="text-[11px] text-slate-500 mt-1.5">
+                      ตอนนี้หมวดนี้อยู่ที่ {gv.weight.toFixed(1)}% เป้า{" "}
+                      {gv.targetPct}%{" "}
+                      <span
+                        className={
+                          gap > 0 ? "text-amber-400" : "text-sky-400"
+                        }
+                      >
+                        ({gap >= 0 ? "+" : ""}
+                        {gap.toFixed(1)}%)
+                      </span>
+                    </p>
+                  );
+                })()}
               </div>
 
               <div>
